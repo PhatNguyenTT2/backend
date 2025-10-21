@@ -26,6 +26,12 @@ const inventorySchema = new mongoose.Schema({
     min: [0, 'Quantity available cannot be negative']
   },
 
+  quantityOnShelf: {
+    type: Number,
+    default: 0,
+    min: [0, 'Quantity on shelf cannot be negative']
+  },
+
   reorderPoint: {
     type: Number,
     default: 10,
@@ -109,6 +115,37 @@ inventorySchema.methods.releaseInventory = function (quantity) {
   this.quantityReserved -= quantity
   this.quantityAvailable = this.quantityOnHand - this.quantityReserved
   return this.save()
+}
+
+// Static method to get products needing restock
+inventorySchema.statics.getProductsNeedingRestock = function () {
+  return this.find({
+    $expr: { $lte: ['$quantityAvailable', '$reorderPoint'] }
+  })
+    .populate('product', 'productCode name vendor')
+    .sort({ quantityAvailable: 1 })
+}
+
+// Static method to get shelf stock summary
+inventorySchema.statics.getShelfStockSummary = async function () {
+  const stats = await this.aggregate([
+    {
+      $group: {
+        _id: null,
+        totalOnShelf: { $sum: '$quantityOnShelf' },
+        totalAvailable: { $sum: '$quantityAvailable' },
+        productsOnShelf: {
+          $sum: { $cond: [{ $gt: ['$quantityOnShelf', 0] }, 1, 0] }
+        }
+      }
+    }
+  ])
+
+  return stats[0] || {
+    totalOnShelf: 0,
+    totalAvailable: 0,
+    productsOnShelf: 0
+  }
 }
 
 inventorySchema.set('toJSON', {

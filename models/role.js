@@ -1,14 +1,12 @@
 const mongoose = require('mongoose')
 
 const roleSchema = new mongoose.Schema({
-  roleId: {
+  roleCode: {
     type: String,
-    required: [true, 'Role ID is required'],
     unique: true,
     uppercase: true,
     trim: true,
-    minlength: [2, 'Role ID must be at least 2 characters long'],
-    maxlength: [20, 'Role ID must be at most 20 characters long']
+    match: [/^ROLE\d{3,}$/, 'Role code must follow format ROLE001, ROLE002, etc.']
   },
   roleName: {
     type: String,
@@ -36,8 +34,17 @@ const roleSchema = new mongoose.Schema({
   })
 
 // Indexes for better query performance
-// Note: roleId already has index from 'unique: true'
+roleSchema.index({ roleCode: 1 })
 roleSchema.index({ isActive: 1 })
+
+// Pre-save hook to generate role code
+roleSchema.pre('save', async function (next) {
+  if (this.isNew && !this.roleCode) {
+    const count = await mongoose.model('Role').countDocuments()
+    this.roleCode = `ROLE${String(count + 1).padStart(3, '0')}`
+  }
+  next()
+})
 
 roleSchema.set('toJSON', {
   transform: (document, returnedObject) => {

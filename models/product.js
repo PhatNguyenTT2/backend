@@ -1,207 +1,285 @@
 const mongoose = require('mongoose')
 
 const productSchema = new mongoose.Schema({
+  productCode: {
+    type: String,
+    required: [true, 'Product code is required'],
+    unique: true,
+    uppercase: true,
+    trim: true,
+    match: [/^PROD\d{10}$/, 'Product code must follow format PROD2025000001']
+    // Auto-generate: PROD2025000001
+  },
+
   name: {
     type: String,
-    required: [true, 'Name is required'],
-    maxlength: [255, 'Name must be less than 255 characters'],
-    trim: true
+    required: [true, 'Product name is required'],
+    trim: true,
+    maxlength: [255, 'Name must be at most 255 characters long']
   },
 
-  slug: {
-    type: String,
-    unique: true,
-    lowercase: true
-  },
-
-  sku: {
-    type: String,
-    required: [true, 'SKU is required'],
-    unique: true,
-    uppercase: true
-  },
-
-  //Category
   category: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Category',
     required: [true, 'Category is required']
   },
 
-  //Price
   costPrice: {
     type: Number,
-    required: [true, 'Cost price is required'],
-    min: [0, 'Cost price must be greater than or equal to 0'],
-    default: 0
+    default: 0,
+    min: [0, 'Cost price cannot be negative']
   },
 
   price: {
     type: Number,
-    required: [true, 'Selling price is required'],
-    min: [0, 'Selling price must be greater than 0']
+    required: [true, 'Price is required'],
+    min: [0, 'Price cannot be negative']
   },
 
   originalPrice: {
     type: Number,
-    min: [0, 'Original price must be greater than 0']
+    min: [0, 'Original price cannot be negative']
   },
 
-  //Images
-  image: {
-    type: String, // Main image URL
-    required: [true, 'Image is required']
-  },
-
-  images: [{
-    type: String,
-    isPrimary: {
-      type: Boolean,
-      default: false
-    }
-  }],
-
-  //Description
-  description: {
-    type: String,
-    required: false,
-    maxlength: [2000, 'Description must be less than 2000 characters'],
-    default: 'No description provided'
-  },
-
-  //Detailed Description (JSON object)
-  detailDescription: {
-    intro: [String],
-
-    specifications: [{
-      label: String,
-      value: String
-    }],
-
-    additionalDesc: String,
-
-    packaging: [String],
-
-    suggestedUse: [String],
-
-    otherIngredients: [String],
-
-    warnings: [String]
-  },
-
-  // Vendor
-  vendor: {
-    type: String,
-    required: [true, 'Vendor is required'],
-    trim: true
-  },
-
-  // Stock & Inventory
   stock: {
     type: Number,
-    required: [true, 'Stock is required'],
-    min: [0, 'Stock must be greater than 0'],
-    default: 0
+    default: 0,
+    min: [0, 'Stock cannot be negative']
   },
 
   isInStock: {
     type: Boolean,
-    default: function () {
-      return this.stock > 0
-    }
+    default: false
   },
 
-  // Rating & Reviews
-  rating: {
-    type: Number,
-    min: 0,
-    max: 5,
-    default: 0
-  },
-
-  reviewCount: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-
-  // Product Meta
-  type: {
-    type: String, // Organic, Regular, etc.
-    trim: true
-  },
-
-  tags: [String],
-
-  mfgDate: Date, // Manufacturing date
-
-  shelfLife: {
-    type: String, // "70 days", "1 year"
-    trim: true
-  },
-
-  // Status
   isActive: {
     type: Boolean,
     default: true
   },
 
-  isFeatured: {
-    type: Boolean,
-    default: false
+  vendor: {
+    type: String,
+    required: [true, 'Vendor is required'],
+    trim: true,
+    maxlength: [100, 'Vendor name must be at most 100 characters long']
   }
 
 }, {
-  timestamps: true // createdAt, updatedAt
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 })
 
-productSchema.index({ name: 'text', description: 'text', tags: 'text' });
-productSchema.index({ category: 1, price: 1 });
-// productSchema.index({ slug: 1 });
+// Virtual for product detail
+productSchema.virtual('detail', {
+  ref: 'DetailProduct',
+  localField: '_id',
+  foreignField: 'product',
+  justOne: true
+})
+
+// Virtual for product batches
+productSchema.virtual('batches', {
+  ref: 'ProductBatch',
+  localField: '_id',
+  foreignField: 'product'
+})
+
+// Virtual for inventory
+productSchema.virtual('inventory', {
+  ref: 'Inventory',
+  localField: '_id',
+  foreignField: 'product',
+  justOne: true
+})
 
 // Virtual: Discount Percent
 productSchema.virtual('discountPercent').get(function () {
-  if (this.originalPrice && this.originalPrice > this.price)
-    return Math.round(((this.originalPrice - this.price) / this.originalPrice) * 100);
-  return 0;
+  if (this.originalPrice && this.originalPrice > this.price) {
+    return Math.round(((this.originalPrice - this.price) / this.originalPrice) * 100)
+  }
+  return 0
 })
 
 // Virtual: Profit Margin (%)
 productSchema.virtual('profitMargin').get(function () {
   if (this.price && this.costPrice && this.price > 0) {
-    return parseFloat((((this.price - this.costPrice) / this.price) * 100).toFixed(2));
+    return parseFloat((((this.price - this.costPrice) / this.price) * 100).toFixed(2))
   }
-  return 0;
+  return 0
 })
 
 // Virtual: Profit Amount
 productSchema.virtual('profitAmount').get(function () {
   if (this.price && this.costPrice) {
-    return parseFloat((this.price - this.costPrice).toFixed(2));
+    return parseFloat((this.price - this.costPrice).toFixed(2))
   }
-  return 0;
+  return 0
 })
 
-// Generate slug from name
-productSchema.pre('save', function (next) {
-  if (this.isModified('name') && !this.slug) {
-    this.slug = this.name
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '') // Remove special chars
-      .replace(/\s+/g, '-')     // Replace spaces with -
-      .replace(/-+/g, '-')      // Replace multiple - with single -
-      .trim();
+// Indexes for faster queries
+productSchema.index({ productCode: 1 })
+productSchema.index({ category: 1 })
+productSchema.index({ price: 1 })
+productSchema.index({ name: 'text' })
+productSchema.index({ isActive: 1 })
+productSchema.index({ isInStock: 1 })
+productSchema.index({ vendor: 1 })
+
+// Pre-save hook to generate product code
+productSchema.pre('save', async function (next) {
+  if (this.isNew && !this.productCode) {
+    const year = new Date().getFullYear()
+    const count = await mongoose.model('Product').countDocuments()
+    this.productCode = `PROD${year}${String(count + 1).padStart(6, '0')}`
   }
-  next();
+
+  // Update isInStock based on stock
+  this.isInStock = this.stock > 0
+
+  next()
 })
+
+// Method to update stock
+productSchema.methods.updateStock = function (quantity) {
+  this.stock += quantity
+  this.isInStock = this.stock > 0
+  return this.save()
+}
+
+// Method to check if product is low stock
+productSchema.methods.isLowStock = async function () {
+  const Inventory = mongoose.model('Inventory')
+  const inventory = await Inventory.findOne({ product: this._id })
+
+  if (inventory && inventory.reorderPoint) {
+    return this.stock <= inventory.reorderPoint
+  }
+
+  return false
+}
+
+// Method to update price
+productSchema.methods.updatePrice = function (newPrice, newOriginalPrice) {
+  this.price = newPrice
+  if (newOriginalPrice !== undefined) {
+    this.originalPrice = newOriginalPrice
+  }
+  return this.save()
+}
+
+// Method to update cost price
+productSchema.methods.updateCostPrice = function (newCostPrice) {
+  this.costPrice = newCostPrice
+  return this.save()
+}
+
+// Method to activate/deactivate
+productSchema.methods.toggleActive = function () {
+  this.isActive = !this.isActive
+  return this.save()
+}
+
+// Static method to find active products
+productSchema.statics.findActiveProducts = function (query = {}) {
+  return this.find({ ...query, isActive: true })
+    .populate('category', 'categoryCode name')
+    .populate('detail')
+    .sort({ createdAt: -1 })
+}
+
+// Static method to find in-stock products
+productSchema.statics.findInStockProducts = function (query = {}) {
+  return this.find({ ...query, isInStock: true, isActive: true })
+    .populate('category', 'categoryCode name')
+    .sort({ name: 1 })
+}
+
+// Static method to find by category
+productSchema.statics.findByCategory = function (categoryId) {
+  return this.find({ category: categoryId, isActive: true })
+    .populate('detail')
+    .sort({ name: 1 })
+}
+
+// Static method to search products
+productSchema.statics.searchProducts = function (searchTerm) {
+  return this.find({
+    $or: [
+      { name: { $regex: searchTerm, $options: 'i' } },
+      { productCode: { $regex: searchTerm, $options: 'i' } },
+      { vendor: { $regex: searchTerm, $options: 'i' } }
+    ],
+    isActive: true
+  })
+    .populate('category', 'name')
+    .populate('detail')
+    .limit(20)
+}
+
+// Static method to get product statistics
+productSchema.statics.getStatistics = async function () {
+  const stats = await this.aggregate([
+    {
+      $group: {
+        _id: null,
+        totalProducts: { $sum: 1 },
+        activeProducts: {
+          $sum: { $cond: ['$isActive', 1, 0] }
+        },
+        inStockProducts: {
+          $sum: { $cond: ['$isInStock', 1, 0] }
+        },
+        outOfStockProducts: {
+          $sum: { $cond: ['$isInStock', 0, 1] }
+        },
+        totalStock: { $sum: '$stock' },
+        averagePrice: { $avg: '$price' },
+        totalValue: { $sum: { $multiply: ['$stock', '$price'] } }
+      }
+    }
+  ])
+
+  return stats[0] || {
+    totalProducts: 0,
+    activeProducts: 0,
+    inStockProducts: 0,
+    outOfStockProducts: 0,
+    totalStock: 0,
+    averagePrice: 0,
+    totalValue: 0
+  }
+}
+
+// Static method to get low stock products
+productSchema.statics.getLowStockProducts = async function () {
+  const products = await this.find({ isActive: true })
+    .populate('inventory')
+
+  return products.filter(product => {
+    if (product.inventory && product.inventory.reorderPoint) {
+      return product.stock <= product.inventory.reorderPoint
+    }
+    return false
+  })
+}
+
+// Static method to get products by price range
+productSchema.statics.findByPriceRange = function (minPrice, maxPrice) {
+  return this.find({
+    price: { $gte: minPrice, $lte: maxPrice },
+    isActive: true
+  })
+    .populate('category', 'name')
+    .sort({ price: 1 })
+}
 
 productSchema.set('toJSON', {
-  virtuals: true,
   transform: (document, returnedObject) => {
-    returnedObject.id = returnedObject._id.toString();
-    delete returnedObject._id;
-    delete returnedObject.__v;
+    returnedObject.id = returnedObject._id.toString()
+    delete returnedObject._id
+    delete returnedObject.__v
   }
 })
 
-module.exports = mongoose.model('Product', productSchema);
+module.exports = mongoose.model('Product', productSchema)

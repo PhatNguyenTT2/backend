@@ -1,14 +1,12 @@
 const mongoose = require('mongoose')
 
 const departmentSchema = new mongoose.Schema({
-  departmentId: {
+  departmentCode: {
     type: String,
-    required: [true, 'Department ID is required'],
     unique: true,
     uppercase: true,
     trim: true,
-    minlength: [2, 'Department ID must be at least 2 characters long'],
-    maxlength: [20, 'Department ID must be at most 20 characters long']
+    match: [/^DEPT\d{3,}$/, 'Department code must follow format DEPT001, DEPT002, etc.']
   },
   departmentName: {
     type: String,
@@ -52,9 +50,18 @@ const departmentSchema = new mongoose.Schema({
   })
 
 // Indexes for better query performance
-// Note: departmentId already has index from 'unique: true'
+departmentSchema.index({ departmentCode: 1 })
 departmentSchema.index({ isActive: 1 })
 departmentSchema.index({ manager: 1 })
+
+// Pre-save hook to generate department code
+departmentSchema.pre('save', async function (next) {
+  if (this.isNew && !this.departmentCode) {
+    const count = await mongoose.model('Department').countDocuments()
+    this.departmentCode = `DEPT${String(count + 1).padStart(3, '0')}`
+  }
+  next()
+})
 
 departmentSchema.set('toJSON', {
   transform: (document, returnedObject) => {

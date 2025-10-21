@@ -1,18 +1,20 @@
 const mongoose = require('mongoose');
 
 const categorySchema = new mongoose.Schema({
+  categoryCode: {
+    type: String,
+    unique: true,
+    uppercase: true,
+    trim: true,
+    match: [/^CAT\d{3,}$/, 'Category code must follow format CAT001, CAT002, etc.']
+  },
+
   name: {
     type: String,
     required: [true, 'Category name is required'],
     unique: true,
     trim: true,
     maxlength: 100
-  },
-
-  slug: {
-    type: String,
-    unique: true,
-    lowercase: true
   },
 
   image: {
@@ -55,14 +57,17 @@ categorySchema.virtual('productCount', {
   count: true
 });
 
-// Generate slug
-categorySchema.pre('save', function (next) {
-  if (this.isModified('name') && !this.slug) {
-    this.slug = this.name
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .trim();
+// Indexes
+categorySchema.index({ categoryCode: 1 });
+categorySchema.index({ name: 1 });
+categorySchema.index({ isActive: 1 });
+categorySchema.index({ parent: 1 });
+
+// Pre-save hook to generate category code
+categorySchema.pre('save', async function (next) {
+  if (this.isNew && !this.categoryCode) {
+    const count = await mongoose.model('Category').countDocuments();
+    this.categoryCode = `CAT${String(count + 1).padStart(3, '0')}`;
   }
   next();
 });
