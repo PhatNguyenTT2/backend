@@ -1,0 +1,41 @@
+{
+  "name": "backend",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:ui": "rm -rf dist && cd ../admin && npm run build && cp -r dist ../backend/dist",
+    "deploy:full": "npm run build:ui && git add . && git commit -m uibuild && git push",
+    "lint": "eslint .",
+    "start:test": "cross-env NODE_ENV=test node --watch index.js",
+    "setup": "node utils/completeSetup.js",
+    "setup:roles": "node scripts/setup-roles.js",
+    "seed:roles": "node utils/seedRolesAndDepartments.js",
+    "seed:products": "node scripts/seed-products.js",
+    "seed:customers": "node scripts/seed-customers.js",
+    "seed:admin": "node utils/seedAdmin.js",
+    "migrate:users": "node utils/migrateUsersRole.js"
+  },
+  "dependencies": {
+    "axios": "^1.12.2",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.20.0",
+    "mongoose": "^8.18.3",
+    "morgan": "^1.10.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.22.0",
+    "@stylistic/eslint-plugin-js": "^4.2.0",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.22.0",
+    "globals": "^16.0.0",
+    "supertest": "^7.1.0"
+  }
+}
