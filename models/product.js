@@ -25,31 +25,34 @@ const productSchema = new mongoose.Schema({
   },
 
   costPrice: {
-    type: Number,
+    type: mongoose.Schema.Types.Decimal128,
     default: 0,
-    min: [0, 'Cost price cannot be negative']
-  },
-
-  price: {
-    type: Number,
-    required: [true, 'Price is required'],
-    min: [0, 'Price cannot be negative']
+    min: [0, 'Cost price cannot be negative'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString())
+      }
+      return 0
+    }
   },
 
   originalPrice: {
-    type: Number,
-    min: [0, 'Original price cannot be negative']
+    type: mongoose.Schema.Types.Decimal128,
+    required: [true, 'Original price is required'],
+    min: [0, 'Original price cannot be negative'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString())
+      }
+      return 0
+    }
   },
 
-  stock: {
+  discountPercentage: {
     type: Number,
     default: 0,
-    min: [0, 'Stock cannot be negative']
-  },
-
-  isInStock: {
-    type: Boolean,
-    default: false
+    min: [0, 'Discount percentage cannot be negative'],
+    max: [100, 'Discount percentage cannot exceed 100']
   },
 
   isActive: {
@@ -66,8 +69,8 @@ const productSchema = new mongoose.Schema({
 
 }, {
   timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toJSON: { virtuals: true, getters: true },
+  toObject: { virtuals: true, getters: true }
 })
 
 // Virtual for product detail
@@ -93,26 +96,37 @@ productSchema.virtual('inventory', {
   justOne: true
 })
 
-// Virtual: Discount Percent
-productSchema.virtual('discountPercent').get(function () {
-  if (this.originalPrice && this.originalPrice > this.price) {
-    return Math.round(((this.originalPrice - this.price) / this.originalPrice) * 100)
+// Virtual: Selling Price (after discount)
+productSchema.virtual('sellPrice').get(function () {
+  const discountAmount = this.originalPrice * (this.discountPercentage / 100)
+  return parseFloat((this.originalPrice - discountAmount).toFixed(2))
+})
+
+// Virtual: Discount Amount
+productSchema.virtual('discountAmount').get(function () {
+  return parseFloat((this.originalPrice * (this.discountPercentage / 100)).toFixed(2))
+})
+
+// Virtual: Stock from inventory (sync version for toJSON when populated)
+productSchema.virtual('stock').get(function () {
+  if (this.inventory) {
+    return this.inventory.quantity || 0
   }
   return 0
 })
 
 // Virtual: Profit Margin (%)
 productSchema.virtual('profitMargin').get(function () {
-  if (this.price && this.costPrice && this.price > 0) {
-    return parseFloat((((this.price - this.costPrice) / this.price) * 100).toFixed(2))
+  if (this.sellPrice && this.costPrice && this.sellPrice > 0) {
+    return parseFloat((((this.sellPrice - this.costPrice) / this.sellPrice) * 100).toFixed(2))
   }
   return 0
 })
 
 // Virtual: Profit Amount
 productSchema.virtual('profitAmount').get(function () {
-  if (this.price && this.costPrice) {
-    return parseFloat((this.price - this.costPrice).toFixed(2))
+  if (this.sellPrice && this.costPrice) {
+    return parseFloat((this.sellPrice - this.costPrice).toFixed(2))
   }
   return 0
 })
@@ -120,10 +134,8 @@ productSchema.virtual('profitAmount').get(function () {
 // Indexes for faster queries
 productSchema.index({ productCode: 1 })
 productSchema.index({ category: 1 })
-productSchema.index({ price: 1 })
 productSchema.index({ name: 'text' })
 productSchema.index({ isActive: 1 })
-productSchema.index({ isInStock: 1 })
 productSchema.index({ vendor: 1 })
 
 // Pre-save hook to generate product code
@@ -133,18 +145,14 @@ productSchema.pre('save', async function (next) {
     const count = await mongoose.model('Product').countDocuments()
     this.productCode = `PROD${year}${String(count + 1).padStart(6, '0')}`
   }
-
-  // Update isInStock based on stock
-  this.isInStock = this.stock > 0
-
   next()
 })
 
-// Method to update stock
-productSchema.methods.updateStock = function (quantity) {
-  this.stock += quantity
-  this.isInStock = this.stock > 0
-  return this.save()
+// Method to get stock from inventory (when not populated)
+productSchema.methods.getStockFromInventory = async function () {
+  const Inventory = mongoose.model('Inventory')
+  const inventory = await Inventory.findOne({ product: this._id })
+  return inventory ? inventory.quantity : 0
 }
 
 // Method to check if product is low stock
@@ -153,18 +161,32 @@ productSchema.methods.isLowStock = async function () {
   const inventory = await Inventory.findOne({ product: this._id })
 
   if (inventory && inventory.reorderPoint) {
-    return this.stock <= inventory.reorderPoint
+    return inventory.quantity <= inventory.reorderPoint
   }
 
   return false
 }
 
-// Method to update price
-productSchema.methods.updatePrice = function (newPrice, newOriginalPrice) {
-  this.price = newPrice
-  if (newOriginalPrice !== undefined) {
-    this.originalPrice = newOriginalPrice
+// Method to update pricing
+productSchema.methods.updatePricing = function (originalPrice, discountPercentage) {
+  if (originalPrice !== undefined) {
+    this.originalPrice = originalPrice
   }
+  if (discountPercentage !== undefined) {
+    this.discountPercentage = discountPercentage
+  }
+  return this.save()
+}
+
+// Method to apply discount
+productSchema.methods.applyDiscount = function (discountPercentage) {
+  this.discountPercentage = discountPercentage
+  return this.save()
+}
+
+// Method to remove discount
+productSchema.methods.removeDiscount = function () {
+  this.discountPercentage = 0
   return this.save()
 }
 
@@ -185,20 +207,27 @@ productSchema.statics.findActiveProducts = function (query = {}) {
   return this.find({ ...query, isActive: true })
     .populate('category', 'categoryCode name')
     .populate('detail')
+    .populate('inventory')
     .sort({ createdAt: -1 })
 }
 
 // Static method to find in-stock products
-productSchema.statics.findInStockProducts = function (query = {}) {
-  return this.find({ ...query, isInStock: true, isActive: true })
+productSchema.statics.findInStockProducts = async function (query = {}) {
+  const products = await this.find({ ...query, isActive: true })
     .populate('category', 'categoryCode name')
+    .populate('detail')
+    .populate('inventory')
     .sort({ name: 1 })
+
+  // Filter products that have stock > 0
+  return products.filter(product => product.stock > 0)
 }
 
 // Static method to find by category
 productSchema.statics.findByCategory = function (categoryId) {
   return this.find({ category: categoryId, isActive: true })
     .populate('detail')
+    .populate('inventory')
     .sort({ name: 1 })
 }
 
@@ -214,41 +243,31 @@ productSchema.statics.searchProducts = function (searchTerm) {
   })
     .populate('category', 'name')
     .populate('detail')
+    .populate('inventory')
     .limit(20)
 }
 
 // Static method to get product statistics
 productSchema.statics.getStatistics = async function () {
-  const stats = await this.aggregate([
-    {
-      $group: {
-        _id: null,
-        totalProducts: { $sum: 1 },
-        activeProducts: {
-          $sum: { $cond: ['$isActive', 1, 0] }
-        },
-        inStockProducts: {
-          $sum: { $cond: ['$isInStock', 1, 0] }
-        },
-        outOfStockProducts: {
-          $sum: { $cond: ['$isInStock', 0, 1] }
-        },
-        totalStock: { $sum: '$stock' },
-        averagePrice: { $avg: '$price' },
-        totalValue: { $sum: { $multiply: ['$stock', '$price'] } }
-      }
-    }
-  ])
+  const products = await this.find().populate('inventory')
 
-  return stats[0] || {
-    totalProducts: 0,
-    activeProducts: 0,
-    inStockProducts: 0,
-    outOfStockProducts: 0,
-    totalStock: 0,
+  const stats = {
+    totalProducts: products.length,
+    activeProducts: products.filter(p => p.isActive).length,
+    inStockProducts: products.filter(p => p.stock > 0).length,
+    outOfStockProducts: products.filter(p => p.stock === 0).length,
+    totalStock: products.reduce((sum, p) => sum + p.stock, 0),
     averagePrice: 0,
     totalValue: 0
   }
+
+  if (stats.totalProducts > 0) {
+    const totalPrice = products.reduce((sum, p) => sum + p.sellPrice, 0)
+    stats.averagePrice = parseFloat((totalPrice / stats.totalProducts).toFixed(2))
+    stats.totalValue = parseFloat(products.reduce((sum, p) => sum + (p.stock * p.sellPrice), 0).toFixed(2))
+  }
+
+  return stats
 }
 
 // Static method to get low stock products
@@ -265,13 +284,15 @@ productSchema.statics.getLowStockProducts = async function () {
 }
 
 // Static method to get products by price range
-productSchema.statics.findByPriceRange = function (minPrice, maxPrice) {
-  return this.find({
-    price: { $gte: minPrice, $lte: maxPrice },
-    isActive: true
-  })
+productSchema.statics.findByPriceRange = async function (minPrice, maxPrice) {
+  const products = await this.find({ isActive: true })
     .populate('category', 'name')
-    .sort({ price: 1 })
+    .populate('inventory')
+
+  // Filter by sellPrice (virtual field)
+  return products.filter(product => {
+    return product.sellPrice >= minPrice && product.sellPrice <= maxPrice
+  }).sort((a, b) => a.sellPrice - b.sellPrice)
 }
 
 productSchema.set('toJSON', {
@@ -279,6 +300,14 @@ productSchema.set('toJSON', {
     returnedObject.id = returnedObject._id.toString()
     delete returnedObject._id
     delete returnedObject.__v
+
+    // Convert Decimal128 to number
+    if (returnedObject.costPrice && typeof returnedObject.costPrice === 'object') {
+      returnedObject.costPrice = parseFloat(returnedObject.costPrice.toString())
+    }
+    if (returnedObject.originalPrice && typeof returnedObject.originalPrice === 'object') {
+      returnedObject.originalPrice = parseFloat(returnedObject.originalPrice.toString())
+    }
   }
 })
 

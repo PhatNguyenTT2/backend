@@ -20,39 +20,32 @@ const detailStockOutOrderSchema = new mongoose.Schema({
   },
 
   unitPrice: {
-    type: Number,
+    type: mongoose.Schema.Types.Decimal128,
     required: [true, 'Unit price is required'],
-    min: [0, 'Unit price cannot be negative']
-  },
-
-  discount: {
-    type: Number,
-    default: 0,
-    min: [0, 'Discount cannot be negative']
-  },
-
-  totalPrice: {
-    type: Number,
-    required: [true, 'Total price is required'],
-    min: [0, 'Total price cannot be negative']
+    min: [0, 'Unit price cannot be negative'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString())
+      }
+      return 0
+    }
   }
 
 }, {
   timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toJSON: { virtuals: true, getters: true },
+  toObject: { virtuals: true, getters: true }
+})
+
+// Virtual field: Calculate total price
+detailStockOutOrderSchema.virtual('totalPrice').get(function () {
+  return this.quantity * this.unitPrice
 })
 
 // Indexes for faster queries
 detailStockOutOrderSchema.index({ stockOutOrder: 1 })
 detailStockOutOrderSchema.index({ product: 1 })
 detailStockOutOrderSchema.index({ stockOutOrder: 1, product: 1 })
-
-// Pre-save hook to calculate total price
-detailStockOutOrderSchema.pre('save', function (next) {
-  this.totalPrice = (this.quantity * this.unitPrice) - this.discount
-  next()
-})
 
 // Pre-save hook to validate stock availability
 detailStockOutOrderSchema.pre('save', async function (next) {
@@ -71,25 +64,8 @@ detailStockOutOrderSchema.pre('save', async function (next) {
   next()
 })
 
-// Post-save hook to update stock out order total
-detailStockOutOrderSchema.post('save', async function (doc) {
-  const StockOutOrder = mongoose.model('StockOutOrder')
-  const stockOutOrder = await StockOutOrder.findById(doc.stockOutOrder)
-  if (stockOutOrder) {
-    await stockOutOrder.calculateTotal()
-  }
-})
-
-// Post-remove hook to update stock out order total
-detailStockOutOrderSchema.post('findOneAndDelete', async function (doc) {
-  if (doc) {
-    const StockOutOrder = mongoose.model('StockOutOrder')
-    const stockOutOrder = await StockOutOrder.findById(doc.stockOutOrder)
-    if (stockOutOrder) {
-      await stockOutOrder.calculateTotal()
-    }
-  }
-})
+// Note: No need for post-save/remove hooks to update totals
+// since subtotal and total are virtual fields that calculate automatically
 
 // Static method to create detail with validation
 detailStockOutOrderSchema.statics.createDetailWithValidation = async function (detailData) {
@@ -133,25 +109,17 @@ detailStockOutOrderSchema.statics.getByStockOutOrder = function (stockOutOrderId
     .sort({ createdAt: 1 })
 }
 
-// Static method to get total quantity for a product in a stock out order
+// Static method to get total quantity and amount for a product in a stock out order
 detailStockOutOrderSchema.statics.getTotalQuantityByProduct = async function (stockOutOrderId, productId) {
-  const result = await this.aggregate([
-    {
-      $match: {
-        stockOutOrder: new mongoose.Types.ObjectId(stockOutOrderId),
-        product: new mongoose.Types.ObjectId(productId)
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        totalQuantity: { $sum: '$quantity' },
-        totalAmount: { $sum: '$totalPrice' }
-      }
-    }
-  ])
+  const details = await this.find({
+    stockOutOrder: stockOutOrderId,
+    product: productId
+  })
 
-  return result[0] || { totalQuantity: 0, totalAmount: 0 }
+  const totalQuantity = details.reduce((sum, detail) => sum + detail.quantity, 0)
+  const totalAmount = details.reduce((sum, detail) => sum + detail.totalPrice, 0)
+
+  return { totalQuantity, totalAmount }
 }
 
 // Static method to validate if product already exists in stock out order
@@ -200,7 +168,6 @@ detailStockOutOrderSchema.methods.updateQuantity = function (newQuantity) {
     throw new Error('Quantity must be at least 1')
   }
   this.quantity = newQuantity
-  this.totalPrice = (this.quantity * this.unitPrice) - this.discount
   return this.save()
 }
 
@@ -210,21 +177,6 @@ detailStockOutOrderSchema.methods.updateUnitPrice = function (newUnitPrice) {
     throw new Error('Unit price cannot be negative')
   }
   this.unitPrice = newUnitPrice
-  this.totalPrice = (this.quantity * this.unitPrice) - this.discount
-  return this.save()
-}
-
-// Instance method to apply discount
-detailStockOutOrderSchema.methods.applyDiscount = function (discountAmount) {
-  if (discountAmount < 0) {
-    throw new Error('Discount cannot be negative')
-  }
-  const maxDiscount = this.quantity * this.unitPrice
-  if (discountAmount > maxDiscount) {
-    throw new Error('Discount cannot exceed total amount')
-  }
-  this.discount = discountAmount
-  this.totalPrice = (this.quantity * this.unitPrice) - this.discount
   return this.save()
 }
 
@@ -233,6 +185,11 @@ detailStockOutOrderSchema.set('toJSON', {
     returnedObject.id = returnedObject._id.toString()
     delete returnedObject._id
     delete returnedObject.__v
+
+    // Convert Decimal128 to number
+    if (returnedObject.unitPrice && typeof returnedObject.unitPrice === 'object') {
+      returnedObject.unitPrice = parseFloat(returnedObject.unitPrice.toString())
+    }
   }
 })
 
