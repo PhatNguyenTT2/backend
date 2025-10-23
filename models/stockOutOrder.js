@@ -24,10 +24,28 @@ const stockOutOrderSchema = new mongoose.Schema({
   },
 
   discountPercentage: {
-    type: Number,
+    type: mongoose.Schema.Types.Decimal128,
     default: 0,
     min: [0, 'Discount percentage cannot be negative'],
-    max: [100, 'Discount percentage cannot exceed 100']
+    max: [100, 'Discount percentage cannot exceed 100'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString())
+      }
+      return 0
+    }
+  },
+
+  totalPrice: {
+    type: mongoose.Schema.Types.Decimal128,
+    default: 0,
+    min: [0, 'Total price cannot be negative'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString())
+      }
+      return 0
+    }
   },
 
   status: {
@@ -71,23 +89,21 @@ stockOutOrderSchema.virtual('details', {
   foreignField: 'stockOutOrder'
 })
 
-// Virtual field: Calculate subtotal from details (sync version for toJSON)
-// Note: This returns 0 for non-populated documents
+// Virtual field: Calculate subtotal from details (for display purposes)
 stockOutOrderSchema.virtual('subtotal').get(function () {
   if (this.details && Array.isArray(this.details)) {
-    return this.details.reduce((sum, detail) => sum + detail.totalPrice, 0)
+    return this.details.reduce((sum, detail) => sum + detail.total, 0)
   }
   return 0
 })
 
-// Virtual field: Calculate discount amount
+// Virtual field: Calculate discount amount (for display purposes)
 stockOutOrderSchema.virtual('discountAmount').get(function () {
-  return (this.subtotal * this.discountPercentage) / 100
-})
-
-// Virtual field: Calculate total
-stockOutOrderSchema.virtual('total').get(function () {
-  return this.subtotal - this.discountAmount + this.shippingFee
+  if (this.details && Array.isArray(this.details)) {
+    const subtotal = this.details.reduce((sum, detail) => sum + detail.total, 0)
+    return (subtotal * this.discountPercentage) / 100
+  }
+  return 0
 })
 
 // Indexes for faster queries
@@ -106,12 +122,24 @@ stockOutOrderSchema.pre('save', async function (next) {
   next()
 })
 
-// Method to get calculated totals with populated details
+// Method to recalculate and save totalPrice
+stockOutOrderSchema.methods.recalculateTotalPrice = async function () {
+  const DetailStockOutOrder = mongoose.model('DetailStockOutOrder')
+  const details = await DetailStockOutOrder.find({ stockOutOrder: this._id })
+
+  const subtotal = details.reduce((sum, detail) => sum + detail.total, 0)
+  const discountAmount = (subtotal * this.discountPercentage) / 100
+  this.totalPrice = subtotal - discountAmount + this.shippingFee
+
+  return this.save()
+}
+
+// Method to get calculated totals with populated details (for backward compatibility)
 stockOutOrderSchema.methods.getCalculatedTotals = async function () {
   const DetailStockOutOrder = mongoose.model('DetailStockOutOrder')
   const details = await DetailStockOutOrder.find({ stockOutOrder: this._id })
 
-  const subtotal = details.reduce((sum, detail) => sum + detail.totalPrice, 0)
+  const subtotal = details.reduce((sum, detail) => sum + detail.total, 0)
   const discountAmount = (subtotal * this.discountPercentage) / 100
   const total = subtotal - discountAmount + this.shippingFee
 
@@ -200,11 +228,9 @@ stockOutOrderSchema.methods.cancel = function () {
 
 // Method to update payment status
 stockOutOrderSchema.methods.updatePaymentStatus = async function (paidAmount) {
-  const { total } = await this.getCalculatedTotals()
-
   if (paidAmount === 0) {
     this.paymentStatus = 'unpaid'
-  } else if (paidAmount >= total) {
+  } else if (paidAmount >= this.totalPrice) {
     this.paymentStatus = 'paid'
   } else {
     this.paymentStatus = 'partial'
@@ -242,38 +268,68 @@ stockOutOrderSchema.statics.getStatistics = async function (options = {}) {
     if (endDate) matchStage.createdAt.$lte = new Date(endDate)
   }
 
-  // Get all matching orders and calculate totals
-  const orders = await this.find(matchStage).populate('details')
+  const pipeline = [
+    { $match: matchStage },
+    {
+      $group: {
+        _id: null,
+        totalOrders: { $sum: 1 },
+        totalAmount: { $sum: { $toDouble: '$totalPrice' } },
+        pendingOrders: {
+          $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
+        },
+        processingOrders: {
+          $sum: { $cond: [{ $eq: ['$status', 'processing'] }, 1, 0] }
+        },
+        completedOrders: {
+          $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+        },
+        cancelledOrders: {
+          $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] }
+        },
+        unpaidAmount: {
+          $sum: {
+            $cond: [
+              { $eq: ['$paymentStatus', 'unpaid'] },
+              { $toDouble: '$totalPrice' },
+              0
+            ]
+          }
+        },
+        partialPaidAmount: {
+          $sum: {
+            $cond: [
+              { $eq: ['$paymentStatus', 'partial'] },
+              { $toDouble: '$totalPrice' },
+              0
+            ]
+          }
+        }
+      }
+    }
+  ]
 
-  // Calculate statistics from orders with virtual fields
-  const totalOrders = orders.length
-  const totalAmount = orders.reduce((sum, order) => sum + order.total, 0)
-  const averageAmount = totalOrders > 0 ? totalAmount / totalOrders : 0
+  const result = await this.aggregate(pipeline)
 
-  const pendingOrders = orders.filter(o => o.status === 'pending').length
-  const processingOrders = orders.filter(o => o.status === 'processing').length
-  const completedOrders = orders.filter(o => o.status === 'completed').length
-  const cancelledOrders = orders.filter(o => o.status === 'cancelled').length
-
-  const unpaidAmount = orders
-    .filter(o => o.paymentStatus === 'unpaid')
-    .reduce((sum, order) => sum + order.total, 0)
-
-  const partialPaidAmount = orders
-    .filter(o => o.paymentStatus === 'partial')
-    .reduce((sum, order) => sum + order.total, 0)
-
-  return {
-    totalOrders,
-    totalAmount,
-    averageAmount,
-    pendingOrders,
-    processingOrders,
-    completedOrders,
-    cancelledOrders,
-    unpaidAmount,
-    partialPaidAmount
+  if (result.length === 0) {
+    return {
+      totalOrders: 0,
+      totalAmount: 0,
+      averageAmount: 0,
+      pendingOrders: 0,
+      processingOrders: 0,
+      completedOrders: 0,
+      cancelledOrders: 0,
+      unpaidAmount: 0,
+      partialPaidAmount: 0
+    }
   }
+
+  const stats = result[0]
+  stats.averageAmount = stats.totalOrders > 0 ? stats.totalAmount / stats.totalOrders : 0
+  delete stats._id
+
+  return stats
 }
 
 stockOutOrderSchema.set('toJSON', {
@@ -285,6 +341,12 @@ stockOutOrderSchema.set('toJSON', {
     // Convert Decimal128 to number
     if (returnedObject.shippingFee && typeof returnedObject.shippingFee === 'object') {
       returnedObject.shippingFee = parseFloat(returnedObject.shippingFee.toString())
+    }
+    if (returnedObject.discountPercentage && typeof returnedObject.discountPercentage === 'object') {
+      returnedObject.discountPercentage = parseFloat(returnedObject.discountPercentage.toString())
+    }
+    if (returnedObject.totalPrice && typeof returnedObject.totalPrice === 'object') {
+      returnedObject.totalPrice = parseFloat(returnedObject.totalPrice.toString())
     }
   }
 })

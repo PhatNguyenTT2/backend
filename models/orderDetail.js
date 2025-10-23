@@ -20,22 +20,27 @@ const orderDetailSchema = new mongoose.Schema({
   },
 
   unitPrice: {
-    type: Number,
+    type: mongoose.Schema.Types.Decimal128,
     required: [true, 'Unit price is required'],
-    min: [0, 'Unit price cannot be negative']
+    min: [0, 'Unit price cannot be negative'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString())
+      }
+      return 0
+    }
   },
 
-  discountPercentage: {
-    type: Number,
-    default: 0,
-    min: [0, 'Discount percentage cannot be negative'],
-    max: [100, 'Discount percentage cannot exceed 100']
-  },
-
-  totalPrice: {
-    type: Number,
-    required: [true, 'Total price is required'],
-    min: [0, 'Total price cannot be negative']
+  total: {
+    type: mongoose.Schema.Types.Decimal128,
+    required: [true, 'Total is required'],
+    min: [0, 'Total cannot be negative'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString())
+      }
+      return 0
+    }
   },
 
   notes: {
@@ -46,8 +51,8 @@ const orderDetailSchema = new mongoose.Schema({
 
 }, {
   timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toJSON: { virtuals: true, getters: true },
+  toObject: { virtuals: true, getters: true }
 })
 
 // Indexes for faster queries
@@ -55,10 +60,9 @@ orderDetailSchema.index({ order: 1 })
 orderDetailSchema.index({ product: 1 })
 orderDetailSchema.index({ order: 1, product: 1 })
 
-// Pre-save hook to calculate total price
+// Pre-save hook to calculate total
 orderDetailSchema.pre('save', function (next) {
-  const discountAmount = (this.quantity * this.unitPrice * this.discountPercentage) / 100
-  this.totalPrice = (this.quantity * this.unitPrice) - discountAmount
+  this.total = this.quantity * this.unitPrice
   next()
 })
 
@@ -67,7 +71,7 @@ orderDetailSchema.post('save', async function (doc) {
   const Order = mongoose.model('Order')
   const order = await Order.findById(doc.order)
   if (order) {
-    await order.calculateTotal()
+    await order.recalculateTotals()
   }
 })
 
@@ -77,7 +81,7 @@ orderDetailSchema.post('findOneAndDelete', async function (doc) {
     const Order = mongoose.model('Order')
     const order = await Order.findById(doc.order)
     if (order) {
-      await order.calculateTotal()
+      await order.recalculateTotals()
     }
   }
 })
@@ -88,8 +92,7 @@ orderDetailSchema.methods.updateQuantity = function (newQuantity) {
     throw new Error('Quantity must be at least 1')
   }
   this.quantity = newQuantity
-  const discountAmount = (this.quantity * this.unitPrice * this.discountPercentage) / 100
-  this.totalPrice = (this.quantity * this.unitPrice) - discountAmount
+  // total will be recalculated in pre-save hook
   return this.save()
 }
 
@@ -99,19 +102,7 @@ orderDetailSchema.methods.updateUnitPrice = function (newUnitPrice) {
     throw new Error('Unit price cannot be negative')
   }
   this.unitPrice = newUnitPrice
-  const discountAmount = (this.quantity * this.unitPrice * this.discountPercentage) / 100
-  this.totalPrice = (this.quantity * this.unitPrice) - discountAmount
-  return this.save()
-}
-
-// Method to apply discount
-orderDetailSchema.methods.applyDiscount = function (discountPercentage) {
-  if (discountPercentage < 0 || discountPercentage > 100) {
-    throw new Error('Discount percentage must be between 0 and 100')
-  }
-  this.discountPercentage = discountPercentage
-  const discountAmount = (this.quantity * this.unitPrice * this.discountPercentage) / 100
-  this.totalPrice = (this.quantity * this.unitPrice) - discountAmount
+  // total will be recalculated in pre-save hook
   return this.save()
 }
 
@@ -124,17 +115,16 @@ orderDetailSchema.statics.createDetailAndReserveInventory = async function (deta
 
   try {
     // Check product availability
-    const product = await Product.findById(detailData.product).session(session)
+    const product = await Product.findById(detailData.product)
+      .populate('inventory')
+      .session(session)
+
     if (!product) {
       throw new Error('Product not found')
     }
 
     if (!product.isActive) {
       throw new Error('Product is not active')
-    }
-
-    if (!product.isInStock) {
-      throw new Error('Product is out of stock')
     }
 
     // Check inventory
@@ -150,7 +140,7 @@ orderDetailSchema.statics.createDetailAndReserveInventory = async function (deta
     // Reserve inventory
     await inventory.reserveInventory(detailData.quantity)
 
-    // Create order detail
+    // Create order detail (total will be calculated in pre-save hook)
     const detail = new this(detailData)
     await detail.save({ session })
 
@@ -167,29 +157,21 @@ orderDetailSchema.statics.createDetailAndReserveInventory = async function (deta
 // Static method to get details by order
 orderDetailSchema.statics.getByOrder = function (orderId) {
   return this.find({ order: orderId })
-    .populate('product', 'productCode name')
+    .populate('product', 'productCode name image')
     .sort({ createdAt: 1 })
 }
 
 // Static method to get total quantity for a product in an order
 orderDetailSchema.statics.getTotalQuantityByProduct = async function (orderId, productId) {
-  const result = await this.aggregate([
-    {
-      $match: {
-        order: new mongoose.Types.ObjectId(orderId),
-        product: new mongoose.Types.ObjectId(productId)
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        totalQuantity: { $sum: '$quantity' },
-        totalAmount: { $sum: '$totalPrice' }
-      }
-    }
-  ])
+  const details = await this.find({
+    order: orderId,
+    product: productId
+  })
 
-  return result[0] || { totalQuantity: 0, totalAmount: 0 }
+  const totalQuantity = details.reduce((sum, detail) => sum + detail.quantity, 0)
+  const totalAmount = details.reduce((sum, detail) => sum + detail.total, 0)
+
+  return { totalQuantity, totalAmount }
 }
 
 // Static method to validate if product already exists in order
@@ -225,7 +207,7 @@ orderDetailSchema.statics.getBestSellingProducts = async function (limit = 10, o
       $group: {
         _id: '$product',
         totalQuantity: { $sum: '$quantity' },
-        totalRevenue: { $sum: '$totalPrice' },
+        totalRevenue: { $sum: { $toDouble: '$total' } },
         orderCount: { $sum: 1 }
       }
     },
@@ -242,11 +224,18 @@ orderDetailSchema.statics.getBestSellingProducts = async function (limit = 10, o
     },
     {
       $project: {
-        productCode: '$productInfo.productCode',
-        productName: '$productInfo.name',
+        _id: 0,
+        product: {
+          id: '$_id',
+          productCode: '$productInfo.productCode',
+          name: '$productInfo.name'
+        },
         totalQuantity: 1,
         totalRevenue: 1,
-        orderCount: 1
+        orderCount: 1,
+        averageQuantityPerOrder: {
+          $divide: ['$totalQuantity', '$orderCount']
+        }
       }
     },
     {
@@ -265,6 +254,14 @@ orderDetailSchema.set('toJSON', {
     returnedObject.id = returnedObject._id.toString()
     delete returnedObject._id
     delete returnedObject.__v
+
+    // Convert Decimal128 to number
+    if (returnedObject.unitPrice && typeof returnedObject.unitPrice === 'object') {
+      returnedObject.unitPrice = parseFloat(returnedObject.unitPrice.toString())
+    }
+    if (returnedObject.total && typeof returnedObject.total === 'object') {
+      returnedObject.total = parseFloat(returnedObject.total.toString())
+    }
   }
 })
 

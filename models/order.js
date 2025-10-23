@@ -12,7 +12,7 @@ const orderSchema = new mongoose.Schema({
     ref: 'Customer'
   },
 
-  user: {
+  createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Employee'
   },
@@ -26,37 +26,22 @@ const orderSchema = new mongoose.Schema({
     default: 'delivery'
   },
 
-  street: {
+  address: {
     type: String,
     trim: true,
-    maxlength: [200, 'Street must be at most 200 characters']
-  },
-
-  city: {
-    type: String,
-    trim: true,
-    maxlength: [100, 'City must be at most 100 characters']
-  },
-
-  subtotal: {
-    type: Number,
-    required: [true, 'Subtotal is required'],
-    min: [0, 'Subtotal cannot be negative']
+    maxlength: [300, 'Address must be at most 300 characters']
   },
 
   shippingFee: {
-    type: Number,
+    type: mongoose.Schema.Types.Decimal128,
     default: 0,
-    min: [0, 'Shipping fee cannot be negative']
-  },
-
-  discountType: {
-    type: String,
-    enum: {
-      values: ['none', 'retail', 'wholesale', 'vip'],
-      message: '{VALUE} is not a valid discount type'
-    },
-    default: 'none'
+    min: [0, 'Shipping fee cannot be negative'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString())
+      }
+      return 0
+    }
   },
 
   discountPercentage: {
@@ -67,9 +52,15 @@ const orderSchema = new mongoose.Schema({
   },
 
   total: {
-    type: Number,
-    required: [true, 'Total is required'],
-    min: [0, 'Total cannot be negative']
+    type: mongoose.Schema.Types.Decimal128,
+    default: 0,
+    min: [0, 'Total cannot be negative'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString())
+      }
+      return 0
+    }
   },
 
   paymentStatus: {
@@ -92,8 +83,8 @@ const orderSchema = new mongoose.Schema({
 
 }, {
   timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toJSON: { virtuals: true, getters: true },
+  toObject: { virtuals: true, getters: true }
 })
 
 // Virtual for order details
@@ -103,23 +94,27 @@ orderSchema.virtual('details', {
   foreignField: 'order'
 })
 
-// Virtual for delivery address
-orderSchema.virtual('deliveryAddress').get(function () {
-  if (this.deliveryType === 'pickup') {
-    return 'Customer Pickup'
+// Virtual: Subtotal (calculated from details when populated)
+orderSchema.virtual('subtotal').get(function () {
+  if (this.details && Array.isArray(this.details)) {
+    return this.details.reduce((sum, detail) => sum + detail.totalPrice, 0)
   }
-  const parts = []
-  if (this.street) parts.push(this.street)
-  if (this.city) parts.push(this.city)
-  return parts.length > 0 ? parts.join(', ') : 'No address provided'
+  return 0
+})
+
+// Virtual: Discount Amount
+orderSchema.virtual('discountAmount').get(function () {
+  return parseFloat(((this.subtotal * this.discountPercentage) / 100).toFixed(2))
 })
 
 // Indexes for faster queries
 orderSchema.index({ orderNumber: 1 })
-orderSchema.index({ user: 1, createdAt: -1 })
 orderSchema.index({ customer: 1, createdAt: -1 })
+orderSchema.index({ createdBy: 1, createdAt: -1 })
 orderSchema.index({ status: 1 })
 orderSchema.index({ paymentStatus: 1 })
+orderSchema.index({ createdAt: -1 })
+orderSchema.index({ total: 1 })
 
 // Pre-save hook to generate order number
 orderSchema.pre('save', async function (next) {
@@ -133,18 +128,19 @@ orderSchema.pre('save', async function (next) {
   next()
 })
 
-// Method to calculate total
-orderSchema.methods.calculateTotal = async function () {
+// Method to recalculate and update total from details
+orderSchema.methods.recalculateTotals = async function () {
   const OrderDetail = mongoose.model('OrderDetail')
   const details = await OrderDetail.find({ order: this._id })
 
-  this.subtotal = details.reduce((sum, detail) => sum + detail.totalPrice, 0)
+  // Calculate subtotal
+  const subtotal = details.reduce((sum, detail) => sum + detail.totalPrice, 0)
 
   // Calculate discount amount
-  const discountAmount = (this.subtotal * this.discountPercentage) / 100
+  const discountAmount = (subtotal * this.discountPercentage) / 100
 
-  // Calculate total
-  this.total = this.subtotal - discountAmount + this.shippingFee
+  // Calculate and store total
+  this.total = subtotal - discountAmount + this.shippingFee
 
   return this.save()
 }
@@ -202,27 +198,27 @@ orderSchema.methods.updatePaymentStatus = function (newStatus) {
 }
 
 // Method to apply discount
-orderSchema.methods.applyDiscount = function (discountType, discountPercentage) {
-  this.discountType = discountType
+orderSchema.methods.applyDiscount = async function (discountPercentage) {
   this.discountPercentage = discountPercentage
-
-  // Recalculate total
-  const discountAmount = (this.subtotal * this.discountPercentage) / 100
-  this.total = this.subtotal - discountAmount + this.shippingFee
-
-  return this.save()
+  return this.recalculateTotals()
 }
 
-// Static method to get orders with details
+// Method to update shipping fee
+orderSchema.methods.updateShippingFee = async function (shippingFee) {
+  this.shippingFee = shippingFee
+  return this.recalculateTotals()
+}
+
+// Static method to get orders with details (subtotal will be calculated)
 orderSchema.statics.findWithDetails = function (query = {}) {
   return this.find(query)
     .populate('customer', 'customerCode fullName email phone')
-    .populate('user', 'fullName')
+    .populate('createdBy', 'fullName')
     .populate({
       path: 'details',
       populate: {
         path: 'product',
-        select: 'productCode name'
+        select: 'productCode name image'
       }
     })
     .sort({ createdAt: -1 })
@@ -239,11 +235,11 @@ orderSchema.statics.findByCustomer = function (customerId) {
 orderSchema.statics.findByStatus = function (status) {
   return this.find({ status })
     .populate('customer', 'customerCode fullName phone')
-    .populate('user', 'fullName')
+    .populate('createdBy', 'fullName')
     .sort({ createdAt: -1 })
 }
 
-// Static method to get statistics
+// Static method to get statistics (FAST with stored total)
 orderSchema.statics.getStatistics = async function (options = {}) {
   const { startDate, endDate, customerId } = options
 
@@ -265,8 +261,12 @@ orderSchema.statics.getStatistics = async function (options = {}) {
       $group: {
         _id: null,
         totalOrders: { $sum: 1 },
-        totalRevenue: { $sum: '$total' },
-        averageOrderValue: { $avg: '$total' },
+        totalRevenue: {
+          $sum: { $toDouble: '$total' }
+        },
+        averageOrderValue: {
+          $avg: { $toDouble: '$total' }
+        },
         pendingOrders: {
           $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
         },
@@ -286,7 +286,13 @@ orderSchema.statics.getStatistics = async function (options = {}) {
           $sum: { $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0] }
         },
         unpaidAmount: {
-          $sum: { $cond: [{ $ne: ['$paymentStatus', 'paid'] }, '$total', 0] }
+          $sum: {
+            $cond: [
+              { $ne: ['$paymentStatus', 'paid'] },
+              { $toDouble: '$total' },
+              0
+            ]
+          }
         }
       }
     }
@@ -323,8 +329,13 @@ orderSchema.statics.getDailyRevenue = async function (days = 7) {
         _id: {
           $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
         },
-        totalRevenue: { $sum: '$total' },
-        orderCount: { $sum: 1 }
+        totalRevenue: {
+          $sum: { $toDouble: '$total' }
+        },
+        orderCount: { $sum: 1 },
+        averageOrderValue: {
+          $avg: { $toDouble: '$total' }
+        }
       }
     },
     {
@@ -335,11 +346,70 @@ orderSchema.statics.getDailyRevenue = async function (days = 7) {
   return revenue
 }
 
+// Static method to get top customers by revenue
+orderSchema.statics.getTopCustomers = async function (limit = 10) {
+  return this.aggregate([
+    {
+      $match: {
+        status: { $ne: 'cancelled' },
+        customer: { $exists: true }
+      }
+    },
+    {
+      $group: {
+        _id: '$customer',
+        totalSpent: { $sum: { $toDouble: '$total' } },
+        orderCount: { $sum: 1 },
+        averageOrderValue: { $avg: { $toDouble: '$total' } }
+      }
+    },
+    {
+      $sort: { totalSpent: -1 }
+    },
+    {
+      $limit: limit
+    },
+    {
+      $lookup: {
+        from: 'customers',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'customerInfo'
+      }
+    },
+    {
+      $unwind: '$customerInfo'
+    },
+    {
+      $project: {
+        _id: 0,
+        customer: {
+          id: '$_id',
+          customerCode: '$customerInfo.customerCode',
+          fullName: '$customerInfo.fullName',
+          email: '$customerInfo.email'
+        },
+        totalSpent: 1,
+        orderCount: 1,
+        averageOrderValue: 1
+      }
+    }
+  ])
+}
+
 orderSchema.set('toJSON', {
   transform: (document, returnedObject) => {
     returnedObject.id = returnedObject._id.toString()
     delete returnedObject._id
     delete returnedObject.__v
+
+    // Convert Decimal128 to number
+    if (returnedObject.shippingFee && typeof returnedObject.shippingFee === 'object') {
+      returnedObject.shippingFee = parseFloat(returnedObject.shippingFee.toString())
+    }
+    if (returnedObject.total && typeof returnedObject.total === 'object') {
+      returnedObject.total = parseFloat(returnedObject.total.toString())
+    }
   }
 })
 

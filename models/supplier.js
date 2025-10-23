@@ -4,6 +4,7 @@ const supplierSchema = new mongoose.Schema({
   supplierCode: {
     type: String,
     unique: true,
+    required: [true, 'Supplier code is required'],
     trim: true,
     // Auto-generate: SUP2025000001
   },
@@ -31,55 +32,10 @@ const supplierSchema = new mongoose.Schema({
     match: [/^[0-9]{10,15}$/, 'Please enter a valid phone number (10-15 digits)']
   },
 
-  street: {
+  address: {
     type: String,
     trim: true,
-    maxlength: [200, 'Street must be at most 200 characters']
-  },
-
-  city: {
-    type: String,
-    trim: true,
-    maxlength: [100, 'City must be at most 100 characters']
-  },
-
-  bankName: {
-    type: String,
-    trim: true,
-    maxlength: [100, 'Bank name must be at most 100 characters']
-  },
-
-  accountNumber: {
-    type: String,
-    trim: true,
-    maxlength: [50, 'Account number must be at most 50 characters']
-  },
-
-  paymentTerms: {
-    type: String,
-    enum: {
-      values: ['cod', 'net15', 'net30', 'net60', 'net90'],
-      message: '{VALUE} is not a valid payment term'
-    },
-    default: 'net30'
-  },
-
-  creditLimit: {
-    type: Number,
-    default: 0,
-    min: [0, 'Credit limit cannot be negative']
-  },
-
-  currentDebt: {
-    type: Number,
-    default: 0,
-    min: [0, 'Current debt cannot be negative']
-  },
-
-  notes: {
-    type: String,
-    trim: true,
-    maxlength: [1000, 'Notes must be at most 1000 characters']
+    maxlength: [500, 'Address must be at most 500 characters']
   },
 
   isActive: {
@@ -100,25 +56,12 @@ supplierSchema.virtual('purchaseOrders', {
   foreignField: 'supplier'
 })
 
-// Virtual for full address
-supplierSchema.virtual('fullAddress').get(function () {
-  const parts = []
-  if (this.street) parts.push(this.street)
-  if (this.city) parts.push(this.city)
-  return parts.join(', ') || 'No address provided'
-})
-
-// Virtual for bank account info
-supplierSchema.virtual('bankAccountInfo').get(function () {
-  if (!this.bankName && !this.accountNumber) {
-    return 'No bank account information'
-  }
-  return `${this.bankName || 'N/A'} - ${this.accountNumber || 'N/A'}`
-})
-
-// Virtual for available credit
-supplierSchema.virtual('availableCredit').get(function () {
-  return Math.max(0, this.creditLimit - this.currentDebt)
+// Virtual for detail supplier (1-1 relationship)
+supplierSchema.virtual('detailSupplier', {
+  ref: 'DetailSupplier',
+  localField: '_id',
+  foreignField: 'supplier',
+  justOne: true
 })
 
 // Index for faster queries
@@ -139,48 +82,12 @@ supplierSchema.pre('save', async function (next) {
 
 // Method to update profile
 supplierSchema.methods.updateProfile = function (updates) {
-  const allowedUpdates = ['companyName', 'phone', 'street', 'city', 'bankName', 'accountNumber', 'paymentTerms', 'notes']
+  const allowedUpdates = ['companyName', 'phone', 'address']
   Object.keys(updates).forEach(key => {
     if (allowedUpdates.includes(key)) {
       this[key] = updates[key]
     }
   })
-  return this.save()
-}
-
-// Method to add debt
-supplierSchema.methods.addDebt = function (amount) {
-  if (amount <= 0) {
-    throw new Error('Debt amount must be positive')
-  }
-  this.currentDebt += amount
-  if (this.currentDebt > this.creditLimit) {
-    throw new Error(`Credit limit exceeded. Available credit: ${this.availableCredit}`)
-  }
-  return this.save()
-}
-
-// Method to pay debt
-supplierSchema.methods.payDebt = function (amount) {
-  if (amount <= 0) {
-    throw new Error('Payment amount must be positive')
-  }
-  if (amount > this.currentDebt) {
-    throw new Error(`Payment amount (${amount}) exceeds current debt (${this.currentDebt})`)
-  }
-  this.currentDebt -= amount
-  return this.save()
-}
-
-// Method to update credit limit
-supplierSchema.methods.updateCreditLimit = function (newLimit) {
-  if (newLimit < 0) {
-    throw new Error('Credit limit cannot be negative')
-  }
-  if (newLimit < this.currentDebt) {
-    throw new Error('New credit limit cannot be less than current debt')
-  }
-  this.creditLimit = newLimit
   return this.save()
 }
 
@@ -198,17 +105,9 @@ supplierSchema.methods.activate = function () {
 
 // Static method to find active suppliers
 supplierSchema.statics.findActiveSuppliers = function () {
-  return this.find({ isActive: true }).sort({ companyName: 1 })
-}
-
-// Static method to find suppliers with debt
-supplierSchema.statics.findSuppliersWithDebt = function () {
-  return this.find({
-    currentDebt: { $gt: 0 },
-    isActive: true
-  })
-    .sort({ currentDebt: -1 })
-    .select('supplierCode companyName currentDebt creditLimit phone email')
+  return this.find({ isActive: true })
+    .populate('detailSupplier')
+    .sort({ companyName: 1 })
 }
 
 // Static method to search suppliers
@@ -221,7 +120,9 @@ supplierSchema.statics.searchSuppliers = function (searchTerm) {
       { email: searchRegex },
       { phone: searchRegex }
     ]
-  }).sort({ companyName: 1 })
+  })
+    .populate('detailSupplier')
+    .sort({ companyName: 1 })
 }
 
 // Static method to get statistics
@@ -236,23 +137,26 @@ supplierSchema.statics.getStatistics = async function () {
         },
         inactive: {
           $sum: { $cond: ['$isActive', 0, 1] }
-        },
-        totalDebt: { $sum: '$currentDebt' },
-        totalCreditLimit: { $sum: '$creditLimit' },
-        suppliersWithDebt: {
-          $sum: { $cond: [{ $gt: ['$currentDebt', 0] }, 1, 0] }
         }
       }
     }
   ])
 
-  return stats.length > 0 ? stats[0] : {
-    total: 0,
-    active: 0,
-    inactive: 0,
-    totalDebt: 0,
-    totalCreditLimit: 0,
-    suppliersWithDebt: 0
+  if (stats.length === 0) {
+    return {
+      total: 0,
+      active: 0,
+      inactive: 0
+    }
+  }
+
+  // Get debt statistics from DetailSupplier
+  const DetailSupplier = mongoose.model('DetailSupplier')
+  const debtStats = await DetailSupplier.getDebtStatistics()
+
+  return {
+    ...stats[0],
+    ...debtStats
   }
 }
 

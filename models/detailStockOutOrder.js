@@ -29,6 +29,18 @@ const detailStockOutOrderSchema = new mongoose.Schema({
       }
       return 0
     }
+  },
+
+  total: {
+    type: mongoose.Schema.Types.Decimal128,
+    required: [true, 'Total is required'],
+    min: [0, 'Total cannot be negative'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString())
+      }
+      return 0
+    }
   }
 
 }, {
@@ -37,18 +49,17 @@ const detailStockOutOrderSchema = new mongoose.Schema({
   toObject: { virtuals: true, getters: true }
 })
 
-// Virtual field: Calculate total price
-detailStockOutOrderSchema.virtual('totalPrice').get(function () {
-  return this.quantity * this.unitPrice
-})
-
 // Indexes for faster queries
 detailStockOutOrderSchema.index({ stockOutOrder: 1 })
 detailStockOutOrderSchema.index({ product: 1 })
 detailStockOutOrderSchema.index({ stockOutOrder: 1, product: 1 })
 
-// Pre-save hook to validate stock availability
+// Pre-save hook to calculate total
 detailStockOutOrderSchema.pre('save', async function (next) {
+  // Calculate total
+  this.total = this.quantity * this.unitPrice
+
+  // Validate stock availability
   if (this.isNew || this.isModified('quantity')) {
     const Inventory = mongoose.model('Inventory')
     const inventory = await Inventory.findOne({ product: this.product })
@@ -64,8 +75,25 @@ detailStockOutOrderSchema.pre('save', async function (next) {
   next()
 })
 
-// Note: No need for post-save/remove hooks to update totals
-// since subtotal and total are virtual fields that calculate automatically
+// Post-save hook to update stock out order total
+detailStockOutOrderSchema.post('save', async function (doc) {
+  const StockOutOrder = mongoose.model('StockOutOrder')
+  const stockOutOrder = await StockOutOrder.findById(doc.stockOutOrder)
+  if (stockOutOrder) {
+    await stockOutOrder.recalculateTotalPrice()
+  }
+})
+
+// Post-remove hook to update stock out order total
+detailStockOutOrderSchema.post('findOneAndDelete', async function (doc) {
+  if (doc) {
+    const StockOutOrder = mongoose.model('StockOutOrder')
+    const stockOutOrder = await StockOutOrder.findById(doc.stockOutOrder)
+    if (stockOutOrder) {
+      await stockOutOrder.recalculateTotalPrice()
+    }
+  }
+})
 
 // Static method to create detail with validation
 detailStockOutOrderSchema.statics.createDetailWithValidation = async function (detailData) {
@@ -117,7 +145,7 @@ detailStockOutOrderSchema.statics.getTotalQuantityByProduct = async function (st
   })
 
   const totalQuantity = details.reduce((sum, detail) => sum + detail.quantity, 0)
-  const totalAmount = details.reduce((sum, detail) => sum + detail.totalPrice, 0)
+  const totalAmount = details.reduce((sum, detail) => sum + detail.total, 0)
 
   return { totalQuantity, totalAmount }
 }
@@ -168,6 +196,7 @@ detailStockOutOrderSchema.methods.updateQuantity = function (newQuantity) {
     throw new Error('Quantity must be at least 1')
   }
   this.quantity = newQuantity
+  // total will be recalculated in pre-save hook
   return this.save()
 }
 
@@ -177,6 +206,7 @@ detailStockOutOrderSchema.methods.updateUnitPrice = function (newUnitPrice) {
     throw new Error('Unit price cannot be negative')
   }
   this.unitPrice = newUnitPrice
+  // total will be recalculated in pre-save hook
   return this.save()
 }
 
@@ -189,6 +219,9 @@ detailStockOutOrderSchema.set('toJSON', {
     // Convert Decimal128 to number
     if (returnedObject.unitPrice && typeof returnedObject.unitPrice === 'object') {
       returnedObject.unitPrice = parseFloat(returnedObject.unitPrice.toString())
+    }
+    if (returnedObject.total && typeof returnedObject.total === 'object') {
+      returnedObject.total = parseFloat(returnedObject.total.toString())
     }
   }
 })

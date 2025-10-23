@@ -29,6 +29,18 @@ const detailPurchaseOrderSchema = new mongoose.Schema({
       }
       return 0
     }
+  },
+
+  total: {
+    type: mongoose.Schema.Types.Decimal128,
+    required: [true, 'Total is required'],
+    min: [0, 'Total cannot be negative'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString())
+      }
+      return 0
+    }
   }
 
 }, {
@@ -37,18 +49,36 @@ const detailPurchaseOrderSchema = new mongoose.Schema({
   toObject: { virtuals: true, getters: true }
 })
 
-// Virtual field: Calculate total price
-detailPurchaseOrderSchema.virtual('totalPrice').get(function () {
-  return this.quantity * this.unitPrice
-})
-
 // Indexes for faster queries
 detailPurchaseOrderSchema.index({ purchaseOrder: 1 })
 detailPurchaseOrderSchema.index({ product: 1 })
 detailPurchaseOrderSchema.index({ purchaseOrder: 1, product: 1 })
 
-// Note: No need for post-save/remove hooks to update totals
-// since subtotal and total are virtual fields that calculate automatically
+// Pre-save hook to calculate total
+detailPurchaseOrderSchema.pre('save', function (next) {
+  this.total = this.quantity * this.unitPrice
+  next()
+})
+
+// Post-save hook to update purchase order total
+detailPurchaseOrderSchema.post('save', async function (doc) {
+  const PurchaseOrder = mongoose.model('PurchaseOrder')
+  const purchaseOrder = await PurchaseOrder.findById(doc.purchaseOrder)
+  if (purchaseOrder) {
+    await purchaseOrder.recalculateTotalPrice()
+  }
+})
+
+// Post-remove hook to update purchase order total
+detailPurchaseOrderSchema.post('findOneAndDelete', async function (doc) {
+  if (doc) {
+    const PurchaseOrder = mongoose.model('PurchaseOrder')
+    const purchaseOrder = await PurchaseOrder.findById(doc.purchaseOrder)
+    if (purchaseOrder) {
+      await purchaseOrder.recalculateTotalPrice()
+    }
+  }
+})
 
 // Static method to create detail and update product cost price
 detailPurchaseOrderSchema.statics.createDetailAndUpdateProduct = async function (detailData) {
@@ -93,7 +123,7 @@ detailPurchaseOrderSchema.statics.getTotalQuantityByProduct = async function (pu
   })
 
   const totalQuantity = details.reduce((sum, detail) => sum + detail.quantity, 0)
-  const totalAmount = details.reduce((sum, detail) => sum + detail.totalPrice, 0)
+  const totalAmount = details.reduce((sum, detail) => sum + detail.total, 0)
 
   return { totalQuantity, totalAmount }
 }
@@ -119,6 +149,7 @@ detailPurchaseOrderSchema.methods.updateQuantity = function (newQuantity) {
     throw new Error('Quantity must be at least 1')
   }
   this.quantity = newQuantity
+  // total will be recalculated in pre-save hook
   return this.save()
 }
 
@@ -128,6 +159,7 @@ detailPurchaseOrderSchema.methods.updateUnitPrice = function (newUnitPrice) {
     throw new Error('Unit price cannot be negative')
   }
   this.unitPrice = newUnitPrice
+  // total will be recalculated in pre-save hook
   return this.save()
 }
 
@@ -140,6 +172,9 @@ detailPurchaseOrderSchema.set('toJSON', {
     // Convert Decimal128 to number
     if (returnedObject.unitPrice && typeof returnedObject.unitPrice === 'object') {
       returnedObject.unitPrice = parseFloat(returnedObject.unitPrice.toString())
+    }
+    if (returnedObject.total && typeof returnedObject.total === 'object') {
+      returnedObject.total = parseFloat(returnedObject.total.toString())
     }
   }
 })

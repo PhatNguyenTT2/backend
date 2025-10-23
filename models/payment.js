@@ -22,12 +22,6 @@ const paymentSchema = new mongoose.Schema({
     // Note: This can reference either Order or PurchaseOrder
   },
 
-  relatedOrderNumber: {
-    type: String,
-    trim: true
-    // Cached order/PO number for quick access
-  },
-
   amount: {
     type: Number,
     required: [true, 'Amount is required'],
@@ -91,6 +85,32 @@ const paymentSchema = new mongoose.Schema({
   timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
+})
+
+// Virtual field: Get related order number based on payment type
+paymentSchema.virtual('relatedOrderNumber').get(function () {
+  if (this.paymentType === 'sales' && this.populated('relatedOrder')) {
+    return this.relatedOrder?.orderNumber
+  } else if (this.paymentType === 'purchase' && this.populated('relatedOrder')) {
+    return this.relatedOrder?.poNumber
+  }
+  return null
+})
+
+// Virtual populate for related order
+paymentSchema.virtual('relatedOrder', {
+  refPath: 'paymentType',
+  localField: 'relatedOrderId',
+  foreignField: '_id',
+  justOne: true,
+  options: function () {
+    return {
+      match: {
+        // Use dynamic model based on paymentType
+        ...(this.paymentType === 'sales' ? { model: 'Order' } : { model: 'PurchaseOrder' })
+      }
+    }
+  }
 })
 
 // Indexes for faster queries
@@ -183,7 +203,6 @@ paymentSchema.statics.createForOrder = async function (paymentData) {
     const payment = new this({
       ...paymentData,
       paymentType: 'sales',
-      relatedOrderNumber: order.orderNumber,
       customer: order.customer
     })
     await payment.save({ session })
@@ -218,7 +237,6 @@ paymentSchema.statics.createForPurchaseOrder = async function (paymentData) {
     const payment = new this({
       ...paymentData,
       paymentType: 'purchase',
-      relatedOrderNumber: po.poNumber,
       supplier: po.supplier
     })
     await payment.save({ session })
