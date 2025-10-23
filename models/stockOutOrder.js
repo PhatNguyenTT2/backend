@@ -7,6 +7,12 @@ const stockOutOrderSchema = new mongoose.Schema({
     // Auto-generate: SO2025000001
   },
 
+  orderDate: {
+    type: Date,
+    default: Date.now,
+    required: [true, 'Order date is required']
+  },
+
   expectedDeliveryDate: {
     type: Date
   },
@@ -110,7 +116,7 @@ stockOutOrderSchema.virtual('discountAmount').get(function () {
 stockOutOrderSchema.index({ soNumber: 1 })
 stockOutOrderSchema.index({ status: 1 })
 stockOutOrderSchema.index({ paymentStatus: 1 })
-stockOutOrderSchema.index({ createdAt: -1 })
+stockOutOrderSchema.index({ orderDate: -1 })
 
 // Pre-save hook to generate SO number
 stockOutOrderSchema.pre('save', async function (next) {
@@ -249,7 +255,7 @@ stockOutOrderSchema.statics.findWithDetails = async function (query = {}) {
         select: 'name sku image price'
       }
     })
-    .sort({ createdAt: -1 })
+    .sort({ orderDate: -1 })
 
   // Virtual fields will automatically calculate subtotal, discountAmount, and total
   // when details are populated
@@ -263,9 +269,9 @@ stockOutOrderSchema.statics.getStatistics = async function (options = {}) {
   const matchStage = {}
 
   if (startDate || endDate) {
-    matchStage.createdAt = {}
-    if (startDate) matchStage.createdAt.$gte = new Date(startDate)
-    if (endDate) matchStage.createdAt.$lte = new Date(endDate)
+    matchStage.orderDate = {}
+    if (startDate) matchStage.orderDate.$gte = new Date(startDate)
+    if (endDate) matchStage.orderDate.$lte = new Date(endDate)
   }
 
   const pipeline = [

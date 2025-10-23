@@ -13,6 +13,12 @@ const purchaseOrderSchema = new mongoose.Schema({
     required: [true, 'Supplier is required']
   },
 
+  orderDate: {
+    type: Date,
+    default: Date.now,
+    required: [true, 'Order date is required']
+  },
+
   expectedDeliveryDate: {
     type: Date
   },
@@ -117,7 +123,7 @@ purchaseOrderSchema.index({ poNumber: 1 })
 purchaseOrderSchema.index({ supplier: 1 })
 purchaseOrderSchema.index({ status: 1 })
 purchaseOrderSchema.index({ paymentStatus: 1 })
-purchaseOrderSchema.index({ createdAt: -1 })
+purchaseOrderSchema.index({ orderDate: -1 })
 
 // Pre-save hook to generate PO number
 purchaseOrderSchema.pre('save', async function (next) {
@@ -209,7 +215,7 @@ purchaseOrderSchema.statics.findWithDetails = async function (query = {}) {
         select: 'name sku image'
       }
     })
-    .sort({ createdAt: -1 })
+    .sort({ orderDate: -1 })
 
   // Virtual fields will automatically calculate subtotal, discountAmount, and total
   // when details are populated
@@ -223,9 +229,9 @@ purchaseOrderSchema.statics.getStatistics = async function (options = {}) {
   const matchStage = {}
 
   if (startDate || endDate) {
-    matchStage.createdAt = {}
-    if (startDate) matchStage.createdAt.$gte = new Date(startDate)
-    if (endDate) matchStage.createdAt.$lte = new Date(endDate)
+    matchStage.orderDate = {}
+    if (startDate) matchStage.orderDate.$gte = new Date(startDate)
+    if (endDate) matchStage.orderDate.$lte = new Date(endDate)
   }
 
   if (supplierId) {

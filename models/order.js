@@ -17,6 +17,12 @@ const orderSchema = new mongoose.Schema({
     ref: 'Employee'
   },
 
+  orderDate: {
+    type: Date,
+    default: Date.now,
+    required: [true, 'Order date is required']
+  },
+
   deliveryType: {
     type: String,
     enum: {
@@ -109,11 +115,11 @@ orderSchema.virtual('discountAmount').get(function () {
 
 // Indexes for faster queries
 orderSchema.index({ orderNumber: 1 })
-orderSchema.index({ customer: 1, createdAt: -1 })
-orderSchema.index({ createdBy: 1, createdAt: -1 })
+orderSchema.index({ customer: 1, orderDate: -1 })
+orderSchema.index({ createdBy: 1, orderDate: -1 })
 orderSchema.index({ status: 1 })
 orderSchema.index({ paymentStatus: 1 })
-orderSchema.index({ createdAt: -1 })
+orderSchema.index({ orderDate: -1 })
 orderSchema.index({ total: 1 })
 
 // Pre-save hook to generate order number
@@ -221,14 +227,14 @@ orderSchema.statics.findWithDetails = function (query = {}) {
         select: 'productCode name image'
       }
     })
-    .sort({ createdAt: -1 })
+    .sort({ orderDate: -1 })
 }
 
 // Static method to find by customer
 orderSchema.statics.findByCustomer = function (customerId) {
   return this.find({ customer: customerId })
     .populate('details')
-    .sort({ createdAt: -1 })
+    .sort({ orderDate: -1 })
 }
 
 // Static method to find by status
@@ -236,7 +242,7 @@ orderSchema.statics.findByStatus = function (status) {
   return this.find({ status })
     .populate('customer', 'customerCode fullName phone')
     .populate('createdBy', 'fullName')
-    .sort({ createdAt: -1 })
+    .sort({ orderDate: -1 })
 }
 
 // Static method to get statistics (FAST with stored total)
@@ -246,9 +252,9 @@ orderSchema.statics.getStatistics = async function (options = {}) {
   const matchStage = {}
 
   if (startDate || endDate) {
-    matchStage.createdAt = {}
-    if (startDate) matchStage.createdAt.$gte = new Date(startDate)
-    if (endDate) matchStage.createdAt.$lte = new Date(endDate)
+    matchStage.orderDate = {}
+    if (startDate) matchStage.orderDate.$gte = new Date(startDate)
+    if (endDate) matchStage.orderDate.$lte = new Date(endDate)
   }
 
   if (customerId) {
@@ -320,14 +326,14 @@ orderSchema.statics.getDailyRevenue = async function (days = 7) {
   const revenue = await this.aggregate([
     {
       $match: {
-        createdAt: { $gte: startDate },
+        orderDate: { $gte: startDate },
         status: { $ne: 'cancelled' }
       }
     },
     {
       $group: {
         _id: {
-          $dateToString: { format: '%Y-%m-%d', date: '$createdAt' }
+          $dateToString: { format: '%Y-%m-%d', date: '$orderDate' }
         },
         totalRevenue: {
           $sum: { $toDouble: '$total' }

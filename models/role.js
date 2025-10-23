@@ -27,12 +27,7 @@ const roleSchema = new mongoose.Schema({
   permissions: [{
     type: String,
     trim: true
-  }],
-
-  isActive: {
-    type: Boolean,
-    default: true
-  }
+  }]
 
 }, {
   timestamps: true,
@@ -43,7 +38,6 @@ const roleSchema = new mongoose.Schema({
 // Indexes for better query performance
 roleSchema.index({ roleCode: 1 })
 roleSchema.index({ roleName: 1 })
-roleSchema.index({ isActive: 1 })
 
 // Virtual to get user count
 roleSchema.virtual('userCount', {
@@ -64,7 +58,7 @@ roleSchema.pre('save', async function (next) {
 
 // Method to update role information
 roleSchema.methods.updateRole = function (updateData) {
-  const allowedUpdates = ['roleName', 'description', 'permissions', 'isActive']
+  const allowedUpdates = ['roleName', 'description', 'permissions']
   Object.keys(updateData).forEach(key => {
     if (allowedUpdates.includes(key)) {
       this[key] = updateData[key]
@@ -92,15 +86,9 @@ roleSchema.methods.removePermission = function (permission) {
   return this
 }
 
-// Method to toggle active status
-roleSchema.methods.toggleActive = function () {
-  this.isActive = !this.isActive
-  return this.save()
-}
-
-// Static method to find active roles
-roleSchema.statics.findActiveRoles = function () {
-  return this.find({ isActive: true }).sort({ roleName: 1 })
+// Static method to find all roles
+roleSchema.statics.findAllRoles = function () {
+  return this.find().sort({ roleName: 1 })
 }
 
 // Static method to find role by code
@@ -132,8 +120,6 @@ roleSchema.statics.getStatistics = async function () {
   const Employee = mongoose.model('Employee')
 
   const totalRoles = await this.countDocuments()
-  const activeRoles = await this.countDocuments({ isActive: true })
-  const inactiveRoles = totalRoles - activeRoles
 
   const rolesWithUsers = await this.aggregate([
     {
@@ -157,8 +143,6 @@ roleSchema.statics.getStatistics = async function () {
 
   return {
     totalRoles,
-    activeRoles,
-    inactiveRoles,
     rolesWithUsers
   }
 }
