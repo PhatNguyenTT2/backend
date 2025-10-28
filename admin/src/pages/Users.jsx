@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { UserListHeader, UserList, AddUserModal, EditUserModal, ResetPasswordModal } from '../components/UserList';
-import userService from '../services/userService';
+// import userService from '../services/userService';
 
 const Users = () => {
   // Breadcrumb items
