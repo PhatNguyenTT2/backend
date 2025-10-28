@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { CategoryList, CategoryListHeader, AddCategoryModal, EditCategoryModal } from '../components/CategoryList';
-import categoryService from '../services/categoryService';
+// import categoryService from '../services/categoryService';
 
 export const Categories = () => {
   // Breadcrumb items
@@ -98,7 +98,7 @@ export const Categories = () => {
       setIsLoading(true);
       setError(null);
       // Include inactive categories for admin panel
-      const response = await categoryService.getCategories({ include_inactive: true });
+      // const response = await categoryService.getCategories({ include_inactive: true });
 
       // Handle response structure: { success: true, data: { categories: [...] } }
       if (response.success && response.data && response.data.categories) {
@@ -178,9 +178,9 @@ export const Categories = () => {
     }
 
     try {
-      await categoryService.updateCategory(category.id, {
-        isActive: newStatus
-      });
+      // await categoryService.updateCategory(category.id, {
+      //   isActive: newStatus
+      // });
       fetchCategories(); // Refresh the list
     } catch (err) {
       console.error('Error toggling category status:', err);
@@ -205,7 +205,7 @@ export const Categories = () => {
     }
 
     try {
-      await categoryService.deleteCategory(category.id);
+      // await categoryService.deleteCategory(category.id);
       alert('Category deleted successfully!');
       fetchCategories(); // Refresh the list
     } catch (err) {

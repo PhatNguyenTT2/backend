@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import inventoryService from '../../services/inventoryService';
+// import inventoryService from '../../services/inventoryService';
 
 export const MovementHistoryModal = ({ isOpen, onClose, productId, productName, productSku }) => {
   const [movements, setMovements] = useState([]);
@@ -17,7 +17,7 @@ export const MovementHistoryModal = ({ isOpen, onClose, productId, productName, 
       try {
         console.log('Fetching movements for product:', productId);
 
-        const data = await inventoryService.getMovements(productId, { limit: 50 });
+        // const data = await inventoryService.getMovements(productId, { limit: 50 });
         console.log('Movement data:', data);
 
         setMovements(data.movements || []);

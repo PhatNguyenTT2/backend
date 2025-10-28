@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { CustomerListHeader, CustomerList, AddCustomerModal, EditCustomerModal } from '../components/CustomerList';
-import customerService from '../services/customerService';
+// import customerService from '../services/customerService';
 
 const Customers = () => {
   // Breadcrumb items
@@ -48,11 +48,11 @@ const Customers = () => {
 
       console.log('Fetching customers with filters:', filters);
 
-      const response = await customerService.getCustomers(filters);
+      // const response = await customerService.getCustomers(filters);
       console.log('API Response:', response);
 
       if (response.success) {
-        const formattedCustomers = customerService.formatCustomersForDisplay(response.data.customers);
+        // const formattedCustomers = customerService.formatCustomersForDisplay(response.data.customers);
         console.log('Formatted customers:', formattedCustomers);
         setCustomers(formattedCustomers);
         setPagination(response.data.pagination);
@@ -145,7 +145,7 @@ const Customers = () => {
     const newStatus = !customer.isActive;
 
     try {
-      const response = await customerService.toggleCustomerStatus(customer.id, newStatus);
+      // const response = await customerService.toggleCustomerStatus(customer.id, newStatus);
 
       if (response) {
         // Refresh customer list
@@ -197,7 +197,7 @@ const Customers = () => {
     if (!confirmed) return;
 
     try {
-      await customerService.deleteCustomer(customer.id);
+      // await customerService.deleteCustomer(customer.id);
       console.log('Customer deleted successfully');
       fetchCustomers(); // Refresh list
     } catch (error) {

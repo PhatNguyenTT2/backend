@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { EditPurchaseOrderModal } from './EditPurchaseOrderModal';
 import { InvoicePurchaseModal } from './InvoicePurchaseModal';
-import purchaseOrderService from '../../services/purchaseOrderService';
-import inventoryService from '../../services/inventoryService';
+// import purchaseOrderService from '../../services/purchaseOrderService';
+// import inventoryService from '../../services/inventoryService';
 
 const PurchaseOrderList = ({
   purchaseOrders = [],

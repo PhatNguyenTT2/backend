@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import productService from '../../services/productService';
-import categoryService from '../../services/categoryService';
+// import productService from '../../services/productService';
+// import categoryService from '../../services/categoryService';
 
 export const EditProductModal = ({ isOpen, onClose, onSuccess, product }) => {
   const [formData, setFormData] = useState({
@@ -361,8 +361,8 @@ export const EditProductModal = ({ isOpen, onClose, onSuccess, product }) => {
               {formData.costPrice && formData.price &&
                 parseFloat(formData.costPrice) > 0 && parseFloat(formData.price) > 0 && (
                   <p className={`mt-1 text-[11px] font-medium font-['Poppins',sans-serif] ${parseFloat(formData.price) >= parseFloat(formData.costPrice)
-                      ? 'text-emerald-600'
-                      : 'text-red-600'
+                    ? 'text-emerald-600'
+                    : 'text-red-600'
                     }`}>
                     {parseFloat(formData.price) >= parseFloat(formData.costPrice) ? '📈' : '📉'} Margin: {
                       (((parseFloat(formData.price) - parseFloat(formData.costPrice)) /

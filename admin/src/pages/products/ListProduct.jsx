@@ -3,7 +3,7 @@ import { Layout } from '../../components/Layout';
 import { Breadcrumb } from '../../components/Breadcrumb';
 import { ProductList, ProductListHeader, AddProductModal, EditProductModal } from '../../components/ListProduct';
 
-import productService from '../../services/productService';
+// import productService from '../../services/productService';
 
 const ListProduct = () => {
   // Breadcrumb items
@@ -47,7 +47,7 @@ const ListProduct = () => {
       setIsLoading(true);
       setError(null);
       // Fetch all products including inactive ones for admin panel
-      const response = await productService.getProducts({ per_page: 1000, include_inactive: true });
+      // const response = await productService.getProducts({ per_page: 1000, include_inactive: true });
 
       // Handle different response structures
       let productData = [];
@@ -174,7 +174,7 @@ const ListProduct = () => {
 
       if (window.confirm(`Are you sure you want to deactivate "${product.name}"?\n\nThe product will no longer be available.`)) {
         try {
-          await productService.updateProduct(product.id, { isActive: false });
+          // await productService.updateProduct(product.id, { isActive: false });
           fetchProducts();
         } catch (err) {
           console.error('Error deactivating product:', err);
@@ -186,7 +186,7 @@ const ListProduct = () => {
       // Activating (inactive -> active)
       if (window.confirm(`Are you sure you want to activate "${product.name}"?`)) {
         try {
-          await productService.updateProduct(product.id, { isActive: true });
+          // await productService.updateProduct(product.id, { isActive: true });
           fetchProducts();
         } catch (err) {
           console.error('Error activating product:', err);
@@ -206,7 +206,7 @@ const ListProduct = () => {
 
     if (window.confirm(`Are you sure you want to delete "${product.name}"?\n\nThis action cannot be undone.`)) {
       try {
-        await productService.deleteProduct(product.id);
+        // await productService.deleteProduct(product.id);
         // Refresh the list
         fetchProducts();
       } catch (err) {

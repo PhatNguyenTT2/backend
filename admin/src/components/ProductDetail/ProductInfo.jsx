@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Heart, Share2 } from 'lucide-react';
-import productService from '../../services/productService';
+// import productService from '../../services/productService';
 
 export const ProductInfo = ({ productId }) => {
   const [selectedImage, setSelectedImage] = useState(0);

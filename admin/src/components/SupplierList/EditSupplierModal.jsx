@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import supplierService from '../../services/supplierService'
+// import supplierService from '../../services/supplierService'
 
 export const EditSupplierModal = ({ isOpen, onClose, onSuccess, supplier }) => {
   const [formData, setFormData] = useState({

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import categoryService from '../../services/categoryService';
+// import categoryService from '../../services/categoryService';
 
 export const AddCategoryModal = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -48,7 +48,7 @@ export const AddCategoryModal = ({ isOpen, onClose, onSuccess }) => {
         categoryData.description = formData.description.trim();
       }
 
-      const response = await categoryService.createCategory(categoryData);
+      // const response = await categoryService.createCategory(categoryData);
 
       if (onSuccess) {
         onSuccess(response);

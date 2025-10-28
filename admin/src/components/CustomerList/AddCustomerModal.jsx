@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import customerService from '../../services/customerService';
+// import customerService from '../../services/customerService';
 
 export const AddCustomerModal = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({

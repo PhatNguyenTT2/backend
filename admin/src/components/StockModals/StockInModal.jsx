@@ -1,8 +1,8 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
-import productService from '../../services/productService';
-import supplierService from '../../services/supplierService';
-import inventoryService from '../../services/inventoryService';
-import purchaseOrderService from '../../services/purchaseOrderService';
+// import productService from '../../services/productService';
+// import supplierService from '../../services/supplierService';
+// import inventoryService from '../../services/inventoryService';
+// import purchaseOrderService from '../../services/purchaseOrderService';
 
 export const StockInModal = ({ isOpen, onClose, onSuccess, preSelectedProduct = null }) => {
   const dropdownRefs = useRef({});

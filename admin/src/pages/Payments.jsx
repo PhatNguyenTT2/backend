@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { PaymentList, PaymentListHeader } from '../components/PaymentList';
-import paymentService from '../services/paymentService';
+// import paymentService from '../services/paymentService';
 
 const Payments = () => {
   // Breadcrumb items
@@ -44,7 +44,7 @@ const Payments = () => {
       setError(null);
 
       console.log('[Payments] Fetching with filters:', filters);
-      const response = await paymentService.getPayments(filters);
+      // const response = await paymentService.getPayments(filters);
       console.log('[Payments] API Response:', response);
 
       // Backend returns { payments, pagination } directly
@@ -139,7 +139,7 @@ const Payments = () => {
     try {
       console.log('[Payments] Updating status:', paymentId, newStatus);
       // Use the new status update endpoint with inventory management
-      const response = await paymentService.updatePaymentStatus(paymentId, newStatus);
+      // const response = await paymentService.updatePaymentStatus(paymentId, newStatus);
       console.log('[Payments] Update response:', response);
 
       if (response) {
@@ -158,7 +158,7 @@ const Payments = () => {
   const handleRefund = async (paymentId, amount, reason) => {
     try {
       console.log('[Payments] Processing refund:', paymentId, amount, reason);
-      const response = await paymentService.processRefund(paymentId, amount, reason);
+      // const response = await paymentService.processRefund(paymentId, amount, reason);
       console.log('[Payments] Refund response:', response);
 
       if (response) {

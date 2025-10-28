@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { SupplierListHeader, SupplierList } from '../components/SupplierList';
-import supplierService from '../services/supplierService';
+// import supplierService from '../services/supplierService';
 
 const Suppliers = () => {
   // Breadcrumb items
@@ -50,7 +50,7 @@ const Suppliers = () => {
 
       console.log('Fetching suppliers with filters:', filters);
 
-      const response = await supplierService.getSuppliers(filters);
+      // const response = await supplierService.getSuppliers(filters);
       console.log('API Response:', response);
 
       if (response.success) {
@@ -155,7 +155,7 @@ const Suppliers = () => {
   // Toggle active handler
   const handleToggleActive = async (supplier) => {
     try {
-      await supplierService.updateSupplier(supplier.id, { isActive: supplier.isActive === false ? true : false });
+      // await supplierService.updateSupplier(supplier.id, { isActive: supplier.isActive === false ? true : false });
       await fetchSuppliers();
     } catch (e) {
       console.error('Failed to toggle supplier active:', e);
@@ -176,7 +176,7 @@ const Suppliers = () => {
     }
 
     try {
-      await supplierService.deleteSupplier(supplier.id, true); // permanent delete
+      // await supplierService.deleteSupplier(supplier.id, true); // permanent delete
       await fetchSuppliers();
       // Optional: alert('Supplier deleted successfully!');
     } catch (e) {

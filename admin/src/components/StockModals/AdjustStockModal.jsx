@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import productService from '../../services/productService';
-import inventoryService from '../../services/inventoryService';
+// import productService from '../../services/productService';
+// import inventoryService from '../../services/inventoryService';
 
 export const AdjustStockModal = ({ isOpen, onClose, onSuccess, preSelectedProduct = null }) => {
   const dropdownRefs = useRef({});

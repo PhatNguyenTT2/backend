@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SortBy } from './SortBy';
 import { generateProductUrl } from '../../utils/productRouting';
-import productService from '../../services/productService';
+// import productService from '../../services/productService';
 
 export const ProductList = ({ filters = {}, onSortChange }) => {
   const navigate = useNavigate();

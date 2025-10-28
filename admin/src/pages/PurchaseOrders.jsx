@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { PurchaseOrderList, PurchaseOrderListHeader } from '../components/PurchaseOrderList';
-import purchaseOrderService from '../services/purchaseOrderService';
+// import purchaseOrderService from '../services/purchaseOrderService';
 
 const PurchaseOrders = () => {
   // Breadcrumb items
@@ -45,13 +45,13 @@ const PurchaseOrders = () => {
       setError(null);
 
       console.log('[PurchaseOrders] Fetching with filters:', filters);
-      const response = await purchaseOrderService.getPurchaseOrders(filters);
+      // const response = await purchaseOrderService.getPurchaseOrders(filters);
       console.log('[PurchaseOrders] API Response:', response);
 
       // Backend returns { purchaseOrders, pagination } directly
       if (response && response.purchaseOrders) {
         console.log('[PurchaseOrders] Raw purchase orders:', response.purchaseOrders);
-        const formattedPOs = purchaseOrderService.formatPurchaseOrdersForDisplay(response.purchaseOrders);
+        // const formattedPOs = purchaseOrderService.formatPurchaseOrdersForDisplay(response.purchaseOrders);
         console.log('[PurchaseOrders] Formatted purchase orders:', formattedPOs);
         setPurchaseOrders(formattedPOs);
 

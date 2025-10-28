@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Layout } from '../../components/Layout';
 import { Breadcrumb } from '../../components/Breadcrumb';
 import { PurchaseList } from '../../components/PurchaseList';
-import reportService from '../../services/reportService';
+// import reportService from '../../services/reportService';
 
 const PurchaseReports = () => {
   // Breadcrumb items
@@ -83,11 +83,11 @@ const PurchaseReports = () => {
       setLoading(true);
       setError(null);
 
-      const response = await reportService.getPurchaseReport({
-        startDate,
-        endDate,
-        periodType
-      });
+      // const response = await reportService.getPurchaseReport({
+      //   startDate,
+      //   endDate,
+      //   periodType
+      // });
 
       if (response.success) {
         setPurchaseData(response.purchaseList || []);

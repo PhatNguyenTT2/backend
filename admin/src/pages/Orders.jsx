@@ -3,7 +3,7 @@ import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { OrderListHeader, OrderList } from '../components/OrderList';
 import { AddOrderModal, EditOrderModal } from '../components/OrderModals';
-import orderService from '../services/orderService';
+// import orderService from '../services/orderService';
 
 const Orders = () => {
   // Breadcrumb items
@@ -49,11 +49,11 @@ const Orders = () => {
       setLoading(true);
       setError(null);
 
-      const response = await orderService.getOrders(filters);
+      // const response = await orderService.getOrders(filters);
 
       if (response.success) {
-        const formattedOrders = orderService.formatOrdersForDisplay(response.data.orders);
-        setOrders(formattedOrders);
+        // const formattedOrders = orderService.formatOrdersForDisplay(response.data.orders);
+        // setOrders(formattedOrders);
         setPagination(response.data.pagination);
       }
     } catch (err) {
@@ -121,7 +121,7 @@ const Orders = () => {
   // Handle status change
   const handleStatusChange = async (orderId, newStatus) => {
     try {
-      const response = await orderService.updateOrderStatus(orderId, newStatus);
+      // const response = await orderService.updateOrderStatus(orderId, newStatus);
 
       if (response.success) {
         // Refresh orders list
@@ -153,7 +153,7 @@ const Orders = () => {
     }
 
     try {
-      const response = await orderService.deleteOrder(order.id);
+      // const response = await orderService.deleteOrder(order.id);
 
       if (response.success) {
         // Refresh orders list

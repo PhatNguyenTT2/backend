@@ -3,7 +3,7 @@ import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { InventoryListHeader, InventoryList } from '../components/InventoryList';
 import { StockInModal, AdjustStockModal, MovementHistoryModal } from '../components/StockModals';
-import inventoryService from '../services/inventoryService';
+// import inventoryService from '../services/inventoryService';
 
 const Inventories = () => {
   // Breadcrumb items
@@ -70,7 +70,7 @@ const Inventories = () => {
 
       console.log('Request params:', params);
 
-      const response = await inventoryService.getInventory(params);
+      // const response = await inventoryService.getInventory(params);
       console.log('API Response:', response);
 
       if (response && response.success && response.data) {
@@ -85,7 +85,7 @@ const Inventories = () => {
           return;
         }
 
-        const formattedInventory = inventoryService.formatInventoryForDisplay(inventoryData);
+        // const formattedInventory = inventoryService.formatInventoryForDisplay(inventoryData);
         console.log('Formatted inventory:', formattedInventory);
 
         setInventory(formattedInventory || []);

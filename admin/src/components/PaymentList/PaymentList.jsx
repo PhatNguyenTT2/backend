@@ -156,9 +156,9 @@ const PaymentList = ({
       console.log('Updating payment method:', payment.id, newMethod);
 
       // Import paymentService dynamically
-      const { default: paymentService } = await import('../../services/paymentService');
+      // const { default: paymentService } = await import('../../services/paymentService');
 
-      await paymentService.updatePaymentMethod(payment.id, newMethod);
+      // await paymentService.updatePaymentMethod(payment.id, newMethod);
 
       alert(`Payment method updated to ${newMethod.split('_').map(word =>
         word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()

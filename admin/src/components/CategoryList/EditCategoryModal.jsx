@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import categoryService from '../../services/categoryService';
+// import categoryService from '../../services/categoryService';
 
 export const EditCategoryModal = ({ isOpen, onClose, onSuccess, category }) => {
   const [formData, setFormData] = useState({

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import productService from '../../services/productService';
-import customerService from '../../services/customerService';
-import orderService from '../../services/orderService';
+// import productService from '../../services/productService';
+// import customerService from '../../services/customerService';
+// import orderService from '../../services/orderService';
 
 export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
   const dropdownRefs = useRef({});
