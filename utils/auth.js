@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken')
-const User = require('../models/user')
+const User = require('../models/userAccount')
 
 // Extract token from Authorization header
 const getTokenFrom = (request) => {
