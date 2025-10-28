@@ -22,7 +22,6 @@ suppliersRouter.get('/', userExtractor, async (request, response) => {
       }
 
       suppliers = await Supplier.find(filter)
-        .populate('detailSupplier')
         .sort({ companyName: 1 })
     }
 
@@ -34,13 +33,7 @@ suppliersRouter.get('/', userExtractor, async (request, response) => {
       phone: supplier.phone,
       address: supplier.address,
       isActive: supplier.isActive,
-      detailSupplier: supplier.detailSupplier ? {
-        id: supplier.detailSupplier._id,
-        contactPerson: supplier.detailSupplier.contactPerson,
-        paymentTerms: supplier.detailSupplier.paymentTerms,
-        totalDebt: supplier.detailSupplier.totalDebt,
-        rating: supplier.detailSupplier.rating
-      } : null,
+      detailSupplierId: supplier.detailSupplier?._id || supplier.detailSupplier,
       createdAt: supplier.createdAt,
       updatedAt: supplier.updatedAt
     }))
@@ -70,13 +63,7 @@ suppliersRouter.get('/active', userExtractor, async (request, response) => {
       email: supplier.email,
       phone: supplier.phone,
       address: supplier.address,
-      detailSupplier: supplier.detailSupplier ? {
-        id: supplier.detailSupplier._id,
-        contactPerson: supplier.detailSupplier.contactPerson,
-        paymentTerms: supplier.detailSupplier.paymentTerms,
-        totalDebt: supplier.detailSupplier.totalDebt,
-        rating: supplier.detailSupplier.rating
-      } : null,
+      detailSupplierId: supplier.detailSupplier?._id || supplier.detailSupplier,
       createdAt: supplier.createdAt
     }))
 
@@ -115,7 +102,6 @@ suppliersRouter.get('/stats/overview', userExtractor, isAdmin, async (request, r
 suppliersRouter.get('/:id', userExtractor, async (request, response) => {
   try {
     const supplier = await Supplier.findById(request.params.id)
-      .populate('detailSupplier')
       .populate({
         path: 'purchaseOrders',
         select: 'poNumber orderDate status totalPrice',
@@ -139,23 +125,8 @@ suppliersRouter.get('/:id', userExtractor, async (request, response) => {
           phone: supplier.phone,
           address: supplier.address,
           isActive: supplier.isActive,
-          detailSupplier: supplier.detailSupplier ? {
-            id: supplier.detailSupplier._id,
-            contactPerson: supplier.detailSupplier.contactPerson,
-            paymentTerms: supplier.detailSupplier.paymentTerms,
-            bankAccount: supplier.detailSupplier.bankAccount,
-            taxCode: supplier.detailSupplier.taxCode,
-            totalDebt: supplier.detailSupplier.totalDebt,
-            rating: supplier.detailSupplier.rating,
-            notes: supplier.detailSupplier.notes
-          } : null,
-          purchaseOrders: supplier.purchaseOrders ? supplier.purchaseOrders.map(po => ({
-            id: po._id,
-            poNumber: po.poNumber,
-            orderDate: po.orderDate,
-            status: po.status,
-            totalPrice: po.totalPrice
-          })) : [],
+          detailSupplierId: supplier.detailSupplier,
+          purchaseOrderIds: supplier.purchaseOrders ? supplier.purchaseOrders.map(po => po._id) : [],
           createdAt: supplier.createdAt,
           updatedAt: supplier.updatedAt
         }
@@ -177,7 +148,6 @@ suppliersRouter.get('/:id', userExtractor, async (request, response) => {
 suppliersRouter.get('/code/:supplierCode', userExtractor, async (request, response) => {
   try {
     const supplier = await Supplier.findOne({ supplierCode: request.params.supplierCode })
-      .populate('detailSupplier')
 
     if (!supplier) {
       return response.status(404).json({
@@ -196,12 +166,7 @@ suppliersRouter.get('/code/:supplierCode', userExtractor, async (request, respon
           phone: supplier.phone,
           address: supplier.address,
           isActive: supplier.isActive,
-          detailSupplier: supplier.detailSupplier ? {
-            contactPerson: supplier.detailSupplier.contactPerson,
-            paymentTerms: supplier.detailSupplier.paymentTerms,
-            totalDebt: supplier.detailSupplier.totalDebt,
-            rating: supplier.detailSupplier.rating
-          } : null,
+          detailSupplierId: supplier.detailSupplier,
           createdAt: supplier.createdAt
         }
       }

@@ -19,24 +19,12 @@ detailStockOutOrdersRouter.get('/', userExtractor, isAdmin, async (request, resp
     }
 
     const detailOrders = await DetailStockOutOrder.find(filter)
-      .populate('stockOutOrder', 'soNumber orderDate status')
-      .populate('product', 'productCode name vendor')
       .sort({ createdAt: -1 })
 
     const detailsData = detailOrders.map(detail => ({
       id: detail._id,
-      stockOutOrder: detail.stockOutOrder ? {
-        id: detail.stockOutOrder._id,
-        soNumber: detail.stockOutOrder.soNumber,
-        orderDate: detail.stockOutOrder.orderDate,
-        status: detail.stockOutOrder.status
-      } : null,
-      product: detail.product ? {
-        id: detail.product._id,
-        productCode: detail.product.productCode,
-        name: detail.product.name,
-        vendor: detail.product.vendor
-      } : null,
+      stockOutOrderId: detail.stockOutOrder,
+      productId: detail.product,
       quantity: detail.quantity,
       unitPrice: detail.unitPrice,
       total: detail.total,
@@ -64,15 +52,8 @@ detailStockOutOrdersRouter.get('/stock-out-order/:soId', userExtractor, async (r
 
     const detailsData = details.map(detail => ({
       id: detail._id,
-      product: detail.product ? {
-        id: detail.product._id,
-        productCode: detail.product.productCode,
-        name: detail.product.name,
-        vendor: detail.product.vendor,
-        image: detail.product.image,
-        price: detail.product.price,
-        stock: detail.product.stock
-      } : null,
+      stockOutOrderId: detail.stockOutOrder?._id || detail.stockOutOrder,
+      productId: detail.product?._id || detail.product,
       quantity: detail.quantity,
       unitPrice: detail.unitPrice,
       total: detail.total,
@@ -134,12 +115,7 @@ detailStockOutOrdersRouter.get('/stock-out-order/:soId/low-stock', userExtractor
       success: true,
       data: {
         lowStockProducts: lowStockProducts.map(item => ({
-          product: {
-            id: item.product._id,
-            productCode: item.product.productCode,
-            name: item.product.name,
-            vendor: item.product.vendor
-          },
+          productId: item.product?._id || item.product,
           requested: item.requested,
           available: item.available,
           shortage: item.shortage
@@ -162,8 +138,6 @@ detailStockOutOrdersRouter.get('/stock-out-order/:soId/low-stock', userExtractor
 detailStockOutOrdersRouter.get('/:id', userExtractor, async (request, response) => {
   try {
     const detail = await DetailStockOutOrder.findById(request.params.id)
-      .populate('stockOutOrder', 'soNumber orderDate status expectedDeliveryDate')
-      .populate('product', 'productCode name vendor price originalPrice image')
 
     if (!detail) {
       return response.status(404).json({
@@ -176,22 +150,8 @@ detailStockOutOrdersRouter.get('/:id', userExtractor, async (request, response) 
       data: {
         detailStockOutOrder: {
           id: detail._id,
-          stockOutOrder: detail.stockOutOrder ? {
-            id: detail.stockOutOrder._id,
-            soNumber: detail.stockOutOrder.soNumber,
-            orderDate: detail.stockOutOrder.orderDate,
-            status: detail.stockOutOrder.status,
-            expectedDeliveryDate: detail.stockOutOrder.expectedDeliveryDate
-          } : null,
-          product: detail.product ? {
-            id: detail.product._id,
-            productCode: detail.product.productCode,
-            name: detail.product.name,
-            vendor: detail.product.vendor,
-            price: detail.product.price,
-            originalPrice: detail.product.originalPrice,
-            image: detail.product.image
-          } : null,
+          stockOutOrderId: detail.stockOutOrder,
+          productId: detail.product,
           quantity: detail.quantity,
           unitPrice: detail.unitPrice,
           total: detail.total,
@@ -293,25 +253,14 @@ detailStockOutOrdersRouter.post('/', userExtractor, isAdmin, async (request, res
       await detail.save()
     }
 
-    await detail.populate('stockOutOrder', 'soNumber')
-    await detail.populate('product', 'productCode name vendor')
-
     response.status(201).json({
       success: true,
       message: 'Detail stock out order created successfully',
       data: {
         detailStockOutOrder: {
           id: detail._id,
-          stockOutOrder: detail.stockOutOrder ? {
-            id: detail.stockOutOrder._id,
-            soNumber: detail.stockOutOrder.soNumber
-          } : null,
-          product: detail.product ? {
-            id: detail.product._id,
-            productCode: detail.product.productCode,
-            name: detail.product.name,
-            vendor: detail.product.vendor
-          } : null,
+          stockOutOrderId: detail.stockOutOrder,
+          productId: detail.product,
           quantity: detail.quantity,
           unitPrice: detail.unitPrice,
           total: detail.total,
@@ -380,7 +329,6 @@ detailStockOutOrdersRouter.put('/:id', userExtractor, isAdmin, async (request, r
     }
 
     const updatedDetail = await detail.save()
-    await updatedDetail.populate('product', 'productCode name')
 
     response.status(200).json({
       success: true,
@@ -388,11 +336,8 @@ detailStockOutOrdersRouter.put('/:id', userExtractor, isAdmin, async (request, r
       data: {
         detailStockOutOrder: {
           id: updatedDetail._id,
-          product: updatedDetail.product ? {
-            id: updatedDetail.product._id,
-            productCode: updatedDetail.product.productCode,
-            name: updatedDetail.product.name
-          } : null,
+          stockOutOrderId: updatedDetail.stockOutOrder,
+          productId: updatedDetail.product,
           quantity: updatedDetail.quantity,
           unitPrice: updatedDetail.unitPrice,
           total: updatedDetail.total,

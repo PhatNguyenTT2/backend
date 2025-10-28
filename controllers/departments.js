@@ -24,7 +24,6 @@ departmentsRouter.get('/', userExtractor, async (request, response) => {
         : allDepartments.filter(dept => dept.isActive)
     } else {
       departments = await Department.find(filter)
-        .populate('manager', 'fullName email phone')
         .sort({ departmentName: 1 })
 
       // Get employee count for each department
@@ -39,12 +38,7 @@ departmentsRouter.get('/', userExtractor, async (request, response) => {
             departmentCode: department.departmentCode,
             departmentName: department.departmentName,
             description: department.description,
-            manager: department.manager ? {
-              id: department.manager._id,
-              fullName: department.manager.fullName,
-              email: department.manager.email,
-              phone: department.manager.phone
-            } : null,
+            managerId: department.manager,
             location: department.location,
             phone: department.phone,
             email: department.email,
@@ -138,11 +132,7 @@ departmentsRouter.get('/code/:code', userExtractor, async (request, response) =>
           departmentCode: department.departmentCode,
           departmentName: department.departmentName,
           description: department.description,
-          manager: department.manager ? {
-            id: department.manager._id,
-            fullName: department.manager.fullName,
-            email: department.manager.email
-          } : null,
+          managerId: department.manager,
           location: department.location,
           phone: department.phone,
           email: department.email,
@@ -164,7 +154,6 @@ departmentsRouter.get('/code/:code', userExtractor, async (request, response) =>
 departmentsRouter.get('/:id', userExtractor, async (request, response) => {
   try {
     const department = await Department.findById(request.params.id)
-      .populate('manager', 'fullName email phone')
 
     if (!department) {
       return response.status(404).json({
@@ -190,12 +179,7 @@ departmentsRouter.get('/:id', userExtractor, async (request, response) => {
           departmentCode: department.departmentCode,
           departmentName: department.departmentName,
           description: department.description,
-          manager: department.manager ? {
-            id: department.manager._id,
-            fullName: department.manager.fullName,
-            email: department.manager.email,
-            phone: department.manager.phone
-          } : null,
+          managerId: department.manager,
           location: department.location,
           phone: department.phone,
           email: department.email,
@@ -257,7 +241,6 @@ departmentsRouter.post('/', userExtractor, isAdmin, async (request, response) =>
     })
 
     const savedDepartment = await department.save()
-    await savedDepartment.populate('manager', 'fullName email')
 
     response.status(201).json({
       success: true,
@@ -268,11 +251,7 @@ departmentsRouter.post('/', userExtractor, isAdmin, async (request, response) =>
           departmentCode: savedDepartment.departmentCode,
           departmentName: savedDepartment.departmentName,
           description: savedDepartment.description,
-          manager: savedDepartment.manager ? {
-            id: savedDepartment.manager._id,
-            fullName: savedDepartment.manager.fullName,
-            email: savedDepartment.manager.email
-          } : null,
+          managerId: savedDepartment.manager,
           location: savedDepartment.location,
           phone: savedDepartment.phone,
           email: savedDepartment.email,
@@ -331,8 +310,6 @@ departmentsRouter.put('/:id', userExtractor, isAdmin, async (request, response) 
       email
     })
 
-    await updatedDepartment.populate('manager', 'fullName email')
-
     response.status(200).json({
       success: true,
       message: 'Department updated successfully',
@@ -342,11 +319,7 @@ departmentsRouter.put('/:id', userExtractor, isAdmin, async (request, response) 
           departmentCode: updatedDepartment.departmentCode,
           departmentName: updatedDepartment.departmentName,
           description: updatedDepartment.description,
-          manager: updatedDepartment.manager ? {
-            id: updatedDepartment.manager._id,
-            fullName: updatedDepartment.manager.fullName,
-            email: updatedDepartment.manager.email
-          } : null,
+          managerId: updatedDepartment.manager,
           location: updatedDepartment.location,
           phone: updatedDepartment.phone,
           email: updatedDepartment.email,
@@ -401,7 +374,6 @@ departmentsRouter.patch('/:id/assign-manager', userExtractor, isAdmin, async (re
 
     // Use the assignManager method from the model
     const updatedDepartment = await department.assignManager(managerId)
-    await updatedDepartment.populate('manager', 'fullName email phone')
 
     response.status(200).json({
       success: true,
@@ -411,12 +383,7 @@ departmentsRouter.patch('/:id/assign-manager', userExtractor, isAdmin, async (re
           id: updatedDepartment._id,
           departmentCode: updatedDepartment.departmentCode,
           departmentName: updatedDepartment.departmentName,
-          manager: {
-            id: updatedDepartment.manager._id,
-            fullName: updatedDepartment.manager.fullName,
-            email: updatedDepartment.manager.email,
-            phone: updatedDepartment.manager.phone
-          },
+          managerId: updatedDepartment.manager,
           updatedAt: updatedDepartment.updatedAt
         }
       }

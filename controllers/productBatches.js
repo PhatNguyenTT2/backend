@@ -31,18 +31,12 @@ productBatchesRouter.get('/', userExtractor, isAdmin, async (request, response) 
     // Get all batches with filter
     else {
       batches = await ProductBatch.find(filter)
-        .populate('product', 'productCode name vendor category')
         .sort({ createdAt: -1 })
     }
 
     const batchesData = batches.map(batch => ({
       id: batch._id,
-      product: batch.product ? {
-        id: batch.product._id,
-        productCode: batch.product.productCode,
-        name: batch.product.name,
-        vendor: batch.product.vendor
-      } : null,
+      productId: batch.product?._id || batch.product,
       batchCode: batch.batchCode,
       mfgDate: batch.mfgDate,
       expiryDate: batch.expiryDate,
@@ -94,11 +88,7 @@ productBatchesRouter.get('/expired', userExtractor, isAdmin, async (request, res
 
     const batchesData = expiredBatches.map(batch => ({
       id: batch._id,
-      product: batch.product ? {
-        id: batch.product._id,
-        productCode: batch.product.productCode,
-        name: batch.product.name
-      } : null,
+      productId: batch.product?._id || batch.product,
       batchCode: batch.batchCode,
       expiryDate: batch.expiryDate,
       quantity: batch.quantity,
@@ -129,11 +119,7 @@ productBatchesRouter.get('/near-expiry', userExtractor, isAdmin, async (request,
 
     const batchesData = nearExpiryBatches.map(batch => ({
       id: batch._id,
-      product: batch.product ? {
-        id: batch.product._id,
-        productCode: batch.product.productCode,
-        name: batch.product.name
-      } : null,
+      productId: batch.product?._id || batch.product,
       batchCode: batch.batchCode,
       expiryDate: batch.expiryDate,
       quantity: batch.quantity,
@@ -194,7 +180,6 @@ productBatchesRouter.get('/product/:productId/active', userExtractor, async (req
 productBatchesRouter.get('/:id', userExtractor, isAdmin, async (request, response) => {
   try {
     const batch = await ProductBatch.findById(request.params.id)
-      .populate('product', 'productCode name vendor category originalPrice')
 
     if (!batch) {
       return response.status(404).json({
@@ -207,13 +192,7 @@ productBatchesRouter.get('/:id', userExtractor, isAdmin, async (request, respons
       data: {
         batch: {
           id: batch._id,
-          product: batch.product ? {
-            id: batch.product._id,
-            productCode: batch.product.productCode,
-            name: batch.product.name,
-            vendor: batch.product.vendor,
-            originalPrice: batch.product.originalPrice
-          } : null,
+          productId: batch.product,
           batchCode: batch.batchCode,
           mfgDate: batch.mfgDate,
           expiryDate: batch.expiryDate,
@@ -281,20 +260,13 @@ productBatchesRouter.post('/', userExtractor, isAdmin, async (request, response)
       status: 'active'
     })
 
-    await batch.populate('product', 'productCode name vendor')
-
     response.status(201).json({
       success: true,
       message: 'Product batch created successfully',
       data: {
         batch: {
           id: batch._id,
-          product: batch.product ? {
-            id: batch.product._id,
-            productCode: batch.product.productCode,
-            name: batch.product.name,
-            vendor: batch.product.vendor
-          } : null,
+          productId: batch.product,
           batchCode: batch.batchCode,
           mfgDate: batch.mfgDate,
           expiryDate: batch.expiryDate,
@@ -351,7 +323,6 @@ productBatchesRouter.put('/:id', userExtractor, isAdmin, async (request, respons
     if (notes !== undefined) batch.notes = notes
 
     const updatedBatch = await batch.save()
-    await updatedBatch.populate('product', 'productCode name')
 
     response.status(200).json({
       success: true,
@@ -359,11 +330,7 @@ productBatchesRouter.put('/:id', userExtractor, isAdmin, async (request, respons
       data: {
         batch: {
           id: updatedBatch._id,
-          product: updatedBatch.product ? {
-            id: updatedBatch.product._id,
-            productCode: updatedBatch.product.productCode,
-            name: updatedBatch.product.name
-          } : null,
+          productId: updatedBatch.product,
           batchCode: updatedBatch.batchCode,
           mfgDate: updatedBatch.mfgDate,
           expiryDate: updatedBatch.expiryDate,
@@ -464,7 +431,6 @@ productBatchesRouter.patch('/:id/dispose', userExtractor, isAdmin, async (reques
 
     // Use the dispose method from the model
     const updatedBatch = await batch.dispose(reason)
-    await updatedBatch.populate('product', 'productCode name')
 
     response.status(200).json({
       success: true,
@@ -472,11 +438,7 @@ productBatchesRouter.patch('/:id/dispose', userExtractor, isAdmin, async (reques
       data: {
         batch: {
           id: updatedBatch._id,
-          product: updatedBatch.product ? {
-            id: updatedBatch.product._id,
-            productCode: updatedBatch.product.productCode,
-            name: updatedBatch.product.name
-          } : null,
+          productId: updatedBatch.product,
           batchCode: updatedBatch.batchCode,
           quantity: updatedBatch.quantity,
           status: updatedBatch.status,

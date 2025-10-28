@@ -7,18 +7,11 @@ const { userExtractor, isAdmin } = require('../utils/auth')
 detailProductsRouter.get('/', userExtractor, isAdmin, async (request, response) => {
   try {
     const detailProducts = await DetailProduct.find()
-      .populate('product', 'productCode name category vendor isActive')
       .sort({ createdAt: -1 })
 
     const detailProductsData = detailProducts.map(detail => ({
       id: detail._id,
-      product: detail.product ? {
-        id: detail.product._id,
-        productCode: detail.product.productCode,
-        name: detail.product.name,
-        vendor: detail.product.vendor,
-        isActive: detail.product.isActive
-      } : null,
+      productId: detail.product,
       image: detail.image,
       description: detail.description,
       createdAt: detail.createdAt,
@@ -49,22 +42,12 @@ detailProductsRouter.get('/product/:productId', async (request, response) => {
       })
     }
 
-    await detailProduct.populate('product', 'productCode name category vendor originalPrice sellPrice isActive')
-
     response.status(200).json({
       success: true,
       data: {
         detailProduct: {
           id: detailProduct._id,
-          product: detailProduct.product ? {
-            id: detailProduct.product._id,
-            productCode: detailProduct.product.productCode,
-            name: detailProduct.product.name,
-            vendor: detailProduct.product.vendor,
-            originalPrice: detailProduct.product.originalPrice,
-            sellPrice: detailProduct.product.sellPrice,
-            isActive: detailProduct.product.isActive
-          } : null,
+          productId: detailProduct.product,
           image: detailProduct.image,
           description: detailProduct.description,
           createdAt: detailProduct.createdAt,
@@ -88,7 +71,6 @@ detailProductsRouter.get('/product/:productId', async (request, response) => {
 detailProductsRouter.get('/:id', async (request, response) => {
   try {
     const detailProduct = await DetailProduct.findById(request.params.id)
-      .populate('product', 'productCode name category vendor originalPrice sellPrice isActive')
 
     if (!detailProduct) {
       return response.status(404).json({
@@ -101,15 +83,7 @@ detailProductsRouter.get('/:id', async (request, response) => {
       data: {
         detailProduct: {
           id: detailProduct._id,
-          product: detailProduct.product ? {
-            id: detailProduct.product._id,
-            productCode: detailProduct.product.productCode,
-            name: detailProduct.product.name,
-            vendor: detailProduct.product.vendor,
-            originalPrice: detailProduct.product.originalPrice,
-            sellPrice: detailProduct.product.sellPrice,
-            isActive: detailProduct.product.isActive
-          } : null,
+          productId: detailProduct.product,
           image: detailProduct.image,
           description: detailProduct.description,
           createdAt: detailProduct.createdAt,
@@ -152,20 +126,13 @@ detailProductsRouter.post('/', userExtractor, isAdmin, async (request, response)
       description
     })
 
-    await detailProduct.populate('product', 'productCode name vendor')
-
     response.status(201).json({
       success: true,
       message: 'Product detail created successfully',
       data: {
         detailProduct: {
           id: detailProduct._id,
-          product: detailProduct.product ? {
-            id: detailProduct.product._id,
-            productCode: detailProduct.product.productCode,
-            name: detailProduct.product.name,
-            vendor: detailProduct.product.vendor
-          } : null,
+          productId: detailProduct.product,
           image: detailProduct.image,
           description: detailProduct.description,
           createdAt: detailProduct.createdAt
@@ -218,20 +185,13 @@ detailProductsRouter.put('/:id', userExtractor, isAdmin, async (request, respons
       description
     })
 
-    await updatedDetail.populate('product', 'productCode name vendor')
-
     response.status(200).json({
       success: true,
       message: 'Product detail updated successfully',
       data: {
         detailProduct: {
           id: updatedDetail._id,
-          product: updatedDetail.product ? {
-            id: updatedDetail.product._id,
-            productCode: updatedDetail.product.productCode,
-            name: updatedDetail.product.name,
-            vendor: updatedDetail.product.vendor
-          } : null,
+          productId: updatedDetail.product,
           image: updatedDetail.image,
           description: updatedDetail.description,
           updatedAt: updatedDetail.updatedAt

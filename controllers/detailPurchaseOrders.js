@@ -19,25 +19,12 @@ detailPurchaseOrdersRouter.get('/', userExtractor, isAdmin, async (request, resp
     }
 
     const detailOrders = await DetailPurchaseOrder.find(filter)
-      .populate('purchaseOrder', 'poNumber orderDate status')
-      .populate('product', 'productCode name vendor costPrice')
       .sort({ createdAt: -1 })
 
     const detailsData = detailOrders.map(detail => ({
       id: detail._id,
-      purchaseOrder: detail.purchaseOrder ? {
-        id: detail.purchaseOrder._id,
-        poNumber: detail.purchaseOrder.poNumber,
-        orderDate: detail.purchaseOrder.orderDate,
-        status: detail.purchaseOrder.status
-      } : null,
-      product: detail.product ? {
-        id: detail.product._id,
-        productCode: detail.product.productCode,
-        name: detail.product.name,
-        vendor: detail.product.vendor,
-        costPrice: detail.product.costPrice
-      } : null,
+      purchaseOrderId: detail.purchaseOrder,
+      productId: detail.product,
       quantity: detail.quantity,
       unitPrice: detail.unitPrice,
       total: detail.total,
@@ -65,14 +52,8 @@ detailPurchaseOrdersRouter.get('/purchase-order/:poId', userExtractor, isAdmin, 
 
     const detailsData = details.map(detail => ({
       id: detail._id,
-      product: detail.product ? {
-        id: detail.product._id,
-        productCode: detail.product.productCode,
-        name: detail.product.name,
-        vendor: detail.product.vendor,
-        costPrice: detail.product.costPrice,
-        image: detail.product.image
-      } : null,
+      purchaseOrderId: detail.purchaseOrder?._id || detail.purchaseOrder,
+      productId: detail.product?._id || detail.product,
       quantity: detail.quantity,
       unitPrice: detail.unitPrice,
       total: detail.total,
@@ -129,8 +110,6 @@ detailPurchaseOrdersRouter.get('/purchase-order/:poId/product/:productId/total',
 detailPurchaseOrdersRouter.get('/:id', userExtractor, isAdmin, async (request, response) => {
   try {
     const detail = await DetailPurchaseOrder.findById(request.params.id)
-      .populate('purchaseOrder', 'poNumber orderDate status supplier')
-      .populate('product', 'productCode name vendor costPrice originalPrice')
 
     if (!detail) {
       return response.status(404).json({
@@ -143,20 +122,8 @@ detailPurchaseOrdersRouter.get('/:id', userExtractor, isAdmin, async (request, r
       data: {
         detailPurchaseOrder: {
           id: detail._id,
-          purchaseOrder: detail.purchaseOrder ? {
-            id: detail.purchaseOrder._id,
-            poNumber: detail.purchaseOrder.poNumber,
-            orderDate: detail.purchaseOrder.orderDate,
-            status: detail.purchaseOrder.status
-          } : null,
-          product: detail.product ? {
-            id: detail.product._id,
-            productCode: detail.product.productCode,
-            name: detail.product.name,
-            vendor: detail.product.vendor,
-            costPrice: detail.product.costPrice,
-            originalPrice: detail.product.originalPrice
-          } : null,
+          purchaseOrderId: detail.purchaseOrder,
+          productId: detail.product,
           quantity: detail.quantity,
           unitPrice: detail.unitPrice,
           total: detail.total,
@@ -258,25 +225,14 @@ detailPurchaseOrdersRouter.post('/', userExtractor, isAdmin, async (request, res
       await detail.save()
     }
 
-    await detail.populate('purchaseOrder', 'poNumber')
-    await detail.populate('product', 'productCode name vendor')
-
     response.status(201).json({
       success: true,
       message: 'Detail purchase order created successfully',
       data: {
         detailPurchaseOrder: {
           id: detail._id,
-          purchaseOrder: detail.purchaseOrder ? {
-            id: detail.purchaseOrder._id,
-            poNumber: detail.purchaseOrder.poNumber
-          } : null,
-          product: detail.product ? {
-            id: detail.product._id,
-            productCode: detail.product.productCode,
-            name: detail.product.name,
-            vendor: detail.product.vendor
-          } : null,
+          purchaseOrderId: detail.purchaseOrder,
+          productId: detail.product,
           quantity: detail.quantity,
           unitPrice: detail.unitPrice,
           total: detail.total,
@@ -337,7 +293,6 @@ detailPurchaseOrdersRouter.put('/:id', userExtractor, isAdmin, async (request, r
     }
 
     const updatedDetail = await detail.save()
-    await updatedDetail.populate('product', 'productCode name')
 
     response.status(200).json({
       success: true,
@@ -345,11 +300,8 @@ detailPurchaseOrdersRouter.put('/:id', userExtractor, isAdmin, async (request, r
       data: {
         detailPurchaseOrder: {
           id: updatedDetail._id,
-          product: updatedDetail.product ? {
-            id: updatedDetail.product._id,
-            productCode: updatedDetail.product.productCode,
-            name: updatedDetail.product.name
-          } : null,
+          purchaseOrderId: updatedDetail.purchaseOrder,
+          productId: updatedDetail.product,
           quantity: updatedDetail.quantity,
           unitPrice: updatedDetail.unitPrice,
           total: updatedDetail.total,

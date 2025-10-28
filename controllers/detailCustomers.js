@@ -21,19 +21,11 @@ detailCustomersRouter.get('/', userExtractor, isAdmin, async (request, response)
     }
 
     const detailCustomers = await DetailCustomer.find(filter)
-      .populate('customer', 'customerCode fullName email phone isActive')
       .sort({ totalSpent: -1 })
 
     const detailCustomersData = detailCustomers.map(detail => ({
       id: detail._id,
-      customer: detail.customer ? {
-        id: detail.customer._id,
-        customerCode: detail.customer.customerCode,
-        fullName: detail.customer.fullName,
-        email: detail.customer.email,
-        phone: detail.customer.phone,
-        isActive: detail.customer.isActive
-      } : null,
+      customerId: detail.customer,
       customerType: detail.customerType,
       totalSpent: detail.totalSpent,
       notes: detail.notes,
@@ -100,13 +92,7 @@ detailCustomersRouter.get('/high-value', userExtractor, isAdmin, async (request,
 
     const customersData = highValueCustomers.map(detail => ({
       id: detail._id,
-      customer: detail.customer ? {
-        id: detail.customer._id,
-        customerCode: detail.customer.customerCode,
-        fullName: detail.customer.fullName,
-        email: detail.customer.email,
-        phone: detail.customer.phone
-      } : null,
+      customerId: detail.customer?._id || detail.customer,
       customerType: detail.customerType,
       totalSpent: detail.totalSpent,
       notes: detail.notes
@@ -135,13 +121,7 @@ detailCustomersRouter.get('/low-spending', userExtractor, isAdmin, async (reques
 
     const customersData = lowSpendingCustomers.map(detail => ({
       id: detail._id,
-      customer: detail.customer ? {
-        id: detail.customer._id,
-        customerCode: detail.customer.customerCode,
-        fullName: detail.customer.fullName,
-        email: detail.customer.email,
-        phone: detail.customer.phone
-      } : null,
+      customerId: detail.customer?._id || detail.customer,
       customerType: detail.customerType,
       totalSpent: detail.totalSpent,
       notes: detail.notes
@@ -176,14 +156,7 @@ detailCustomersRouter.get('/type/:type', userExtractor, isAdmin, async (request,
 
     const customersData = detailCustomers.map(detail => ({
       id: detail._id,
-      customer: detail.customer ? {
-        id: detail.customer._id,
-        customerCode: detail.customer.customerCode,
-        fullName: detail.customer.fullName,
-        email: detail.customer.email,
-        phone: detail.customer.phone,
-        isActive: detail.customer.isActive
-      } : null,
+      customerId: detail.customer?._id || detail.customer,
       customerType: detail.customerType,
       totalSpent: detail.totalSpent,
       notes: detail.notes,
@@ -209,7 +182,7 @@ detailCustomersRouter.get('/customer/:customerId', userExtractor, isAdmin, async
   try {
     const detailCustomer = await DetailCustomer.findOne({
       customer: request.params.customerId
-    }).populate('customer', 'customerCode fullName email phone address gender dateOfBirth isActive')
+    })
 
     if (!detailCustomer) {
       return response.status(404).json({
@@ -222,17 +195,7 @@ detailCustomersRouter.get('/customer/:customerId', userExtractor, isAdmin, async
       data: {
         detailCustomer: {
           id: detailCustomer._id,
-          customer: detailCustomer.customer ? {
-            id: detailCustomer.customer._id,
-            customerCode: detailCustomer.customer.customerCode,
-            fullName: detailCustomer.customer.fullName,
-            email: detailCustomer.customer.email,
-            phone: detailCustomer.customer.phone,
-            address: detailCustomer.customer.address,
-            gender: detailCustomer.customer.gender,
-            dateOfBirth: detailCustomer.customer.dateOfBirth,
-            isActive: detailCustomer.customer.isActive
-          } : null,
+          customerId: detailCustomer.customer,
           customerType: detailCustomer.customerType,
           totalSpent: detailCustomer.totalSpent,
           notes: detailCustomer.notes,
@@ -257,7 +220,6 @@ detailCustomersRouter.get('/customer/:customerId', userExtractor, isAdmin, async
 detailCustomersRouter.get('/:id', userExtractor, isAdmin, async (request, response) => {
   try {
     const detailCustomer = await DetailCustomer.findById(request.params.id)
-      .populate('customer', 'customerCode fullName email phone address gender dateOfBirth isActive')
 
     if (!detailCustomer) {
       return response.status(404).json({
@@ -270,17 +232,7 @@ detailCustomersRouter.get('/:id', userExtractor, isAdmin, async (request, respon
       data: {
         detailCustomer: {
           id: detailCustomer._id,
-          customer: detailCustomer.customer ? {
-            id: detailCustomer.customer._id,
-            customerCode: detailCustomer.customer.customerCode,
-            fullName: detailCustomer.customer.fullName,
-            email: detailCustomer.customer.email,
-            phone: detailCustomer.customer.phone,
-            address: detailCustomer.customer.address,
-            gender: detailCustomer.customer.gender,
-            dateOfBirth: detailCustomer.customer.dateOfBirth,
-            isActive: detailCustomer.customer.isActive
-          } : null,
+          customerId: detailCustomer.customer,
           customerType: detailCustomer.customerType,
           totalSpent: detailCustomer.totalSpent,
           notes: detailCustomer.notes,
@@ -336,7 +288,6 @@ detailCustomersRouter.post('/', userExtractor, isAdmin, async (request, response
     })
 
     const savedDetail = await detailCustomer.save()
-    await savedDetail.populate('customer', 'customerCode fullName email phone')
 
     response.status(201).json({
       success: true,
@@ -344,13 +295,7 @@ detailCustomersRouter.post('/', userExtractor, isAdmin, async (request, response
       data: {
         detailCustomer: {
           id: savedDetail._id,
-          customer: savedDetail.customer ? {
-            id: savedDetail.customer._id,
-            customerCode: savedDetail.customer.customerCode,
-            fullName: savedDetail.customer.fullName,
-            email: savedDetail.customer.email,
-            phone: savedDetail.customer.phone
-          } : null,
+          customerId: savedDetail.customer,
           customerType: savedDetail.customerType,
           totalSpent: savedDetail.totalSpent,
           notes: savedDetail.notes,
@@ -398,21 +343,13 @@ detailCustomersRouter.put('/:id', userExtractor, isAdmin, async (request, respon
       await detailCustomer.updateNotes(notes)
     }
 
-    await detailCustomer.populate('customer', 'customerCode fullName email phone')
-
     response.status(200).json({
       success: true,
       message: 'Customer details updated successfully',
       data: {
         detailCustomer: {
           id: detailCustomer._id,
-          customer: detailCustomer.customer ? {
-            id: detailCustomer.customer._id,
-            customerCode: detailCustomer.customer.customerCode,
-            fullName: detailCustomer.customer.fullName,
-            email: detailCustomer.customer.email,
-            phone: detailCustomer.customer.phone
-          } : null,
+          customerId: detailCustomer.customer,
           customerType: detailCustomer.customerType,
           totalSpent: detailCustomer.totalSpent,
           notes: detailCustomer.notes,
@@ -458,7 +395,6 @@ detailCustomersRouter.patch('/:id/add-spending', userExtractor, isAdmin, async (
 
     // Use the addSpending method from the model (includes auto-upgrade)
     await detailCustomer.addSpending(parseFloat(amount))
-    await detailCustomer.populate('customer', 'customerCode fullName')
 
     response.status(200).json({
       success: true,
@@ -466,11 +402,7 @@ detailCustomersRouter.patch('/:id/add-spending', userExtractor, isAdmin, async (
       data: {
         detailCustomer: {
           id: detailCustomer._id,
-          customer: detailCustomer.customer ? {
-            id: detailCustomer.customer._id,
-            customerCode: detailCustomer.customer.customerCode,
-            fullName: detailCustomer.customer.fullName
-          } : null,
+          customerId: detailCustomer.customer,
           customerType: detailCustomer.customerType,
           totalSpent: detailCustomer.totalSpent,
           updatedAt: detailCustomer.updatedAt
@@ -515,7 +447,6 @@ detailCustomersRouter.patch('/:id/subtract-spending', userExtractor, isAdmin, as
 
     // Use the subtractSpending method from the model
     await detailCustomer.subtractSpending(parseFloat(amount))
-    await detailCustomer.populate('customer', 'customerCode fullName')
 
     response.status(200).json({
       success: true,
@@ -523,11 +454,7 @@ detailCustomersRouter.patch('/:id/subtract-spending', userExtractor, isAdmin, as
       data: {
         detailCustomer: {
           id: detailCustomer._id,
-          customer: detailCustomer.customer ? {
-            id: detailCustomer.customer._id,
-            customerCode: detailCustomer.customer.customerCode,
-            fullName: detailCustomer.customer.fullName
-          } : null,
+          customerId: detailCustomer.customer,
           customerType: detailCustomer.customerType,
           totalSpent: detailCustomer.totalSpent,
           updatedAt: detailCustomer.updatedAt

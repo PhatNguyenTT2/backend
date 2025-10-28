@@ -78,8 +78,6 @@ productsRouter.get('/', async (request, response) => {
       detail: product.detail ? {
         id: product.detail._id,
         description: product.detail.description,
-        brand: product.detail.brand,
-        origin: product.detail.origin,
         image: product.detail.image
       } : null,
       createdAt: product.createdAt,
@@ -191,12 +189,7 @@ productsRouter.get('/code/:code', async (request, response) => {
           detail: product.detail ? {
             id: product.detail._id,
             description: product.detail.description,
-            brand: product.detail.brand,
-            origin: product.detail.origin,
-            image: product.detail.image,
-            unit: product.detail.unit,
-            weight: product.detail.weight,
-            dimensions: product.detail.dimensions
+            image: product.detail.image
           } : null,
           inventory: product.inventory ? {
             id: product.inventory._id,
@@ -257,12 +250,7 @@ productsRouter.get('/:id', async (request, response) => {
           detail: product.detail ? {
             id: product.detail._id,
             description: product.detail.description,
-            brand: product.detail.brand,
-            origin: product.detail.origin,
-            image: product.detail.image,
-            unit: product.detail.unit,
-            weight: product.detail.weight,
-            dimensions: product.detail.dimensions
+            image: product.detail.image
           } : null,
           inventory: product.inventory ? {
             id: product.inventory._id,

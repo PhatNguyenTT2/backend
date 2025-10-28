@@ -44,7 +44,6 @@ stockOutOrdersRouter.get('/', userExtractor, async (request, response) => {
       orders = await StockOutOrder.findWithDetails(filter)
     } else {
       orders = await StockOutOrder.find(filter)
-        .populate('createdBy', 'employeeCode fullName email')
         .sort({ orderDate: -1 })
     }
 
@@ -60,12 +59,7 @@ stockOutOrdersRouter.get('/', userExtractor, async (request, response) => {
         status: order.status,
         paymentStatus: order.paymentStatus,
         notes: order.notes,
-        createdBy: order.createdBy ? {
-          id: order.createdBy._id,
-          employeeCode: order.createdBy.employeeCode,
-          fullName: order.createdBy.fullName,
-          email: order.createdBy.email
-        } : null,
+        createdById: order.createdBy?._id || order.createdBy,
         createdAt: order.createdAt,
         updatedAt: order.updatedAt
       }
@@ -73,13 +67,7 @@ stockOutOrdersRouter.get('/', userExtractor, async (request, response) => {
       if (with_details === 'true' && order.details) {
         orderData.details = order.details.map(detail => ({
           id: detail._id,
-          product: detail.product ? {
-            id: detail.product._id,
-            productCode: detail.product.productCode,
-            name: detail.product.name,
-            image: detail.product.image,
-            price: detail.product.price
-          } : null,
+          productId: detail.product?._id || detail.product,
           quantity: detail.quantity,
           unitPrice: detail.unitPrice,
           total: detail.total
@@ -132,7 +120,6 @@ stockOutOrdersRouter.get('/stats/overview', userExtractor, isAdmin, async (reque
 stockOutOrdersRouter.get('/:id', userExtractor, async (request, response) => {
   try {
     const order = await StockOutOrder.findById(request.params.id)
-      .populate('createdBy', 'employeeCode fullName email position')
       .populate({
         path: 'details',
         populate: {
@@ -164,24 +151,10 @@ stockOutOrdersRouter.get('/:id', userExtractor, async (request, response) => {
           status: order.status,
           paymentStatus: order.paymentStatus,
           notes: order.notes,
-          createdBy: order.createdBy ? {
-            id: order.createdBy._id,
-            employeeCode: order.createdBy.employeeCode,
-            fullName: order.createdBy.fullName,
-            email: order.createdBy.email,
-            position: order.createdBy.position
-          } : null,
+          createdById: order.createdBy,
           details: calculatedTotals.details.map(detail => ({
             id: detail._id,
-            product: detail.product ? {
-              id: detail.product._id,
-              productCode: detail.product.productCode,
-              name: detail.product.name,
-              vendor: detail.product.vendor,
-              image: detail.product.image,
-              price: detail.product.price,
-              costPrice: detail.product.costPrice
-            } : null,
+            productId: detail.product?._id || detail.product,
             quantity: detail.quantity,
             unitPrice: detail.unitPrice,
             total: detail.total
@@ -210,7 +183,6 @@ stockOutOrdersRouter.get('/:id', userExtractor, async (request, response) => {
 stockOutOrdersRouter.get('/number/:soNumber', userExtractor, async (request, response) => {
   try {
     const order = await StockOutOrder.findOne({ soNumber: request.params.soNumber })
-      .populate('createdBy', 'employeeCode fullName email')
       .populate({
         path: 'details',
         populate: {
@@ -239,11 +211,7 @@ stockOutOrdersRouter.get('/number/:soNumber', userExtractor, async (request, res
           status: order.status,
           paymentStatus: order.paymentStatus,
           notes: order.notes,
-          createdBy: order.createdBy ? {
-            id: order.createdBy._id,
-            employeeCode: order.createdBy.employeeCode,
-            fullName: order.createdBy.fullName
-          } : null,
+          createdById: order.createdBy,
           subtotal: order.subtotal,
           discountAmount: order.discountAmount,
           createdAt: order.createdAt
@@ -289,7 +257,6 @@ stockOutOrdersRouter.post('/', userExtractor, isAdmin, async (request, response)
     })
 
     const savedOrder = await order.save()
-    await savedOrder.populate('createdBy', 'employeeCode fullName')
 
     response.status(201).json({
       success: true,
@@ -306,11 +273,7 @@ stockOutOrdersRouter.post('/', userExtractor, isAdmin, async (request, response)
           status: savedOrder.status,
           paymentStatus: savedOrder.paymentStatus,
           notes: savedOrder.notes,
-          createdBy: savedOrder.createdBy ? {
-            id: savedOrder.createdBy._id,
-            employeeCode: savedOrder.createdBy.employeeCode,
-            fullName: savedOrder.createdBy.fullName
-          } : null,
+          createdById: savedOrder.createdBy,
           createdAt: savedOrder.createdAt
         }
       }
@@ -380,8 +343,6 @@ stockOutOrdersRouter.put('/:id', userExtractor, isAdmin, async (request, respons
     if (shippingFee !== undefined || discountPercentage !== undefined) {
       await updatedOrder.recalculateTotalPrice()
     }
-
-    await updatedOrder.populate('createdBy', 'employeeCode fullName')
 
     response.status(200).json({
       success: true,

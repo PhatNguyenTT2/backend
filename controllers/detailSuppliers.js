@@ -21,19 +21,11 @@ detailSuppliersRouter.get('/', userExtractor, isAdmin, async (request, response)
     }
 
     const detailSuppliers = await DetailSupplier.find(filter)
-      .populate('supplier', 'supplierCode companyName email phone isActive')
       .sort({ createdAt: -1 })
 
     const detailsData = detailSuppliers.map(detail => ({
       id: detail._id,
-      supplier: detail.supplier ? {
-        id: detail.supplier._id,
-        supplierCode: detail.supplier.supplierCode,
-        companyName: detail.supplier.companyName,
-        email: detail.supplier.email,
-        phone: detail.supplier.phone,
-        isActive: detail.supplier.isActive
-      } : null,
+      supplierId: detail.supplier,
       bankName: detail.bankName,
       accountNumber: detail.accountNumber,
       bankAccountInfo: detail.bankAccountInfo,
@@ -69,13 +61,7 @@ detailSuppliersRouter.get('/with-debt', userExtractor, isAdmin, async (request, 
 
     const detailsData = validSuppliers.map(detail => ({
       id: detail._id,
-      supplier: {
-        id: detail.supplier._id,
-        supplierCode: detail.supplier.supplierCode,
-        companyName: detail.supplier.companyName,
-        phone: detail.supplier.phone,
-        email: detail.supplier.email
-      },
+      supplierId: detail.supplier?._id || detail.supplier,
       currentDebt: detail.currentDebt,
       creditLimit: detail.creditLimit,
       availableCredit: detail.availableCredit,
@@ -129,15 +115,7 @@ detailSuppliersRouter.get('/:id', userExtractor, isAdmin, async (request, respon
       data: {
         detailSupplier: {
           id: detail._id,
-          supplier: detail.supplier ? {
-            id: detail.supplier._id,
-            supplierCode: detail.supplier.supplierCode,
-            companyName: detail.supplier.companyName,
-            email: detail.supplier.email,
-            phone: detail.supplier.phone,
-            address: detail.supplier.address,
-            isActive: detail.supplier.isActive
-          } : null,
+          supplierId: detail.supplier?._id || detail.supplier,
           bankName: detail.bankName,
           accountNumber: detail.accountNumber,
           bankAccountInfo: detail.bankAccountInfo,
@@ -167,7 +145,6 @@ detailSuppliersRouter.get('/:id', userExtractor, isAdmin, async (request, respon
 detailSuppliersRouter.get('/supplier/:supplierId', userExtractor, isAdmin, async (request, response) => {
   try {
     const detail = await DetailSupplier.findOne({ supplier: request.params.supplierId })
-      .populate('supplier', 'supplierCode companyName email phone address isActive')
 
     if (!detail) {
       return response.status(404).json({
@@ -180,15 +157,7 @@ detailSuppliersRouter.get('/supplier/:supplierId', userExtractor, isAdmin, async
       data: {
         detailSupplier: {
           id: detail._id,
-          supplier: detail.supplier ? {
-            id: detail.supplier._id,
-            supplierCode: detail.supplier.supplierCode,
-            companyName: detail.supplier.companyName,
-            email: detail.supplier.email,
-            phone: detail.supplier.phone,
-            address: detail.supplier.address,
-            isActive: detail.supplier.isActive
-          } : null,
+          supplierId: detail.supplier,
           bankName: detail.bankName,
           accountNumber: detail.accountNumber,
           bankAccountInfo: detail.bankAccountInfo,
@@ -249,19 +218,13 @@ detailSuppliersRouter.post('/', userExtractor, isAdmin, async (request, response
       notes
     })
 
-    await detail.populate('supplier', 'supplierCode companyName')
-
     response.status(201).json({
       success: true,
       message: 'Detail supplier created successfully',
       data: {
         detailSupplier: {
           id: detail._id,
-          supplier: detail.supplier ? {
-            id: detail.supplier._id,
-            supplierCode: detail.supplier.supplierCode,
-            companyName: detail.supplier.companyName
-          } : null,
+          supplierId: detail.supplier,
           bankName: detail.bankName,
           accountNumber: detail.accountNumber,
           paymentTerms: detail.paymentTerms,
@@ -446,7 +409,6 @@ detailSuppliersRouter.patch('/:id/add-debt', userExtractor, isAdmin, async (requ
 
   try {
     const detail = await DetailSupplier.findById(request.params.id)
-      .populate('supplier', 'supplierCode companyName')
 
     if (!detail) {
       return response.status(404).json({
@@ -462,11 +424,7 @@ detailSuppliersRouter.patch('/:id/add-debt', userExtractor, isAdmin, async (requ
       data: {
         detailSupplier: {
           id: updatedDetail._id,
-          supplier: detail.supplier ? {
-            id: detail.supplier._id,
-            supplierCode: detail.supplier.supplierCode,
-            companyName: detail.supplier.companyName
-          } : null,
+          supplierId: updatedDetail.supplier,
           currentDebt: updatedDetail.currentDebt,
           creditLimit: updatedDetail.creditLimit,
           availableCredit: updatedDetail.availableCredit,
@@ -503,7 +461,6 @@ detailSuppliersRouter.patch('/:id/pay-debt', userExtractor, isAdmin, async (requ
 
   try {
     const detail = await DetailSupplier.findById(request.params.id)
-      .populate('supplier', 'supplierCode companyName')
 
     if (!detail) {
       return response.status(404).json({
@@ -519,11 +476,7 @@ detailSuppliersRouter.patch('/:id/pay-debt', userExtractor, isAdmin, async (requ
       data: {
         detailSupplier: {
           id: updatedDetail._id,
-          supplier: detail.supplier ? {
-            id: detail.supplier._id,
-            supplierCode: detail.supplier.supplierCode,
-            companyName: detail.supplier.companyName
-          } : null,
+          supplierId: updatedDetail.supplier,
           currentDebt: updatedDetail.currentDebt,
           creditLimit: updatedDetail.creditLimit,
           availableCredit: updatedDetail.availableCredit,

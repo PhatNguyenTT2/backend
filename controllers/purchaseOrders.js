@@ -40,21 +40,13 @@ purchaseOrdersRouter.get('/', userExtractor, isAdmin, async (request, response) 
       purchaseOrders = await PurchaseOrder.findWithDetails(filter)
     } else {
       purchaseOrders = await PurchaseOrder.find(filter)
-        .populate('supplier', 'supplierCode companyName email phone')
-        .populate('createdBy', 'fullName email')
         .sort({ orderDate: -1 })
     }
 
     const ordersData = purchaseOrders.map(order => ({
       id: order._id,
       poNumber: order.poNumber,
-      supplier: order.supplier ? {
-        id: order.supplier._id,
-        supplierCode: order.supplier.supplierCode,
-        companyName: order.supplier.companyName,
-        email: order.supplier.email,
-        phone: order.supplier.phone
-      } : null,
+      supplierId: order.supplier?._id || order.supplier,
       orderDate: order.orderDate,
       expectedDeliveryDate: order.expectedDeliveryDate,
       shippingFee: order.shippingFee,
@@ -63,11 +55,7 @@ purchaseOrdersRouter.get('/', userExtractor, isAdmin, async (request, response) 
       status: order.status,
       paymentStatus: order.paymentStatus,
       notes: order.notes,
-      createdBy: order.createdBy ? {
-        id: order.createdBy._id,
-        fullName: order.createdBy.fullName,
-        email: order.createdBy.email
-      } : null,
+      createdById: order.createdBy?._id || order.createdBy,
       ...(with_details === 'true' && {
         subtotal: order.subtotal,
         discountAmount: order.discountAmount,
@@ -118,8 +106,6 @@ purchaseOrdersRouter.get('/stats/overview', userExtractor, isAdmin, async (reque
 purchaseOrdersRouter.get('/:id', userExtractor, isAdmin, async (request, response) => {
   try {
     const purchaseOrder = await PurchaseOrder.findById(request.params.id)
-      .populate('supplier', 'supplierCode companyName email phone address')
-      .populate('createdBy', 'fullName email')
       .populate({
         path: 'details',
         populate: {
@@ -143,14 +129,7 @@ purchaseOrdersRouter.get('/:id', userExtractor, isAdmin, async (request, respons
         purchaseOrder: {
           id: purchaseOrder._id,
           poNumber: purchaseOrder.poNumber,
-          supplier: purchaseOrder.supplier ? {
-            id: purchaseOrder.supplier._id,
-            supplierCode: purchaseOrder.supplier.supplierCode,
-            companyName: purchaseOrder.supplier.companyName,
-            email: purchaseOrder.supplier.email,
-            phone: purchaseOrder.supplier.phone,
-            address: purchaseOrder.supplier.address
-          } : null,
+          supplierId: purchaseOrder.supplier,
           orderDate: purchaseOrder.orderDate,
           expectedDeliveryDate: purchaseOrder.expectedDeliveryDate,
           shippingFee: purchaseOrder.shippingFee,
@@ -159,23 +138,13 @@ purchaseOrdersRouter.get('/:id', userExtractor, isAdmin, async (request, respons
           status: purchaseOrder.status,
           paymentStatus: purchaseOrder.paymentStatus,
           notes: purchaseOrder.notes,
-          createdBy: purchaseOrder.createdBy ? {
-            id: purchaseOrder.createdBy._id,
-            fullName: purchaseOrder.createdBy.fullName,
-            email: purchaseOrder.createdBy.email
-          } : null,
+          createdById: purchaseOrder.createdBy,
           subtotal: calculatedTotals.subtotal,
           discountAmount: calculatedTotals.discountAmount,
           calculatedTotal: calculatedTotals.total,
           details: calculatedTotals.details.map(detail => ({
             id: detail._id,
-            product: detail.product ? {
-              id: detail.product._id,
-              productCode: detail.product.productCode,
-              name: detail.product.name,
-              vendor: detail.product.vendor,
-              originalPrice: detail.product.originalPrice
-            } : null,
+            productId: detail.product?._id || detail.product,
             quantity: detail.quantity,
             unitPrice: detail.unitPrice,
             total: detail.total
@@ -242,8 +211,6 @@ purchaseOrdersRouter.post('/', userExtractor, isAdmin, async (request, response)
     })
 
     const savedOrder = await purchaseOrder.save()
-    await savedOrder.populate('supplier', 'supplierCode companyName email phone')
-    await savedOrder.populate('createdBy', 'fullName email')
 
     response.status(201).json({
       success: true,
@@ -252,13 +219,7 @@ purchaseOrdersRouter.post('/', userExtractor, isAdmin, async (request, response)
         purchaseOrder: {
           id: savedOrder._id,
           poNumber: savedOrder.poNumber,
-          supplier: savedOrder.supplier ? {
-            id: savedOrder.supplier._id,
-            supplierCode: savedOrder.supplier.supplierCode,
-            companyName: savedOrder.supplier.companyName,
-            email: savedOrder.supplier.email,
-            phone: savedOrder.supplier.phone
-          } : null,
+          supplierId: savedOrder.supplier,
           orderDate: savedOrder.orderDate,
           expectedDeliveryDate: savedOrder.expectedDeliveryDate,
           shippingFee: savedOrder.shippingFee,
@@ -267,11 +228,7 @@ purchaseOrdersRouter.post('/', userExtractor, isAdmin, async (request, response)
           status: savedOrder.status,
           paymentStatus: savedOrder.paymentStatus,
           notes: savedOrder.notes,
-          createdBy: savedOrder.createdBy ? {
-            id: savedOrder.createdBy._id,
-            fullName: savedOrder.createdBy.fullName,
-            email: savedOrder.createdBy.email
-          } : null,
+          createdById: savedOrder.createdBy,
           createdAt: savedOrder.createdAt
         }
       }
@@ -326,8 +283,6 @@ purchaseOrdersRouter.put('/:id', userExtractor, isAdmin, async (request, respons
       await purchaseOrder.save()
     }
 
-    await purchaseOrder.populate('supplier', 'supplierCode companyName')
-
     response.status(200).json({
       success: true,
       message: 'Purchase order updated successfully',
@@ -335,11 +290,7 @@ purchaseOrdersRouter.put('/:id', userExtractor, isAdmin, async (request, respons
         purchaseOrder: {
           id: purchaseOrder._id,
           poNumber: purchaseOrder.poNumber,
-          supplier: purchaseOrder.supplier ? {
-            id: purchaseOrder.supplier._id,
-            supplierCode: purchaseOrder.supplier.supplierCode,
-            companyName: purchaseOrder.supplier.companyName
-          } : null,
+          supplierId: purchaseOrder.supplier,
           expectedDeliveryDate: purchaseOrder.expectedDeliveryDate,
           shippingFee: purchaseOrder.shippingFee,
           discountPercentage: purchaseOrder.discountPercentage,

@@ -142,7 +142,6 @@ customersRouter.get('/code/:code', userExtractor, isAdmin, async (request, respo
           orderCount,
           totalSpent: details?.totalSpent || 0,
           customerType: details?.customerType || 'regular',
-          loyaltyPoints: details?.loyaltyPoints || 0,
           createdAt: customer.createdAt,
           updatedAt: customer.updatedAt
         }
@@ -190,8 +189,6 @@ customersRouter.get('/:id', userExtractor, isAdmin, async (request, response) =>
           orderCount,
           totalSpent: details?.totalSpent || 0,
           customerType: details?.customerType || 'regular',
-          loyaltyPoints: details?.loyaltyPoints || 0,
-          membershipLevel: details?.membershipLevel,
           createdAt: customer.createdAt,
           updatedAt: customer.updatedAt
         }

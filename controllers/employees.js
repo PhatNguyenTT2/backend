@@ -35,24 +35,8 @@ employeesRouter.get('/', userExtractor, async (request, response) => {
       address: emp.address,
       dateOfBirth: emp.dateOfBirth,
       age: emp.age,
-      department: emp.department ? {
-        id: emp.department._id,
-        departmentName: emp.department.departmentName,
-        departmentCode: emp.department.departmentCode,
-        location: emp.department.location
-      } : null,
-      userAccount: emp.userAccount ? {
-        id: emp.userAccount._id,
-        username: emp.userAccount.username,
-        email: emp.userAccount.email,
-        userCode: emp.userAccount.userCode,
-        role: emp.userAccount.role ? {
-          id: emp.userAccount.role._id,
-          roleName: emp.userAccount.role.roleName
-        } : null,
-        isActive: emp.userAccount.isActive,
-        lastLogin: emp.userAccount.lastLogin
-      } : null,
+      departmentId: emp.department?._id || emp.department,
+      userAccountId: emp.userAccount?._id || emp.userAccount,
       createdAt: emp.createdAt,
       updatedAt: emp.updatedAt
     }))
@@ -109,19 +93,8 @@ employeesRouter.get('/user/:userId', userExtractor, async (request, response) =>
           address: employee.address,
           dateOfBirth: employee.dateOfBirth,
           age: employee.age,
-          department: employee.department ? {
-            id: employee.department._id,
-            departmentName: employee.department.departmentName,
-            departmentCode: employee.department.departmentCode
-          } : null,
-          userAccount: employee.userAccount ? {
-            id: employee.userAccount._id,
-            username: employee.userAccount.username,
-            email: employee.userAccount.email,
-            userCode: employee.userAccount.userCode,
-            role: employee.userAccount.role,
-            isActive: employee.userAccount.isActive
-          } : null,
+          departmentId: employee.department?._id || employee.department,
+          userAccountId: employee.userAccount?._id || employee.userAccount,
           createdAt: employee.createdAt,
           updatedAt: employee.updatedAt
         }
@@ -143,15 +116,6 @@ employeesRouter.get('/user/:userId', userExtractor, async (request, response) =>
 employeesRouter.get('/:id', userExtractor, async (request, response) => {
   try {
     const employee = await Employee.findById(request.params.id)
-      .populate({
-        path: 'userAccount',
-        select: 'username email userCode role isActive lastLogin createdAt',
-        populate: {
-          path: 'role',
-          select: 'roleName permissions'
-        }
-      })
-      .populate('department', 'departmentName departmentCode location phone email')
 
     if (!employee) {
       return response.status(404).json({
@@ -169,28 +133,8 @@ employeesRouter.get('/:id', userExtractor, async (request, response) => {
           address: employee.address,
           dateOfBirth: employee.dateOfBirth,
           age: employee.age,
-          department: employee.department ? {
-            id: employee.department._id,
-            departmentName: employee.department.departmentName,
-            departmentCode: employee.department.departmentCode,
-            location: employee.department.location,
-            phone: employee.department.phone,
-            email: employee.department.email
-          } : null,
-          userAccount: employee.userAccount ? {
-            id: employee.userAccount._id,
-            username: employee.userAccount.username,
-            email: employee.userAccount.email,
-            userCode: employee.userAccount.userCode,
-            role: employee.userAccount.role ? {
-              id: employee.userAccount.role._id,
-              roleName: employee.userAccount.role.roleName,
-              permissions: employee.userAccount.role.permissions
-            } : null,
-            isActive: employee.userAccount.isActive,
-            lastLogin: employee.userAccount.lastLogin,
-            createdAt: employee.userAccount.createdAt
-          } : null,
+          departmentId: employee.department,
+          userAccountId: employee.userAccount,
           createdAt: employee.createdAt,
           updatedAt: employee.updatedAt
         }
@@ -261,17 +205,8 @@ employeesRouter.post('/', userExtractor, isAdmin, async (request, response) => {
           phone: employee.phone,
           address: employee.address,
           dateOfBirth: employee.dateOfBirth,
-          department: employee.department ? {
-            id: employee.department._id,
-            departmentName: employee.department.departmentName,
-            departmentCode: employee.department.departmentCode
-          } : null,
-          userAccount: {
-            id: employee.userAccount._id,
-            username: employee.userAccount.username,
-            email: employee.userAccount.email,
-            userCode: employee.userAccount.userCode
-          },
+          departmentId: employee.department?._id || employee.department,
+          userAccountId: employee.userAccount?._id || employee.userAccount,
           createdAt: employee.createdAt
         }
       }
@@ -335,8 +270,6 @@ employeesRouter.put('/:id', userExtractor, async (request, response) => {
       department
     })
 
-    await updatedEmployee.populate('department', 'departmentName departmentCode')
-
     response.status(200).json({
       success: true,
       message: 'Employee profile updated successfully',
@@ -348,11 +281,7 @@ employeesRouter.put('/:id', userExtractor, async (request, response) => {
           address: updatedEmployee.address,
           dateOfBirth: updatedEmployee.dateOfBirth,
           age: updatedEmployee.age,
-          department: updatedEmployee.department ? {
-            id: updatedEmployee.department._id,
-            departmentName: updatedEmployee.department.departmentName,
-            departmentCode: updatedEmployee.department.departmentCode
-          } : null,
+          departmentId: updatedEmployee.department,
           updatedAt: updatedEmployee.updatedAt
         }
       }
@@ -409,7 +338,6 @@ employeesRouter.patch('/:id/change-department', userExtractor, isAdmin, async (r
 
     // Use the changeDepartment method from the model
     const updatedEmployee = await employee.changeDepartment(departmentId)
-    await updatedEmployee.populate('department', 'departmentName departmentCode location')
 
     response.status(200).json({
       success: true,
@@ -418,12 +346,7 @@ employeesRouter.patch('/:id/change-department', userExtractor, isAdmin, async (r
         employee: {
           id: updatedEmployee._id,
           fullName: updatedEmployee.fullName,
-          department: {
-            id: updatedEmployee.department._id,
-            departmentName: updatedEmployee.department.departmentName,
-            departmentCode: updatedEmployee.department.departmentCode,
-            location: updatedEmployee.department.location
-          },
+          departmentId: updatedEmployee.department,
           updatedAt: updatedEmployee.updatedAt
         }
       }
