@@ -2,6 +2,7 @@ const userAccountsRouter = require('express').Router()
 const UserAccount = require('../models/userAccount')
 const Employee = require('../models/employee')
 const Role = require('../models/role')
+const Department = require('../models/department')
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 const { userExtractor, isAdmin } = require('../utils/auth')
@@ -117,7 +118,11 @@ userAccountsRouter.get('/me', userExtractor, async (request, response) => {
 
     // Get employee profile if exists
     const employee = await Employee.findOne({ userAccount: user._id })
-      .populate('department', 'departmentName')
+      .populate({
+        path: 'department',
+        select: 'departmentName departmentCode',
+        model: 'Department'
+      })
 
     response.status(200).json({
       success: true,
@@ -127,18 +132,35 @@ userAccountsRouter.get('/me', userExtractor, async (request, response) => {
           userCode: user.userCode,
           username: user.username,
           email: user.email,
-          roleId: user.role?._id,
+          role: user.role ? {
+            id: user.role._id,
+            roleCode: user.role.roleCode,
+            roleName: user.role.roleName
+          } : null,
           isActive: user.isActive,
           lastLogin: user.lastLogin,
-          employeeId: employee?._id,
+          employee: employee ? {
+            id: employee._id,
+            fullName: employee.fullName,
+            phone: employee.phone,
+            address: employee.address,
+            dateOfBirth: employee.dateOfBirth,
+            department: employee.department ? {
+              id: employee.department._id,
+              departmentName: employee.department.departmentName,
+              departmentCode: employee.department.departmentCode
+            } : null
+          } : null,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt
         }
       }
     })
   } catch (error) {
+    console.error('Error fetching user profile:', error)
     response.status(500).json({
-      error: 'Failed to fetch user profile'
+      error: 'Failed to fetch user profile',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     })
   }
 })
@@ -398,17 +420,19 @@ userAccountsRouter.post('/signup', async (request, response) => {
 
     const savedUser = await userAccount.save()
 
-    // If fullName provided, create employee profile
+    // Create employee profile automatically
+    let employee = null
     if (fullName) {
       try {
-        await Employee.create({
-          employeeName: fullName,
+        employee = await Employee.create({
+          fullName: fullName,
           userAccount: savedUser._id,
           department: null // Can be updated later
         })
+        console.log(`✅ Employee profile created for user: ${savedUser.username}`)
       } catch (err) {
-        console.error('Failed to create employee profile:', err)
-        // Continue even if employee creation fails
+        console.error('❌ Failed to create employee profile:', err.message)
+        // Continue even if employee creation fails - user account is still created
       }
     }
 
@@ -421,6 +445,7 @@ userAccountsRouter.post('/signup', async (request, response) => {
           userCode: savedUser.userCode,
           username: savedUser.username,
           email: savedUser.email,
+          employeeId: employee?._id,
           createdAt: savedUser.createdAt
         }
       }

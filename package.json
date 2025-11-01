@@ -13,6 +13,7 @@
     "start:test": "cross-env NODE_ENV=test node --watch index.js",
     "setup": "node utils/completeSetup.js",
     "setup:roles": "node scripts/setup-roles.js",
+    "setup:departments": "node scripts/setup-departments.js",
     "seed:roles": "node utils/seedRolesAndDepartments.js",
     "seed:products": "node scripts/seed-products.js",
     "seed:customers": "node scripts/seed-customers.js",

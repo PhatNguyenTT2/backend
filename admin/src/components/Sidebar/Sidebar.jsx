@@ -1,6 +1,6 @@
 import React from 'react';
 import { LogoSection } from './sections/LogoSection';
-import { UserProfileSection } from './sections/UserProfileSection';
+import { EmployeeProfileSection } from './sections/EmployeeProfileSection';
 import { NavigationMenuSection } from './sections/NavigationMenuSection';
 
 export const Sidebar = () => {
@@ -10,7 +10,7 @@ export const Sidebar = () => {
         <LogoSection />
       </div>
       <div className="px-4 py-2 flex-shrink-0">
-        <UserProfileSection />
+        <EmployeeProfileSection />
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-2">
         <NavigationMenuSection />
