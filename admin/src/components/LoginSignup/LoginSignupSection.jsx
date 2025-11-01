@@ -293,9 +293,9 @@ export default function LoginSignupSection() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full h-[50px] px-4 border border-[#ececec] rounded-[8px] font-['Lato',sans-serif] text-[14px] text-[#253d4e] focus:border-[#3bb77e] focus:outline-none transition-colors"
-                  placeholder="Create a password (min 8 characters)"
+                  placeholder="Create a password (min 6 characters)"
                   required
-                  minLength={8}
+                  minLength={6}
                 />
               </div>
 

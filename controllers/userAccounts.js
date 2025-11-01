@@ -326,6 +326,120 @@ userAccountsRouter.post('/register', userExtractor, isAdmin, async (request, res
   }
 })
 
+// POST /api/user-accounts/signup - Public registration (auto-assigns default role)
+userAccountsRouter.post('/signup', async (request, response) => {
+  const { username, email, password, fullName } = request.body
+
+  if (!username) {
+    return response.status(400).json({
+      error: 'Username is required'
+    })
+  }
+
+  if (!email) {
+    return response.status(400).json({
+      error: 'Email is required'
+    })
+  }
+
+  if (!password) {
+    return response.status(400).json({
+      error: 'Password is required'
+    })
+  }
+
+  if (password.length < 6) {
+    return response.status(400).json({
+      error: 'Password must be at least 6 characters long'
+    })
+  }
+
+  try {
+    // Check if username already exists
+    const existingUsername = await UserAccount.findOne({ username })
+    if (existingUsername) {
+      return response.status(400).json({
+        error: 'Username already exists'
+      })
+    }
+
+    // Check if email already exists
+    const existingEmail = await UserAccount.findOne({ email: email.toLowerCase() })
+    if (existingEmail) {
+      return response.status(400).json({
+        error: 'Email already exists'
+      })
+    }
+
+    // Find or create default user role
+    let defaultRole = await Role.findOne({ roleCode: 'USER' })
+    if (!defaultRole) {
+      // Create default user role if it doesn't exist
+      defaultRole = await Role.create({
+        roleCode: 'USER',
+        roleName: 'User',
+        permissions: ['user.read', 'user.update.own']
+      })
+    }
+
+    // Hash password
+    const saltRounds = 10
+    const passwordHash = await bcrypt.hash(password, saltRounds)
+
+    const userAccount = new UserAccount({
+      username,
+      email: email.toLowerCase(),
+      passwordHash,
+      role: defaultRole._id,
+      isActive: true
+    })
+
+    const savedUser = await userAccount.save()
+
+    // If fullName provided, create employee profile
+    if (fullName) {
+      try {
+        await Employee.create({
+          employeeName: fullName,
+          userAccount: savedUser._id,
+          department: null // Can be updated later
+        })
+      } catch (err) {
+        console.error('Failed to create employee profile:', err)
+        // Continue even if employee creation fails
+      }
+    }
+
+    response.status(201).json({
+      success: true,
+      message: 'Registration successful! Please login with your credentials.',
+      data: {
+        user: {
+          id: savedUser._id,
+          userCode: savedUser.userCode,
+          username: savedUser.username,
+          email: savedUser.email,
+          createdAt: savedUser.createdAt
+        }
+      }
+    })
+  } catch (error) {
+    if (error.name === 'ValidationError') {
+      return response.status(400).json({
+        error: error.message
+      })
+    }
+    if (error.code === 11000) {
+      return response.status(400).json({
+        error: 'Username or email already exists'
+      })
+    }
+    response.status(500).json({
+      error: 'Failed to create account'
+    })
+  }
+})
+
 // POST /api/user-accounts/login - Login
 userAccountsRouter.post('/login', async (request, response) => {
   const { identifier, password } = request.body

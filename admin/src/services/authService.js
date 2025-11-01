@@ -1,9 +1,12 @@
 import api from './api'
 
 const authService = {
-  // Login
+  // Login - uses /api/user-accounts/login
   login: async (username, password) => {
-    const response = await api.post('/login', { username, password })
+    const response = await api.post('/user-accounts/login', {
+      identifier: username,
+      password
+    })
 
     if (response.data.success) {
       const { token, user } = response.data.data
@@ -15,10 +18,10 @@ const authService = {
     return { success: false, error: 'Login failed' }
   },
 
-  // Register
+  // Register - uses /api/user-accounts/signup (public endpoint)
   register: async (userData) => {
     const { fullName, username, email, password } = userData
-    const response = await api.post('/login/register', {
+    const response = await api.post('/user-accounts/signup', {
       username,
       email,
       fullName,
@@ -32,10 +35,10 @@ const authService = {
     return { success: false, error: 'Registration failed' }
   },
 
-  // Logout
+  // Logout - uses /api/user-accounts/logout
   logout: async () => {
     try {
-      await api.post('/login/logout')
+      await api.post('/user-accounts/logout')
     } catch (error) {
       console.error('Logout error:', error)
     } finally {
@@ -44,9 +47,9 @@ const authService = {
     }
   },
 
-  // Get current user
+  // Get current user - uses /api/user-accounts/me
   getCurrentUser: async () => {
-    const response = await api.get('/login/me')
+    const response = await api.get('/user-accounts/me')
     return response.data.data.user
   },
 
