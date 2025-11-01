@@ -3,11 +3,11 @@ const mongoose = require('mongoose')
 const userAccountSchema = new mongoose.Schema({
   userCode: {
     type: String,
-    required: [true, 'User code is required'],
     unique: true,
     uppercase: true,
     trim: true,
     match: [/^USER\d{3,}$/, 'User code must follow format USER001, USER002, etc.']
+    // Auto-generated in pre-save hook, not required on input
   },
 
   username: {

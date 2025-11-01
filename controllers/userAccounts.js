@@ -371,15 +371,17 @@ userAccountsRouter.post('/signup', async (request, response) => {
       })
     }
 
-    // Find or create default user role
-    let defaultRole = await Role.findOne({ roleCode: 'USER' })
+    // Find default Admin role for signup (ROLE001)
+    // For admin dashboard, new registrations should default to Admin role
+    let defaultRole = await Role.findOne({ roleCode: 'ROLE001' }) // Admin role
     if (!defaultRole) {
-      // Create default user role if it doesn't exist
-      defaultRole = await Role.create({
-        roleCode: 'USER',
-        roleName: 'User',
-        permissions: ['user.read', 'user.update.own']
-      })
+      // If Admin role doesn't exist, try to find any role or create one
+      defaultRole = await Role.findOne({ roleName: 'Admin' })
+      if (!defaultRole) {
+        return response.status(500).json({
+          error: 'System error: Default role not found. Please run setup:roles script first.'
+        })
+      }
     }
 
     // Hash password
