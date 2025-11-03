@@ -1,198 +1,141 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import authService from '../../services/authService'
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import authService from '../../services/authService';
 
-export default function LoginSignup() {
-  const navigate = useNavigate()
-  const [isLogin, setIsLogin] = useState(true)
-
-  // Login form state
-  const [loginData, setLoginData] = useState({
-    username: '',
-    password: ''
-  })
-
-  // Register form state
-  const [registerData, setRegisterData] = useState({
-    fullName: '',
-    username: '',
-    email: '',
-    password: '',
-    confirmPassword: ''
-  })
-
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
-  const [rememberMe, setRememberMe] = useState(false)
+export default function LoginSignupSection() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState('login');
+  const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Check if already logged in
   useEffect(() => {
     if (authService.isAuthenticated()) {
-      navigate('/dashboard')
+      navigate('/dashboard');
     }
-  }, [navigate])
+  }, [navigate]);
 
-  // Handle login form change
-  const handleLoginChange = (e) => {
-    const { name, value } = e.target
-    setLoginData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-    setError('')
-  }
+  // Sync tab with route
+  useEffect(() => {
+    if (location.pathname === '/signup') {
+      setActiveTab('register');
+    } else if (location.pathname === '/') {
+      setActiveTab('login');
+    }
+  }, [location.pathname]);
 
-  // Handle register form change
-  const handleRegisterChange = (e) => {
-    const { name, value } = e.target
-    setRegisterData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-    setError('')
-  }
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setError('');
+    setSuccessMessage('');
+    navigate(tab === 'login' ? '/' : '/signup');
+  };
 
-  // Switch between login and register
-  const toggleMode = () => {
-    setIsLogin(!isLogin)
-    setError('')
-    setSuccessMessage('')
-    setLoginData({ username: '', password: '' })
-    setRegisterData({
-      fullName: '',
-      username: '',
-      email: '',
-      password: '',
-      confirmPassword: ''
-    })
-  }
-
-  // Handle login submit
   const handleLoginSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
     try {
-      const result = await authService.login(loginData.username, loginData.password)
+      const result = await authService.login(username, password);
 
       if (result.success) {
-        navigate('/dashboard')
+        // Login successful - redirect to dashboard
+        navigate('/dashboard');
       } else {
-        setError(result.error || 'Login failed. Please try again.')
+        setError(result.error || 'Login failed. Please try again.');
       }
     } catch (err) {
-      console.error('Login error:', err)
-      // Handle error from authService or axios
+      console.error('Login error:', err);
       if (err.response?.data?.error) {
-        // Error is a string
-        if (typeof err.response.data.error === 'string') {
-          setError(err.response.data.error)
-        } else {
-          // Error is an object with message
-          setError(err.response.data.error.message || err.response.data.error)
-        }
+        setError(err.response.data.error);
       } else if (err.response?.status === 401) {
-        setError('Invalid username or password')
+        setError('Invalid username or password');
       } else if (err.response?.status === 403) {
-        setError('Account is inactive. Please contact administrator.')
+        setError('Account is inactive. Please contact administrator.');
       } else {
-        setError('Unable to connect to server. Please try again later.')
+        setError('Unable to connect to server. Please try again later.');
       }
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  // Handle register submit
   const handleRegisterSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-    setSuccessMessage('')
-    setLoading(true)
+    e.preventDefault();
+    setError('');
+    setSuccessMessage('');
+    setLoading(true);
 
-    // Validation
-    if (registerData.password.length < 6) {
-      setError('Password must be at least 6 characters long')
-      setLoading(false)
-      return
-    }
-
-    if (registerData.password !== registerData.confirmPassword) {
-      setError('Passwords do not match')
-      setLoading(false)
-      return
+    // Validate password length
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      setLoading(false);
+      return;
     }
 
     try {
       const result = await authService.register({
-        fullName: registerData.fullName,
-        username: registerData.username,
-        email: registerData.email,
-        password: registerData.password
-      })
+        fullName,
+        username,
+        email,
+        password
+      });
 
       if (result.success) {
-        setSuccessMessage('Registration successful! Please login with your credentials.')
-        setRegisterData({
-          fullName: '',
-          username: '',
-          email: '',
-          password: '',
-          confirmPassword: ''
-        })
-        // Switch to login after 2 seconds
+        setSuccessMessage('Registration successful! Please login with your credentials.');
+        // Clear form
+        setFullName('');
+        setUsername('');
+        setEmail('');
+        setPassword('');
+        // Switch to login tab after 2 seconds
         setTimeout(() => {
-          setIsLogin(true)
-          setSuccessMessage('')
-        }, 2000)
+          handleTabChange('login');
+        }, 2000);
       } else {
-        setError(result.error || 'Registration failed. Please try again.')
+        setError(result.error || 'Registration failed. Please try again.');
       }
     } catch (err) {
-      console.error('Registration error:', err)
-      // Handle error from authService or axios
+      console.error('Registration error:', err);
       if (err.response?.data?.error) {
-        // Error is a string
-        if (typeof err.response.data.error === 'string') {
-          setError(err.response.data.error)
-        } else {
-          // Error is an object with message
-          setError(err.response.data.error.message || err.response.data.error)
-        }
+        setError(err.response.data.error);
       } else if (err.response?.status === 400) {
-        setError('Invalid input. Please check your information.')
-      } else if (err.response?.status === 409) {
-        setError('Username or email already exists.')
+        setError('Invalid input. Please check your information.');
       } else {
-        setError('Unable to connect to server. Please try again later.')
+        setError('Unable to connect to server. Please try again later.');
       }
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="max-w-[1440px] mx-auto px-8 py-16">
       <div className="max-w-[500px] mx-auto bg-white rounded-[15px] border border-[#ececec] shadow-sm p-8">
-        {/* Tab Headers */}
+        {/* Tab Headers - Centered */}
         <div className="flex justify-center gap-8 mb-6 border-b border-[#ececec]">
           <button
-            onClick={() => !loading && toggleMode()}
-            className={`font-['Quicksand',sans-serif] font-bold text-[28px] pb-3 transition-colors ${isLogin
-                ? 'text-[#3bb77e] border-b-2 border-[#3bb77e]'
-                : 'text-[#7e7e7e]'
+            onClick={() => handleTabChange('login')}
+            className={`font-['Quicksand',sans-serif] font-bold text-[28px] pb-3 transition-colors ${activeTab === 'login'
+              ? 'text-[#3bb77e] border-b-2 border-[#3bb77e]'
+              : 'text-[#7e7e7e]'
               }`}
             disabled={loading}
           >
             Login
           </button>
           <button
-            onClick={() => !loading && toggleMode()}
-            className={`font-['Quicksand',sans-serif] font-bold text-[28px] pb-3 transition-colors ${!isLogin
-                ? 'text-[#3bb77e] border-b-2 border-[#3bb77e]'
-                : 'text-[#7e7e7e]'
+            onClick={() => handleTabChange('register')}
+            className={`font-['Quicksand',sans-serif] font-bold text-[28px] pb-3 transition-colors ${activeTab === 'register'
+              ? 'text-[#3bb77e] border-b-2 border-[#3bb77e]'
+              : 'text-[#7e7e7e]'
               }`}
             disabled={loading}
           >
@@ -219,7 +162,7 @@ export default function LoginSignup() {
         )}
 
         {/* Login Form */}
-        {isLogin ? (
+        {activeTab === 'login' && (
           <div>
             <p className="font-['Lato',sans-serif] text-[#7e7e7e] text-[14px] leading-[22px] mb-6 text-center">
               Sign in to access the admin dashboard and manage your store.
@@ -233,13 +176,11 @@ export default function LoginSignup() {
                 </label>
                 <input
                   type="text"
-                  name="username"
-                  value={loginData.username}
-                  onChange={handleLoginChange}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   className="w-full h-[50px] px-4 border border-[#ececec] rounded-[8px] font-['Lato',sans-serif] text-[14px] text-[#253d4e] focus:border-[#3bb77e] focus:outline-none transition-colors"
                   placeholder="Enter your username or email"
                   required
-                  disabled={loading}
                 />
               </div>
 
@@ -250,13 +191,11 @@ export default function LoginSignup() {
                 </label>
                 <input
                   type="password"
-                  name="password"
-                  value={loginData.password}
-                  onChange={handleLoginChange}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="w-full h-[50px] px-4 border border-[#ececec] rounded-[8px] font-['Lato',sans-serif] text-[14px] text-[#253d4e] focus:border-[#3bb77e] focus:outline-none transition-colors"
                   placeholder="Enter your password"
                   required
-                  disabled={loading}
                 />
               </div>
 
@@ -265,22 +204,18 @@ export default function LoginSignup() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
                     className="w-[18px] h-[18px] border border-[#ececec] rounded-[4px] accent-[#3bb77e] cursor-pointer"
-                    disabled={loading}
                   />
                   <span className="font-['Lato',sans-serif] text-[#253d4e] text-[13px]">
                     Remember me
                   </span>
                 </label>
-                <button
-                  type="button"
+                <a
+                  href="#"
                   className="font-['Lato',sans-serif] text-[#3bb77e] text-[13px] hover:underline"
-                  disabled={loading}
                 >
-                  Forgot password?
-                </button>
+                  Lost your password?
+                </a>
               </div>
 
               {/* Submit Button */}
@@ -293,8 +228,10 @@ export default function LoginSignup() {
               </button>
             </form>
           </div>
-        ) : (
-          /* Register Form */
+        )}
+
+        {/* Register Form */}
+        {activeTab === 'register' && (
           <div>
             <p className="font-['Lato',sans-serif] text-[#7e7e7e] text-[14px] leading-[22px] mb-6 text-center">
               Create an admin account to manage products, orders, and customers.
@@ -308,13 +245,11 @@ export default function LoginSignup() {
                 </label>
                 <input
                   type="text"
-                  name="fullName"
-                  value={registerData.fullName}
-                  onChange={handleRegisterChange}
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                   className="w-full h-[50px] px-4 border border-[#ececec] rounded-[8px] font-['Lato',sans-serif] text-[14px] text-[#253d4e] focus:border-[#3bb77e] focus:outline-none transition-colors"
                   placeholder="Enter your full name"
                   required
-                  disabled={loading}
                 />
               </div>
 
@@ -325,15 +260,11 @@ export default function LoginSignup() {
                 </label>
                 <input
                   type="text"
-                  name="username"
-                  value={registerData.username}
-                  onChange={handleRegisterChange}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   className="w-full h-[50px] px-4 border border-[#ececec] rounded-[8px] font-['Lato',sans-serif] text-[14px] text-[#253d4e] focus:border-[#3bb77e] focus:outline-none transition-colors"
                   placeholder="Enter your username"
                   required
-                  disabled={loading}
-                  minLength={3}
-                  maxLength={20}
                 />
               </div>
 
@@ -344,13 +275,11 @@ export default function LoginSignup() {
                 </label>
                 <input
                   type="email"
-                  name="email"
-                  value={registerData.email}
-                  onChange={handleRegisterChange}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="w-full h-[50px] px-4 border border-[#ececec] rounded-[8px] font-['Lato',sans-serif] text-[14px] text-[#253d4e] focus:border-[#3bb77e] focus:outline-none transition-colors"
                   placeholder="Enter your email address"
                   required
-                  disabled={loading}
                 />
               </div>
 
@@ -361,31 +290,11 @@ export default function LoginSignup() {
                 </label>
                 <input
                   type="password"
-                  name="password"
-                  value={registerData.password}
-                  onChange={handleRegisterChange}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="w-full h-[50px] px-4 border border-[#ececec] rounded-[8px] font-['Lato',sans-serif] text-[14px] text-[#253d4e] focus:border-[#3bb77e] focus:outline-none transition-colors"
                   placeholder="Create a password (min 6 characters)"
                   required
-                  disabled={loading}
-                  minLength={6}
-                />
-              </div>
-
-              {/* Confirm Password Field */}
-              <div>
-                <label className="font-['Lato',sans-serif] text-[#253d4e] text-[13px] leading-[20px] block mb-2">
-                  Confirm Password <span className="text-[#3bb77e]">*</span>
-                </label>
-                <input
-                  type="password"
-                  name="confirmPassword"
-                  value={registerData.confirmPassword}
-                  onChange={handleRegisterChange}
-                  className="w-full h-[50px] px-4 border border-[#ececec] rounded-[8px] font-['Lato',sans-serif] text-[14px] text-[#253d4e] focus:border-[#3bb77e] focus:outline-none transition-colors"
-                  placeholder="Confirm your password"
-                  required
-                  disabled={loading}
                   minLength={6}
                 />
               </div>
@@ -401,13 +310,9 @@ export default function LoginSignup() {
               <div className="bg-[#f4f6fa] p-4 rounded-[8px]">
                 <p className="font-['Lato',sans-serif] text-[#7e7e7e] text-[12px] leading-[20px]">
                   Your personal data will be used to support your experience throughout this admin dashboard, to manage access to your account, and for other purposes described in our{' '}
-                  <button
-                    type="button"
-                    className="text-[#3bb77e] hover:underline"
-                    disabled={loading}
-                  >
+                  <a href="#" className="text-[#3bb77e] hover:underline">
                     privacy policy
-                  </button>
+                  </a>
                   .
                 </p>
               </div>
@@ -425,5 +330,5 @@ export default function LoginSignup() {
         )}
       </div>
     </div>
-  )
+  );
 }

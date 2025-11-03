@@ -5,6 +5,7 @@ const config = require('./utils/config')
 const logger = require('./utils/logger')
 const middleware = require('./utils/middleware')
 // const productsRouter = require('./controllers/products')
+const loginRouter = require('./controllers/login')
 const rolesRouter = require('./controllers/roles')
 // const departmentsRouter = require('./controllers/departments')
 // const categoriesRouter = require('./controllers/categories')
@@ -46,6 +47,10 @@ app.use(express.json())
 app.use(middleware.requestLogger)
 
 // API Routes
+// Authentication routes - PUBLIC (no auth middleware needed)
+app.use('/api/login', loginRouter)
+
+// Protected routes
 // app.use('/api/products', productsRouter)
 app.use('/api/roles', rolesRouter)
 // app.use('/api/departments', departmentsRouter)
