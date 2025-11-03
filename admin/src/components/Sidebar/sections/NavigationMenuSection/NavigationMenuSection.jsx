@@ -107,7 +107,15 @@ export const NavigationMenuSection = () => {
       category: 'Admin',
       items: [
         // { name: 'Profile', icon: UserCircle, arrow: true },
-        { name: 'Users', icon: Users, href: '/users' },
+        {
+          name: 'Users',
+          icon: Users,
+          arrow: true,
+          submenu: [
+            { name: 'Employees', href: '/employees' },
+            { name: 'Departments', href: '/departments' },
+          ]
+        },
         { name: 'Authentication', icon: Shield, arrow: true },
         { name: 'Settings', icon: Settings },
       ],
