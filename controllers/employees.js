@@ -1,3 +1,4 @@
+const employeesRouter = require('express').Router()
 const Employee = require('../models/employee')
 const UserAccount = require('../models/userAccount')
 const bcrypt = require('bcrypt')
@@ -10,7 +11,7 @@ const bcrypt = require('bcrypt')
  * @query   search: string - Search by name or phone
  * @query   isActive: boolean - Filter by user account active status
  */
-exports.getAll = async (request, response) => {
+employeesRouter.get('/', async (request, response) => {
   try {
     const { department, search, isActive } = request.query
 
@@ -55,14 +56,14 @@ exports.getAll = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * @route   GET /api/employees/:id
  * @desc    Get employee by ID
  * @access  Private
  */
-exports.getById = async (request, response) => {
+employeesRouter.get('/:id', async (request, response) => {
   try {
     const employee = await Employee.findById(request.params.id)
       .populate({
@@ -99,7 +100,7 @@ exports.getById = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * @route   POST /api/employees
@@ -110,7 +111,7 @@ exports.getById = async (request, response) => {
  *            employeeData: { fullName, department, phone, address, dateOfBirth }
  *          }
  */
-exports.create = async (request, response) => {
+employeesRouter.post('/', async (request, response) => {
   try {
     const { userData, employeeData } = request.body
 
@@ -209,7 +210,7 @@ exports.create = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * @route   PUT /api/employees/:id
@@ -218,7 +219,7 @@ exports.create = async (request, response) => {
  * @body    { fullName, department, phone, address, dateOfBirth }
  * @note    Xử lý cả updateProfile() và changeDepartment() methods qua endpoint này
  */
-exports.update = async (request, response) => {
+employeesRouter.put('/:id', async (request, response) => {
   try {
     const { fullName, department, phone, address, dateOfBirth } = request.body
 
@@ -288,7 +289,7 @@ exports.update = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * @route   DELETE /api/employees/:id
@@ -296,7 +297,7 @@ exports.update = async (request, response) => {
  * @access  Private (Admin only)
  * @note    Hard delete - nếu muốn soft delete, deactivate user account thay vì xóa employee
  */
-exports.delete = async (request, response) => {
+employeesRouter.delete('/:id', async (request, response) => {
   try {
     const employee = await Employee.findById(request.params.id)
 
@@ -327,6 +328,25 @@ exports.delete = async (request, response) => {
       }
     })
   }
-}
+})
 
-module.exports = exports
+/**
+ * Methods NOT implemented as endpoints (and why):
+ * 
+ * 1. updateProfile() - Use PUT /employees/:id
+ * 2. changeDepartment() - Use PUT /employees/:id with { department: newId }
+ * 3. findByUserAccount() - Use GET /employees?userAccount=:id (thông qua query param)
+ * 4. findByDepartment() - Use GET /employees?department=:id (đã có trong getAll)
+ * 5. searchEmployees() - Use GET /employees?search=:term (đã có trong getAll)
+ * 6. getStatisticsByDepartment() - CHƯA TẠO, đợi frontend yêu cầu
+ * 7. getAllWithDetails() - Đã dùng trong getAll
+ * 8. createWithUserAccount() - Đã dùng trong create
+ * 
+ * These methods are part of the model for code organization and reusability.
+ * They're either:
+ * - Used internally by the CRUD endpoints
+ * - Can be accessed through query parameters
+ * - Will be added later when frontend requests them
+ */
+
+module.exports = employeesRouter

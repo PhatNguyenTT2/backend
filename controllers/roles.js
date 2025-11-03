@@ -1,3 +1,4 @@
+const rolesRouter = require('express').Router()
 const Role = require('../models/role')
 
 /**
@@ -20,7 +21,7 @@ const Role = require('../models/role')
  * @query   code: string - Filter by role code (e.g., ROLE001)
  * @query   search: string - Search by role name or description
  */
-exports.getAll = async (request, response) => {
+rolesRouter.get('/', async (request, response) => {
   try {
     const { code, search } = request.query
 
@@ -60,14 +61,14 @@ exports.getAll = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * @route   GET /api/roles/:id
  * @desc    Get role by ID
  * @access  Private (All authenticated users)
  */
-exports.getById = async (request, response) => {
+rolesRouter.get('/:id', async (request, response) => {
   try {
     const role = await Role.findById(request.params.id)
 
@@ -95,7 +96,7 @@ exports.getById = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * @route   POST /api/roles
@@ -103,7 +104,7 @@ exports.getById = async (request, response) => {
  * @access  Private (Admin only)
  * @body    { roleName, description, permissions }
  */
-exports.create = async (request, response) => {
+rolesRouter.post('/', async (request, response) => {
   try {
     const { roleName, description, permissions } = request.body
 
@@ -183,7 +184,7 @@ exports.create = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * @route   PUT /api/roles/:id
@@ -192,7 +193,7 @@ exports.create = async (request, response) => {
  * @body    { roleName, description, permissions }
  * @note    Xử lý cả addPermission() và removePermission() thông qua update permissions array
  */
-exports.update = async (request, response) => {
+rolesRouter.put('/:id', async (request, response) => {
   try {
     const { roleName, description, permissions } = request.body
 
@@ -256,7 +257,7 @@ exports.update = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * @route   DELETE /api/roles/:id
@@ -264,7 +265,7 @@ exports.update = async (request, response) => {
  * @access  Private (Admin only)
  * @note    Nên check xem có users nào đang dùng role này không trước khi xóa
  */
-exports.delete = async (request, response) => {
+rolesRouter.delete('/:id', async (request, response) => {
   try {
     const role = await Role.findById(request.params.id)
 
@@ -312,7 +313,7 @@ exports.delete = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * Methods NOT implemented as endpoints (and why):
@@ -336,4 +337,4 @@ exports.delete = async (request, response) => {
  * This is simpler and more RESTful than having separate add/remove endpoints.
  */
 
-module.exports = exports
+module.exports = rolesRouter

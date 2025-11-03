@@ -1,5 +1,15 @@
+const userAccountsRouter = require('express').Router()
 const UserAccount = require('../models/userAccount')
 const bcrypt = require('bcrypt')
+
+/**
+ * User Account Controller
+ * 
+ * Nguyên tắc: CHỈ 5 CRUD endpoints cơ bản
+ * - KHÔNG tạo custom endpoints từ đầu
+ * - Custom endpoints chỉ thêm khi frontend yêu cầu cụ thể
+ * - Sử dụng query parameters cho filtering
+ */
 
 /**
  * @route   GET /api/user-accounts
@@ -9,7 +19,7 @@ const bcrypt = require('bcrypt')
  * @query   search: string - Search by username or email
  * @query   role: string - Filter by role ID
  */
-exports.getAll = async (request, response) => {
+userAccountsRouter.get('/', async (request, response) => {
   try {
     const { isActive, search, role } = request.query
 
@@ -65,14 +75,14 @@ exports.getAll = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * @route   GET /api/user-accounts/:id
  * @desc    Get user account by ID
  * @access  Private
  */
-exports.getById = async (request, response) => {
+userAccountsRouter.get('/:id', async (request, response) => {
   try {
     const user = await UserAccount.findById(request.params.id)
       .populate('role', 'roleName permissions')
@@ -108,7 +118,7 @@ exports.getById = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * @route   POST /api/user-accounts
@@ -116,7 +126,7 @@ exports.getById = async (request, response) => {
  * @access  Private (Admin only)
  * @body    { username, email, password, role, isActive }
  */
-exports.create = async (request, response) => {
+userAccountsRouter.post('/', async (request, response) => {
   try {
     const { username, email, password, role, isActive } = request.body
 
@@ -203,7 +213,7 @@ exports.create = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * @route   PUT /api/user-accounts/:id
@@ -211,7 +221,7 @@ exports.create = async (request, response) => {
  * @access  Private (Admin or own account)
  * @body    { username, email, password, role, isActive }
  */
-exports.update = async (request, response) => {
+userAccountsRouter.put('/:id', async (request, response) => {
   try {
     const { username, email, password, role, isActive } = request.body
 
@@ -290,7 +300,7 @@ exports.update = async (request, response) => {
       }
     })
   }
-}
+})
 
 /**
  * @route   DELETE /api/user-accounts/:id
@@ -298,7 +308,7 @@ exports.update = async (request, response) => {
  * @access  Private (Admin only)
  * @note    Soft delete: set isActive = false instead of removing from database
  */
-exports.delete = async (request, response) => {
+userAccountsRouter.delete('/:id', async (request, response) => {
   try {
     const user = await UserAccount.findById(request.params.id)
 
@@ -329,6 +339,25 @@ exports.delete = async (request, response) => {
       }
     })
   }
-}
+})
 
-module.exports = exports
+/**
+ * Methods NOT implemented as endpoints (and why):
+ * 
+ * 1. generateAuthToken() - Internal use only, handled by auth middleware
+ * 2. removeToken() - Internal use only, handled by logout endpoint in auth
+ * 3. clearAllTokens() - Internal use only, handled by logout-all endpoint in auth
+ * 4. updateLastLogin() - Internal use only, handled by auth middleware
+ * 5. findByUsernameOrEmail() - Internal use only, used in login process
+ * 6. activate() - Use PUT /user-accounts/:id with { isActive: true }
+ * 7. deactivate() - Already handled in delete() method
+ * 8. getStatistics() - CHƯA TẠO, đợi frontend yêu cầu
+ * 
+ * These methods are part of the model for code organization and reusability,
+ * but don't need dedicated controller endpoints. They're either:
+ * - Used internally by other parts of the system
+ * - Can be handled through existing CRUD endpoints
+ * - Will be added later when frontend requests them
+ */
+
+module.exports = userAccountsRouter
