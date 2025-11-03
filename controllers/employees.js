@@ -330,23 +330,4 @@ employeesRouter.delete('/:id', async (request, response) => {
   }
 })
 
-/**
- * Methods NOT implemented as endpoints (and why):
- * 
- * 1. updateProfile() - Use PUT /employees/:id
- * 2. changeDepartment() - Use PUT /employees/:id with { department: newId }
- * 3. findByUserAccount() - Use GET /employees?userAccount=:id (thông qua query param)
- * 4. findByDepartment() - Use GET /employees?department=:id (đã có trong getAll)
- * 5. searchEmployees() - Use GET /employees?search=:term (đã có trong getAll)
- * 6. getStatisticsByDepartment() - CHƯA TẠO, đợi frontend yêu cầu
- * 7. getAllWithDetails() - Đã dùng trong getAll
- * 8. createWithUserAccount() - Đã dùng trong create
- * 
- * These methods are part of the model for code organization and reusability.
- * They're either:
- * - Used internally by the CRUD endpoints
- * - Can be accessed through query parameters
- * - Will be added later when frontend requests them
- */
-
 module.exports = employeesRouter

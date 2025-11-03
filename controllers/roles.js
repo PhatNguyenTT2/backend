@@ -2,19 +2,6 @@ const rolesRouter = require('express').Router()
 const Role = require('../models/role')
 
 /**
- * Role Controller
- * 
- * Nguyên tắc: CHỈ 5 CRUD endpoints cơ bản
- * - KHÔNG tạo custom endpoints từ đầu
- * - Custom endpoints chỉ thêm khi frontend yêu cầu cụ thể
- * - Sử dụng query parameters cho filtering
- * 
- * Access Control:
- * - GET (all, byId): Authenticated users (cần xem danh sách roles trong form)
- * - POST, PUT, DELETE: Admin only (chỉ admin quản lý roles và permissions)
- */
-
-/**
  * @route   GET /api/roles
  * @desc    Get all roles (with optional filters)
  * @access  Private (All authenticated users)
@@ -314,27 +301,5 @@ rolesRouter.delete('/:id', async (request, response) => {
     })
   }
 })
-
-/**
- * Methods NOT implemented as endpoints (and why):
- * 
- * 1. updateRole() - Use PUT /roles/:id
- * 2. addPermission() - Use PUT /roles/:id with updated permissions array
- *    Example: { permissions: [...existingPermissions, 'new_permission'] }
- * 3. removePermission() - Use PUT /roles/:id with updated permissions array
- *    Example: { permissions: existingPermissions.filter(p => p !== 'removed_permission') }
- * 4. findByCode() - Use GET /roles?code=ROLE001 (đã có trong getAll)
- * 5. getRolesWithUserCount() - CHƯA TẠO, đợi frontend yêu cầu cho dashboard
- * 6. getStatistics() - CHƯA TẠO, đợi frontend yêu cầu cho reports
- * 7. findAllRoles() - Đã dùng trong getAll
- * 
- * Permission Management Pattern:
- * Frontend should:
- * 1. GET /roles/:id to get current permissions
- * 2. Modify permissions array in client
- * 3. PUT /roles/:id with new permissions array
- * 
- * This is simpler and more RESTful than having separate add/remove endpoints.
- */
 
 module.exports = rolesRouter

@@ -3,15 +3,6 @@ const UserAccount = require('../models/userAccount')
 const bcrypt = require('bcrypt')
 
 /**
- * User Account Controller
- * 
- * Nguyên tắc: CHỈ 5 CRUD endpoints cơ bản
- * - KHÔNG tạo custom endpoints từ đầu
- * - Custom endpoints chỉ thêm khi frontend yêu cầu cụ thể
- * - Sử dụng query parameters cho filtering
- */
-
-/**
  * @route   GET /api/user-accounts
  * @desc    Get all user accounts (with optional filters)
  * @access  Private (Admin/Manager)
@@ -340,24 +331,5 @@ userAccountsRouter.delete('/:id', async (request, response) => {
     })
   }
 })
-
-/**
- * Methods NOT implemented as endpoints (and why):
- * 
- * 1. generateAuthToken() - Internal use only, handled by auth middleware
- * 2. removeToken() - Internal use only, handled by logout endpoint in auth
- * 3. clearAllTokens() - Internal use only, handled by logout-all endpoint in auth
- * 4. updateLastLogin() - Internal use only, handled by auth middleware
- * 5. findByUsernameOrEmail() - Internal use only, used in login process
- * 6. activate() - Use PUT /user-accounts/:id with { isActive: true }
- * 7. deactivate() - Already handled in delete() method
- * 8. getStatistics() - CHƯA TẠO, đợi frontend yêu cầu
- * 
- * These methods are part of the model for code organization and reusability,
- * but don't need dedicated controller endpoints. They're either:
- * - Used internally by other parts of the system
- * - Can be handled through existing CRUD endpoints
- * - Will be added later when frontend requests them
- */
 
 module.exports = userAccountsRouter
