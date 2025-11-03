@@ -1,404 +1,339 @@
-const rolesRouter = require('express').Router()
 const Role = require('../models/role')
-const Employee = require('../models/employee')
-const { userExtractor, isAdmin } = require('../utils/auth')
 
-// GET /api/roles - Get all roles
-rolesRouter.get('/', userExtractor, async (request, response) => {
+/**
+ * Role Controller
+ * 
+ * Nguyên tắc: CHỈ 5 CRUD endpoints cơ bản
+ * - KHÔNG tạo custom endpoints từ đầu
+ * - Custom endpoints chỉ thêm khi frontend yêu cầu cụ thể
+ * - Sử dụng query parameters cho filtering
+ * 
+ * Access Control:
+ * - GET (all, byId): Authenticated users (cần xem danh sách roles trong form)
+ * - POST, PUT, DELETE: Admin only (chỉ admin quản lý roles và permissions)
+ */
+
+/**
+ * @route   GET /api/roles
+ * @desc    Get all roles (with optional filters)
+ * @access  Private (All authenticated users)
+ * @query   code: string - Filter by role code (e.g., ROLE001)
+ * @query   search: string - Search by role name or description
+ */
+exports.getAll = async (request, response) => {
   try {
-    const { include_user_count } = request.query
+    const { code, search } = request.query
 
     let roles
 
-    if (include_user_count === 'true') {
-      roles = await Role.getRolesWithUserCount()
+    if (code) {
+      // Find by code
+      const role = await Role.findByCode(code)
+      roles = role ? [role] : []
+    } else if (search) {
+      // Search by name or description
+      roles = await Role.find({
+        $or: [
+          { roleName: new RegExp(search, 'i') },
+          { description: new RegExp(search, 'i') }
+        ]
+      }).sort({ roleName: 1 })
     } else {
+      // Get all roles
       roles = await Role.findAllRoles()
     }
 
-    const rolesData = roles.map(role => ({
-      id: role._id || role.id,
-      roleCode: role.roleCode,
-      roleName: role.roleName,
-      description: role.description,
-      permissions: role.permissions,
-      userCount: role.userCount,
-      createdAt: role.createdAt,
-      updatedAt: role.updatedAt
-    }))
-
-    response.status(200).json({
+    response.json({
       success: true,
       data: {
-        roles: rolesData
+        roles,
+        count: roles.length
       }
     })
   } catch (error) {
+    console.error('Error in getAll roles:', error)
     response.status(500).json({
-      error: 'Failed to fetch roles'
-    })
-  }
-})
-
-// GET /api/roles/stats/overview - Get role statistics (Admin only)
-rolesRouter.get('/stats/overview', userExtractor, isAdmin, async (request, response) => {
-  try {
-    const stats = await Role.getStatistics()
-
-    response.status(200).json({
-      success: true,
-      data: {
-        statistics: stats
+      success: false,
+      error: {
+        message: 'Failed to fetch roles',
+        details: error.message
       }
     })
-  } catch (error) {
-    response.status(500).json({
-      error: 'Failed to fetch role statistics'
-    })
   }
-})
+}
 
-// GET /api/roles/code/:code - Get role by code
-rolesRouter.get('/code/:code', userExtractor, async (request, response) => {
-  try {
-    const role = await Role.findByCode(request.params.code)
-
-    if (!role) {
-      return response.status(404).json({
-        error: 'Role not found'
-      })
-    }
-
-    response.status(200).json({
-      success: true,
-      data: {
-        role: {
-          id: role._id,
-          roleCode: role.roleCode,
-          roleName: role.roleName,
-          description: role.description,
-          permissions: role.permissions,
-          createdAt: role.createdAt,
-          updatedAt: role.updatedAt
-        }
-      }
-    })
-  } catch (error) {
-    response.status(500).json({
-      error: 'Failed to fetch role'
-    })
-  }
-})
-
-// GET /api/roles/:id - Get single role
-rolesRouter.get('/:id', userExtractor, async (request, response) => {
+/**
+ * @route   GET /api/roles/:id
+ * @desc    Get role by ID
+ * @access  Private (All authenticated users)
+ */
+exports.getById = async (request, response) => {
   try {
     const role = await Role.findById(request.params.id)
 
     if (!role) {
       return response.status(404).json({
-        error: 'Role not found'
+        success: false,
+        error: {
+          message: 'Role not found',
+          code: 'ROLE_NOT_FOUND'
+        }
       })
     }
 
-    // Get user count for this role
-    const userCount = await Employee.countDocuments({ role: role._id })
-
-    response.status(200).json({
+    response.json({
       success: true,
-      data: {
-        role: {
-          id: role._id,
-          roleCode: role.roleCode,
-          roleName: role.roleName,
-          description: role.description,
-          permissions: role.permissions,
-          userCount,
-          createdAt: role.createdAt,
-          updatedAt: role.updatedAt
-        }
-      }
+      data: { role }
     })
   } catch (error) {
-    if (error.name === 'CastError') {
+    console.error('Error in getById role:', error)
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to fetch role',
+        details: error.message
+      }
+    })
+  }
+}
+
+/**
+ * @route   POST /api/roles
+ * @desc    Create new role
+ * @access  Private (Admin only)
+ * @body    { roleName, description, permissions }
+ */
+exports.create = async (request, response) => {
+  try {
+    const { roleName, description, permissions } = request.body
+
+    // Validate required fields
+    if (!roleName) {
       return response.status(400).json({
-        error: 'Invalid role ID'
+        success: false,
+        error: {
+          message: 'Missing required fields',
+          code: 'MISSING_FIELDS',
+          details: {
+            required: ['roleName']
+          }
+        }
       })
     }
-    response.status(500).json({
-      error: 'Failed to fetch role'
-    })
-  }
-})
 
-// POST /api/roles - Create new role (Admin only)
-rolesRouter.post('/', userExtractor, isAdmin, async (request, response) => {
-  const { roleName, description, permissions } = request.body
-
-  if (!roleName) {
-    return response.status(400).json({
-      error: 'Role name is required'
-    })
-  }
-
-  try {
     // Check if role name already exists
     const existingRole = await Role.findOne({
-      roleName: { $regex: new RegExp(`^${roleName}$`, 'i') }
+      roleName: new RegExp(`^${roleName}$`, 'i')
     })
-
     if (existingRole) {
-      return response.status(400).json({
-        error: 'Role name already exists'
+      return response.status(409).json({
+        success: false,
+        error: {
+          message: 'Role name already exists',
+          code: 'ROLE_EXISTS'
+        }
       })
     }
 
+    // Create role
     const role = new Role({
       roleName,
       description,
       permissions: permissions || []
     })
 
-    const savedRole = await role.save()
+    await role.save()
 
     response.status(201).json({
       success: true,
-      message: 'Role created successfully',
-      data: {
-        role: {
-          id: savedRole._id,
-          roleCode: savedRole.roleCode,
-          roleName: savedRole.roleName,
-          description: savedRole.description,
-          permissions: savedRole.permissions,
-          createdAt: savedRole.createdAt
-        }
-      }
+      data: { role },
+      message: 'Role created successfully'
     })
   } catch (error) {
+    console.error('Error in create role:', error)
+
+    // Handle validation errors
     if (error.name === 'ValidationError') {
       return response.status(400).json({
-        error: error.message
+        success: false,
+        error: {
+          message: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: error.errors
+        }
       })
     }
+
+    // Handle duplicate key errors
     if (error.code === 11000) {
-      return response.status(400).json({
-        error: 'Role code already exists'
+      return response.status(409).json({
+        success: false,
+        error: {
+          message: 'Role code or name already exists',
+          code: 'DUPLICATE_KEY'
+        }
       })
     }
+
     response.status(500).json({
-      error: 'Failed to create role'
+      success: false,
+      error: {
+        message: 'Failed to create role',
+        details: error.message
+      }
     })
   }
-})
+}
 
-// PUT /api/roles/:id - Update role (Admin only)
-rolesRouter.put('/:id', userExtractor, isAdmin, async (request, response) => {
-  const { roleName, description, permissions } = request.body
-
+/**
+ * @route   PUT /api/roles/:id
+ * @desc    Update role
+ * @access  Private (Admin only)
+ * @body    { roleName, description, permissions }
+ * @note    Xử lý cả addPermission() và removePermission() thông qua update permissions array
+ */
+exports.update = async (request, response) => {
   try {
+    const { roleName, description, permissions } = request.body
+
     const role = await Role.findById(request.params.id)
 
     if (!role) {
       return response.status(404).json({
-        error: 'Role not found'
+        success: false,
+        error: {
+          message: 'Role not found',
+          code: 'ROLE_NOT_FOUND'
+        }
       })
     }
 
-    // Check if new role name conflicts with existing role
-    if (roleName && roleName !== role.roleName) {
-      const existingRole = await Role.findOne({
-        roleName: { $regex: new RegExp(`^${roleName}$`, 'i') },
-        _id: { $ne: role._id }
-      })
-
-      if (existingRole) {
-        return response.status(400).json({
-          error: 'Role name already exists'
-        })
-      }
-    }
-
-    // Use the updateRole method from the model
+    // Prepare update data
     const updateData = {}
     if (roleName !== undefined) updateData.roleName = roleName
     if (description !== undefined) updateData.description = description
     if (permissions !== undefined) updateData.permissions = permissions
 
+    // Use updateRole method from model
     await role.updateRole(updateData)
 
-    response.status(200).json({
+    response.json({
       success: true,
-      message: 'Role updated successfully',
-      data: {
-        role: {
-          id: role._id,
-          roleCode: role.roleCode,
-          roleName: role.roleName,
-          description: role.description,
-          permissions: role.permissions,
-          updatedAt: role.updatedAt
-        }
-      }
+      data: { role },
+      message: 'Role updated successfully'
     })
   } catch (error) {
+    console.error('Error in update role:', error)
+
+    // Handle validation errors
     if (error.name === 'ValidationError') {
       return response.status(400).json({
-        error: error.message
-      })
-    }
-    if (error.name === 'CastError') {
-      return response.status(400).json({
-        error: 'Invalid role ID'
-      })
-    }
-    response.status(500).json({
-      error: 'Failed to update role'
-    })
-  }
-})
-
-// PATCH /api/roles/:id/add-permission - Add permission to role (Admin only)
-rolesRouter.patch('/:id/add-permission', userExtractor, isAdmin, async (request, response) => {
-  const { permission } = request.body
-
-  if (!permission) {
-    return response.status(400).json({
-      error: 'Permission is required'
-    })
-  }
-
-  try {
-    const role = await Role.findById(request.params.id)
-
-    if (!role) {
-      return response.status(404).json({
-        error: 'Role not found'
-      })
-    }
-
-    // Check if permission already exists
-    if (role.permissions.includes(permission)) {
-      return response.status(400).json({
-        error: 'Permission already exists in this role'
-      })
-    }
-
-    await role.addPermission(permission)
-
-    response.status(200).json({
-      success: true,
-      message: 'Permission added successfully',
-      data: {
-        role: {
-          id: role._id,
-          roleCode: role.roleCode,
-          roleName: role.roleName,
-          permissions: role.permissions,
-          updatedAt: role.updatedAt
+        success: false,
+        error: {
+          message: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: error.errors
         }
+      })
+    }
+
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      return response.status(409).json({
+        success: false,
+        error: {
+          message: 'Role name already exists',
+          code: 'DUPLICATE_KEY'
+        }
+      })
+    }
+
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to update role',
+        details: error.message
       }
     })
-  } catch (error) {
-    if (error.name === 'CastError') {
-      return response.status(400).json({
-        error: 'Invalid role ID'
-      })
-    }
-    response.status(500).json({
-      error: 'Failed to add permission'
-    })
   }
-})
+}
 
-// PATCH /api/roles/:id/remove-permission - Remove permission from role (Admin only)
-rolesRouter.patch('/:id/remove-permission', userExtractor, isAdmin, async (request, response) => {
-  const { permission } = request.body
-
-  if (!permission) {
-    return response.status(400).json({
-      error: 'Permission is required'
-    })
-  }
-
+/**
+ * @route   DELETE /api/roles/:id
+ * @desc    Delete role
+ * @access  Private (Admin only)
+ * @note    Nên check xem có users nào đang dùng role này không trước khi xóa
+ */
+exports.delete = async (request, response) => {
   try {
     const role = await Role.findById(request.params.id)
 
     if (!role) {
       return response.status(404).json({
-        error: 'Role not found'
-      })
-    }
-
-    // Check if permission exists
-    if (!role.permissions.includes(permission)) {
-      return response.status(400).json({
-        error: 'Permission does not exist in this role'
-      })
-    }
-
-    await role.removePermission(permission)
-
-    response.status(200).json({
-      success: true,
-      message: 'Permission removed successfully',
-      data: {
-        role: {
-          id: role._id,
-          roleCode: role.roleCode,
-          roleName: role.roleName,
-          permissions: role.permissions,
-          updatedAt: role.updatedAt
+        success: false,
+        error: {
+          message: 'Role not found',
+          code: 'ROLE_NOT_FOUND'
         }
-      }
-    })
-  } catch (error) {
-    if (error.name === 'CastError') {
+      })
+    }
+
+    // Check if any users are using this role
+    const UserAccount = require('../models/userAccount')
+    const usersWithRole = await UserAccount.countDocuments({ role: request.params.id })
+
+    if (usersWithRole > 0) {
       return response.status(400).json({
-        error: 'Invalid role ID'
-      })
-    }
-    response.status(500).json({
-      error: 'Failed to remove permission'
-    })
-  }
-})
-
-// DELETE /api/roles/:id - Delete role (Admin only)
-rolesRouter.delete('/:id', userExtractor, isAdmin, async (request, response) => {
-  try {
-    const role = await Role.findById(request.params.id)
-
-    if (!role) {
-      return response.status(404).json({
-        error: 'Role not found'
+        success: false,
+        error: {
+          message: `Cannot delete role. ${usersWithRole} user(s) are currently assigned to this role`,
+          code: 'ROLE_IN_USE',
+          details: {
+            userCount: usersWithRole
+          }
+        }
       })
     }
 
-    // Check if role is assigned to any employees
-    const employeeCount = await Employee.countDocuments({ role: role._id })
-    if (employeeCount > 0) {
-      return response.status(400).json({
-        error: `Cannot delete role assigned to ${employeeCount} employee(s). Please reassign them first.`
-      })
-    }
-
+    // Delete role
     await Role.findByIdAndDelete(request.params.id)
 
-    response.status(200).json({
+    response.json({
       success: true,
       message: 'Role deleted successfully'
     })
   } catch (error) {
-    if (error.name === 'CastError') {
-      return response.status(400).json({
-        error: 'Invalid role ID'
-      })
-    }
+    console.error('Error in delete role:', error)
     response.status(500).json({
-      error: 'Failed to delete role'
+      success: false,
+      error: {
+        message: 'Failed to delete role',
+        details: error.message
+      }
     })
   }
-})
+}
 
-module.exports = rolesRouter
+/**
+ * Methods NOT implemented as endpoints (and why):
+ * 
+ * 1. updateRole() - Use PUT /roles/:id
+ * 2. addPermission() - Use PUT /roles/:id with updated permissions array
+ *    Example: { permissions: [...existingPermissions, 'new_permission'] }
+ * 3. removePermission() - Use PUT /roles/:id with updated permissions array
+ *    Example: { permissions: existingPermissions.filter(p => p !== 'removed_permission') }
+ * 4. findByCode() - Use GET /roles?code=ROLE001 (đã có trong getAll)
+ * 5. getRolesWithUserCount() - CHƯA TẠO, đợi frontend yêu cầu cho dashboard
+ * 6. getStatistics() - CHƯA TẠO, đợi frontend yêu cầu cho reports
+ * 7. findAllRoles() - Đã dùng trong getAll
+ * 
+ * Permission Management Pattern:
+ * Frontend should:
+ * 1. GET /roles/:id to get current permissions
+ * 2. Modify permissions array in client
+ * 3. PUT /roles/:id with new permissions array
+ * 
+ * This is simpler and more RESTful than having separate add/remove endpoints.
+ */
+
+module.exports = exports
