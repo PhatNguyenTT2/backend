@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { Dashboard, ViewProduct, DetailProduct, ListProduct, LoginSignup, Orders, Categories, Users, Customers, Suppliers, Inventories, SalesReports, PurchaseReports } from "./pages";
+import { Dashboard, ViewProduct, DetailProduct, ListProduct, LoginSignup, Orders, Categories, Users, Employees, Customers, Suppliers, Inventories, SalesReports, PurchaseReports } from "./pages";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import Payments from "./pages/Payments";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -67,6 +67,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Users />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/employees"
+          element={
+            <ProtectedRoute>
+              <Employees />
             </ProtectedRoute>
           }
         />

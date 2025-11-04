@@ -1,1 +1,1 @@
-export { default as LoginSignupSection } from './LoginSignupSection';
+export { default as LoginSignupSection } from './LoginSignupSection'

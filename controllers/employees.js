@@ -1,402 +1,331 @@
 const employeesRouter = require('express').Router()
 const Employee = require('../models/employee')
 const UserAccount = require('../models/userAccount')
-const Department = require('../models/department')
-const { userExtractor, isAdmin } = require('../utils/auth')
+const bcrypt = require('bcrypt')
 
-// GET /api/employees - Get all employees
-employeesRouter.get('/', userExtractor, async (request, response) => {
+/**
+ * @route   GET /api/employees
+ * @desc    Get all employees (with optional filters)
+ * @access  Private (Admin/Manager)
+ * @query   department: string - Filter by department ID
+ * @query   search: string - Search by name or phone
+ * @query   isActive: boolean - Filter by user account active status
+ */
+employeesRouter.get('/', async (request, response) => {
   try {
-    const { department_id, search, include_inactive } = request.query
+    const { department, search, isActive } = request.query
 
     let employees
 
-    // Search functionality
     if (search) {
+      // Use search method from model
       employees = await Employee.searchEmployees(search)
-    } else if (department_id) {
-      employees = await Employee.findByDepartment(department_id)
     } else {
-      const query = {}
-      employees = await Employee.getAllWithDetails(query)
+      // Build filter
+      const filter = {}
+      if (department) {
+        filter.department = department
+      }
+
+      // Get all with details
+      employees = await Employee.getAllWithDetails(filter)
+
+      // Filter by user account active status if provided
+      if (isActive !== undefined) {
+        const activeFilter = isActive === 'true'
+        employees = employees.filter(emp =>
+          emp.userAccount && emp.userAccount.isActive === activeFilter
+        )
+      }
     }
 
-    // Filter by active status if needed
-    if (include_inactive !== 'true') {
-      employees = employees.filter(emp =>
-        emp.userAccount && emp.userAccount.isActive
-      )
-    }
-
-    const employeesData = employees.map(emp => ({
-      id: emp._id,
-      fullName: emp.fullName,
-      phone: emp.phone,
-      address: emp.address,
-      dateOfBirth: emp.dateOfBirth,
-      age: emp.age,
-      departmentId: emp.department?._id || emp.department,
-      userAccountId: emp.userAccount?._id || emp.userAccount,
-      createdAt: emp.createdAt,
-      updatedAt: emp.updatedAt
-    }))
-
-    response.status(200).json({
+    response.json({
       success: true,
       data: {
-        employees: employeesData
+        employees,
+        count: employees.length
       }
     })
   } catch (error) {
+    console.error('Error in getAll employees:', error)
     response.status(500).json({
-      error: 'Failed to fetch employees'
+      success: false,
+      error: {
+        message: 'Failed to fetch employees',
+        details: error.message
+      }
     })
   }
 })
 
-// GET /api/employees/stats/by-department - Get employee statistics by department (Admin only)
-employeesRouter.get('/stats/by-department', userExtractor, isAdmin, async (request, response) => {
-  try {
-    const stats = await Employee.getStatisticsByDepartment()
-
-    response.status(200).json({
-      success: true,
-      data: {
-        statistics: stats
-      }
-    })
-  } catch (error) {
-    response.status(500).json({
-      error: 'Failed to fetch statistics'
-    })
-  }
-})
-
-// GET /api/employees/user/:userId - Get employee by user account ID
-employeesRouter.get('/user/:userId', userExtractor, async (request, response) => {
-  try {
-    const employee = await Employee.findByUserAccount(request.params.userId)
-
-    if (!employee) {
-      return response.status(404).json({
-        error: 'Employee not found'
-      })
-    }
-
-    response.status(200).json({
-      success: true,
-      data: {
-        employee: {
-          id: employee._id,
-          fullName: employee.fullName,
-          phone: employee.phone,
-          address: employee.address,
-          dateOfBirth: employee.dateOfBirth,
-          age: employee.age,
-          departmentId: employee.department?._id || employee.department,
-          userAccountId: employee.userAccount?._id || employee.userAccount,
-          createdAt: employee.createdAt,
-          updatedAt: employee.updatedAt
-        }
-      }
-    })
-  } catch (error) {
-    if (error.name === 'CastError') {
-      return response.status(400).json({
-        error: 'Invalid user ID'
-      })
-    }
-    response.status(500).json({
-      error: 'Failed to fetch employee'
-    })
-  }
-})
-
-// GET /api/employees/:id - Get single employee
-employeesRouter.get('/:id', userExtractor, async (request, response) => {
+/**
+ * @route   GET /api/employees/:id
+ * @desc    Get employee by ID
+ * @access  Private
+ */
+employeesRouter.get('/:id', async (request, response) => {
   try {
     const employee = await Employee.findById(request.params.id)
+      .populate({
+        path: 'userAccount',
+        select: 'username email userCode role isActive lastLogin',
+        populate: {
+          path: 'role',
+          select: 'roleName permissions'
+        }
+      })
+      .populate('department', 'departmentName departmentId location')
 
     if (!employee) {
       return response.status(404).json({
-        error: 'Employee not found'
+        success: false,
+        error: {
+          message: 'Employee not found',
+          code: 'EMPLOYEE_NOT_FOUND'
+        }
       })
     }
 
-    response.status(200).json({
+    response.json({
       success: true,
-      data: {
-        employee: {
-          id: employee._id,
-          fullName: employee.fullName,
-          phone: employee.phone,
-          address: employee.address,
-          dateOfBirth: employee.dateOfBirth,
-          age: employee.age,
-          departmentId: employee.department,
-          userAccountId: employee.userAccount,
-          createdAt: employee.createdAt,
-          updatedAt: employee.updatedAt
-        }
-      }
+      data: { employee }
     })
   } catch (error) {
-    if (error.name === 'CastError') {
-      return response.status(400).json({
-        error: 'Invalid employee ID'
-      })
-    }
+    console.error('Error in getById employee:', error)
     response.status(500).json({
-      error: 'Failed to fetch employee'
+      success: false,
+      error: {
+        message: 'Failed to fetch employee',
+        details: error.message
+      }
     })
   }
 })
 
-// POST /api/employees - Create new employee with user account (Admin only)
-employeesRouter.post('/', userExtractor, isAdmin, async (request, response) => {
-  const {
-    username,
-    email,
-    password,
-    role,
-    fullName,
-    phone,
-    address,
-    dateOfBirth,
-    department
-  } = request.body
-
-  if (!username || !email || !password) {
-    return response.status(400).json({
-      error: 'Username, email, and password are required'
-    })
-  }
-
-  if (!fullName) {
-    return response.status(400).json({
-      error: 'Full name is required'
-    })
-  }
-
+/**
+ * @route   POST /api/employees
+ * @desc    Create new employee with user account (all-in-one)
+ * @access  Private (Admin only)
+ * @body    { 
+ *            userData: { username, email, password, role },
+ *            employeeData: { fullName, department, phone, address, dateOfBirth }
+ *          }
+ */
+employeesRouter.post('/', async (request, response) => {
   try {
-    // Verify department exists if provided
-    if (department) {
-      const departmentExists = await Department.findById(department)
-      if (!departmentExists) {
-        return response.status(400).json({
-          error: 'Department not found'
-        })
-      }
+    const { userData, employeeData } = request.body
+
+    // Validate required fields
+    if (!userData || !employeeData) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Missing required fields',
+          code: 'MISSING_FIELDS',
+          details: {
+            required: ['userData', 'employeeData']
+          }
+        }
+      })
     }
 
-    // Create employee with user account using the static method
-    const employee = await Employee.createWithUserAccount(
-      { username, email, password, role },
-      { fullName, phone, address, dateOfBirth, department }
-    )
+    if (!userData.username || !userData.email || !userData.password || !userData.role) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Missing required user data fields',
+          code: 'MISSING_USER_FIELDS',
+          details: {
+            required: ['username', 'email', 'password', 'role']
+          }
+        }
+      })
+    }
+
+    if (!employeeData.fullName) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Missing required employee data fields',
+          code: 'MISSING_EMPLOYEE_FIELDS',
+          details: {
+            required: ['fullName']
+          }
+        }
+      })
+    }
+
+    // Hash password
+    const saltRounds = 10
+    const passwordHash = await bcrypt.hash(userData.password, saltRounds)
+
+    // Prepare user data with hashed password
+    const userDataWithHash = {
+      username: userData.username,
+      email: userData.email,
+      passwordHash,
+      role: userData.role,
+      isActive: userData.isActive !== undefined ? userData.isActive : true
+    }
+
+    // Create employee with user account using transaction
+    const employee = await Employee.createWithUserAccount(userDataWithHash, employeeData)
 
     response.status(201).json({
       success: true,
-      message: 'Employee created successfully',
-      data: {
-        employee: {
-          id: employee._id,
-          fullName: employee.fullName,
-          phone: employee.phone,
-          address: employee.address,
-          dateOfBirth: employee.dateOfBirth,
-          departmentId: employee.department?._id || employee.department,
-          userAccountId: employee.userAccount?._id || employee.userAccount,
-          createdAt: employee.createdAt
-        }
-      }
+      data: { employee },
+      message: 'Employee and user account created successfully'
     })
   } catch (error) {
+    console.error('Error in create employee:', error)
+
+    // Handle validation errors
     if (error.name === 'ValidationError') {
       return response.status(400).json({
-        error: error.message
+        success: false,
+        error: {
+          message: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: error.errors
+        }
       })
     }
+
+    // Handle duplicate key errors
     if (error.code === 11000) {
-      const field = Object.keys(error.keyPattern)[0]
-      return response.status(400).json({
-        error: `${field === 'username' ? 'Username' : field === 'email' ? 'Email' : 'User account'} already exists`
+      return response.status(409).json({
+        success: false,
+        error: {
+          message: 'Username or email already exists',
+          code: 'DUPLICATE_KEY'
+        }
       })
     }
+
     response.status(500).json({
-      error: 'Failed to create employee'
+      success: false,
+      error: {
+        message: 'Failed to create employee',
+        details: error.message
+      }
     })
   }
 })
 
-// PUT /api/employees/:id - Update employee profile (Admin or own profile)
-employeesRouter.put('/:id', userExtractor, async (request, response) => {
-  const { fullName, phone, address, dateOfBirth, department } = request.body
-
+/**
+ * @route   PUT /api/employees/:id
+ * @desc    Update employee profile
+ * @access  Private (Admin or own profile)
+ * @body    { fullName, department, phone, address, dateOfBirth }
+ * @note    Xử lý cả updateProfile() và changeDepartment() methods qua endpoint này
+ */
+employeesRouter.put('/:id', async (request, response) => {
   try {
+    const { fullName, department, phone, address, dateOfBirth } = request.body
+
     const employee = await Employee.findById(request.params.id)
-      .populate('userAccount')
 
     if (!employee) {
       return response.status(404).json({
-        error: 'Employee not found'
-      })
-    }
-
-    // Check if user is admin or updating own profile
-    const isOwnProfile = employee.userAccount._id.toString() === request.user.id
-    if (!request.user.isAdmin && !isOwnProfile) {
-      return response.status(403).json({
-        error: 'You can only update your own profile'
-      })
-    }
-
-    // Verify department exists if provided and changing
-    if (department && department !== employee.department?.toString()) {
-      const departmentExists = await Department.findById(department)
-      if (!departmentExists) {
-        return response.status(400).json({
-          error: 'Department not found'
-        })
-      }
-    }
-
-    // Use the updateProfile method from the model
-    const updatedEmployee = await employee.updateProfile({
-      fullName,
-      phone,
-      address,
-      dateOfBirth,
-      department
-    })
-
-    response.status(200).json({
-      success: true,
-      message: 'Employee profile updated successfully',
-      data: {
-        employee: {
-          id: updatedEmployee._id,
-          fullName: updatedEmployee.fullName,
-          phone: updatedEmployee.phone,
-          address: updatedEmployee.address,
-          dateOfBirth: updatedEmployee.dateOfBirth,
-          age: updatedEmployee.age,
-          departmentId: updatedEmployee.department,
-          updatedAt: updatedEmployee.updatedAt
+        success: false,
+        error: {
+          message: 'Employee not found',
+          code: 'EMPLOYEE_NOT_FOUND'
         }
+      })
+    }
+
+    // Use updateProfile method from model
+    const profileData = {}
+    if (fullName !== undefined) profileData.fullName = fullName
+    if (department !== undefined) profileData.department = department
+    if (phone !== undefined) profileData.phone = phone
+    if (address !== undefined) profileData.address = address
+    if (dateOfBirth !== undefined) profileData.dateOfBirth = dateOfBirth
+
+    await employee.updateProfile(profileData)
+
+    // Populate before returning
+    await employee.populate([
+      {
+        path: 'userAccount',
+        select: 'username email userCode role isActive',
+        populate: {
+          path: 'role',
+          select: 'roleName'
+        }
+      },
+      {
+        path: 'department',
+        select: 'departmentName departmentId location'
       }
+    ])
+
+    response.json({
+      success: true,
+      data: { employee },
+      message: 'Employee updated successfully'
     })
   } catch (error) {
+    console.error('Error in update employee:', error)
+
+    // Handle validation errors
     if (error.name === 'ValidationError') {
       return response.status(400).json({
-        error: error.message
-      })
-    }
-    if (error.name === 'CastError') {
-      return response.status(400).json({
-        error: 'Invalid employee ID'
-      })
-    }
-    response.status(500).json({
-      error: 'Failed to update employee'
-    })
-  }
-})
-
-// PATCH /api/employees/:id/change-department - Change employee department (Admin only)
-employeesRouter.patch('/:id/change-department', userExtractor, isAdmin, async (request, response) => {
-  const { departmentId } = request.body
-
-  if (!departmentId) {
-    return response.status(400).json({
-      error: 'Department ID is required'
-    })
-  }
-
-  try {
-    const employee = await Employee.findById(request.params.id)
-
-    if (!employee) {
-      return response.status(404).json({
-        error: 'Employee not found'
-      })
-    }
-
-    // Verify department exists
-    const department = await Department.findById(departmentId)
-    if (!department) {
-      return response.status(400).json({
-        error: 'Department not found'
-      })
-    }
-
-    if (!department.isActive) {
-      return response.status(400).json({
-        error: 'Cannot assign to inactive department'
-      })
-    }
-
-    // Use the changeDepartment method from the model
-    const updatedEmployee = await employee.changeDepartment(departmentId)
-
-    response.status(200).json({
-      success: true,
-      message: 'Department changed successfully',
-      data: {
-        employee: {
-          id: updatedEmployee._id,
-          fullName: updatedEmployee.fullName,
-          departmentId: updatedEmployee.department,
-          updatedAt: updatedEmployee.updatedAt
+        success: false,
+        error: {
+          message: 'Validation failed',
+          code: 'VALIDATION_ERROR',
+          details: error.errors
         }
+      })
+    }
+
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to update employee',
+        details: error.message
       }
     })
-  } catch (error) {
-    if (error.name === 'CastError') {
-      return response.status(400).json({
-        error: 'Invalid ID'
-      })
-    }
-    response.status(500).json({
-      error: 'Failed to change department'
-    })
   }
 })
 
-// DELETE /api/employees/:id - Delete employee (Admin only)
-employeesRouter.delete('/:id', userExtractor, isAdmin, async (request, response) => {
+/**
+ * @route   DELETE /api/employees/:id
+ * @desc    Delete employee profile
+ * @access  Private (Admin only)
+ * @note    Hard delete - nếu muốn soft delete, deactivate user account thay vì xóa employee
+ */
+employeesRouter.delete('/:id', async (request, response) => {
   try {
     const employee = await Employee.findById(request.params.id)
-      .populate('userAccount')
 
     if (!employee) {
       return response.status(404).json({
-        error: 'Employee not found'
+        success: false,
+        error: {
+          message: 'Employee not found',
+          code: 'EMPLOYEE_NOT_FOUND'
+        }
       })
     }
 
-    // Check if user account is still active
-    if (employee.userAccount && employee.userAccount.isActive) {
-      return response.status(400).json({
-        error: 'Cannot delete employee with active user account. Please deactivate the user account first.'
-      })
-    }
-
-    // Delete employee (this will cascade to user account if needed)
+    // Delete employee
     await Employee.findByIdAndDelete(request.params.id)
 
-    response.status(200).json({
+    response.json({
       success: true,
       message: 'Employee deleted successfully'
     })
   } catch (error) {
-    if (error.name === 'CastError') {
-      return response.status(400).json({
-        error: 'Invalid employee ID'
-      })
-    }
+    console.error('Error in delete employee:', error)
     response.status(500).json({
-      error: 'Failed to delete employee'
+      success: false,
+      error: {
+        message: 'Failed to delete employee',
+        details: error.message
+      }
     })
   }
 })

@@ -1,314 +1,163 @@
 import api from './api'
 
+/**
+ * User Account Service
+ * Handles all API calls related to user accounts
+ */
 const userAccountService = {
-  // Get all user accounts with filters
-  getAllUserAccounts: async (filters = {}) => {
+  /**
+   * Get all user accounts with optional filters
+   * @param {Object} params - Query parameters
+   * @param {boolean} params.isActive - Filter by active status
+   * @param {string} params.search - Search by username or email
+   * @param {string} params.role - Filter by role ID
+   * @returns {Promise<Object>} Response with users array and count
+   */
+  getAllUsers: async (params = {}) => {
     try {
-      const params = {}
-
-      if (filters.isActive !== undefined) {
-        params.is_active = filters.isActive
-      }
-      if (filters.roleId) {
-        params.role_id = filters.roleId
-      }
-      if (filters.search) {
-        params.search = filters.search
-      }
-      if (filters.limit) {
-        params.limit = filters.limit
-      }
-
       const response = await api.get('/user-accounts', { params })
-      return {
-        success: true,
-        data: response.data.data.userAccounts
-      }
+      return response.data
     } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to fetch user accounts'
-      }
+      console.error('Error fetching users:', error)
+      throw error
     }
   },
 
-  // Get user account statistics
-  getStatistics: async () => {
+  /**
+   * Get user account by ID
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} User account data
+   */
+  getUserById: async (userId) => {
     try {
-      const response = await api.get('/user-accounts/stats/overview')
-      return {
-        success: true,
-        data: response.data.data.statistics
-      }
+      const response = await api.get(`/user-accounts/${userId}`)
+      return response.data
     } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to fetch statistics'
-      }
+      console.error('Error fetching user:', error)
+      throw error
     }
   },
 
-  // Get active user accounts
+  /**
+   * Create new user account
+   * @param {Object} userData - User data
+   * @param {string} userData.username - Username
+   * @param {string} userData.email - Email
+   * @param {string} userData.password - Password
+   * @param {string} userData.role - Role ID
+   * @param {boolean} userData.isActive - Active status (optional, default true)
+   * @returns {Promise<Object>} Created user data
+   */
+  createUser: async (userData) => {
+    try {
+      const response = await api.post('/user-accounts', userData)
+      return response.data
+    } catch (error) {
+      console.error('Error creating user:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Update user account
+   * @param {string} userId - User ID
+   * @param {Object} userData - Updated user data
+   * @param {string} userData.username - Username (optional)
+   * @param {string} userData.email - Email (optional)
+   * @param {string} userData.password - New password (optional)
+   * @param {string} userData.role - Role ID (optional)
+   * @param {boolean} userData.isActive - Active status (optional)
+   * @returns {Promise<Object>} Updated user data
+   */
+  updateUser: async (userId, userData) => {
+    try {
+      const response = await api.put(`/user-accounts/${userId}`, userData)
+      return response.data
+    } catch (error) {
+      console.error('Error updating user:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Delete/Deactivate user account (soft delete)
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} Success message
+   */
+  deleteUser: async (userId) => {
+    try {
+      const response = await api.delete(`/user-accounts/${userId}`)
+      return response.data
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Search users by username or email
+   * @param {string} searchTerm - Search term
+   * @returns {Promise<Object>} Search results
+   */
+  searchUsers: async (searchTerm) => {
+    try {
+      const response = await api.get('/user-accounts', {
+        params: { search: searchTerm }
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error searching users:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Get users by role
+   * @param {string} roleId - Role ID
+   * @returns {Promise<Object>} Users with specified role
+   */
+  getUsersByRole: async (roleId) => {
+    try {
+      const response = await api.get('/user-accounts', {
+        params: { role: roleId }
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error fetching users by role:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Get active users only
+   * @returns {Promise<Object>} Active users
+   */
   getActiveUsers: async () => {
     try {
-      const response = await api.get('/user-accounts/active')
-      return {
-        success: true,
-        data: response.data.data.activeUsers
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to fetch active users'
-      }
-    }
-  },
-
-  // Get current user profile
-  getCurrentUserProfile: async () => {
-    try {
-      const response = await api.get('/user-accounts/me')
-      return {
-        success: true,
-        data: response.data.data.user
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to fetch user profile'
-      }
-    }
-  },
-
-  // Get user by username
-  getUserByUsername: async (username) => {
-    try {
-      const response = await api.get(`/user-accounts/username/${username}`)
-      return {
-        success: true,
-        data: response.data.data.user
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to fetch user'
-      }
-    }
-  },
-
-  // Get single user account by ID
-  getUserAccountById: async (id) => {
-    try {
-      const response = await api.get(`/user-accounts/${id}`)
-      return {
-        success: true,
-        data: response.data.data.user
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to fetch user account'
-      }
-    }
-  },
-
-  // Register new user account
-  registerUser: async (userData) => {
-    try {
-      const { username, email, password, roleId } = userData
-      const response = await api.post('/user-accounts/register', {
-        username,
-        email,
-        password,
-        roleId
+      const response = await api.get('/user-accounts', {
+        params: { isActive: true }
       })
-
-      return {
-        success: true,
-        data: response.data.data.user,
-        message: response.data.message
-      }
+      return response.data
     } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to create user account'
-      }
+      console.error('Error fetching active users:', error)
+      throw error
     }
   },
 
-  // Login user
-  login: async (identifier, password) => {
+  /**
+   * Get inactive users only
+   * @returns {Promise<Object>} Inactive users
+   */
+  getInactiveUsers: async () => {
     try {
-      const response = await api.post('/user-accounts/login', {
-        identifier,
-        password
+      const response = await api.get('/user-accounts', {
+        params: { isActive: false }
       })
-
-      if (response.data.success) {
-        const { token, user } = response.data.data
-        localStorage.setItem('adminToken', token)
-        localStorage.setItem('adminUser', JSON.stringify(user))
-        return {
-          success: true,
-          data: { user, token },
-          message: response.data.message
-        }
-      }
-
-      return {
-        success: false,
-        error: 'Login failed'
-      }
+      return response.data
     } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Login failed'
-      }
+      console.error('Error fetching inactive users:', error)
+      throw error
     }
-  },
-
-  // Logout user
-  logout: async () => {
-    try {
-      await api.post('/user-accounts/logout')
-      localStorage.removeItem('adminToken')
-      localStorage.removeItem('adminUser')
-      return {
-        success: true,
-        message: 'Logout successful'
-      }
-    } catch (error) {
-      // Clean up local storage even if API call fails
-      localStorage.removeItem('adminToken')
-      localStorage.removeItem('adminUser')
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Logout failed'
-      }
-    }
-  },
-
-  // Logout from all devices
-  logoutAll: async () => {
-    try {
-      await api.post('/user-accounts/logout-all')
-      localStorage.removeItem('adminToken')
-      localStorage.removeItem('adminUser')
-      return {
-        success: true,
-        message: 'Logged out from all devices successfully'
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Logout failed'
-      }
-    }
-  },
-
-  // Update user account
-  updateUserAccount: async (id, userData) => {
-    try {
-      const { username, email, roleId } = userData
-      const response = await api.put(`/user-accounts/${id}`, {
-        username,
-        email,
-        roleId
-      })
-
-      return {
-        success: true,
-        data: response.data.data.user,
-        message: response.data.message
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to update user account'
-      }
-    }
-  },
-
-  // Change password
-  changePassword: async (id, passwordData) => {
-    try {
-      const { currentPassword, newPassword } = passwordData
-      const response = await api.patch(`/user-accounts/${id}/change-password`, {
-        currentPassword,
-        newPassword
-      })
-
-      return {
-        success: true,
-        message: response.data.message
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to change password'
-      }
-    }
-  },
-
-  // Deactivate user account
-  deactivateUserAccount: async (id) => {
-    try {
-      const response = await api.patch(`/user-accounts/${id}/deactivate`)
-      return {
-        success: true,
-        data: response.data.data.user,
-        message: response.data.message
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to deactivate user account'
-      }
-    }
-  },
-
-  // Activate user account
-  activateUserAccount: async (id) => {
-    try {
-      const response = await api.patch(`/user-accounts/${id}/activate`)
-      return {
-        success: true,
-        data: response.data.data.user,
-        message: response.data.message
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to activate user account'
-      }
-    }
-  },
-
-  // Delete user account
-  deleteUserAccount: async (id) => {
-    try {
-      const response = await api.delete(`/user-accounts/${id}`)
-      return {
-        success: true,
-        message: response.data.message
-      }
-    } catch (error) {
-      return {
-        success: false,
-        error: error.response?.data?.error || 'Failed to delete user account'
-      }
-    }
-  },
-
-  // Check if user is authenticated
-  isAuthenticated: () => {
-    return !!localStorage.getItem('adminToken')
-  },
-
-  // Get stored user data
-  getStoredUser: () => {
-    const user = localStorage.getItem('adminUser')
-    return user ? JSON.parse(user) : null
   }
 }
 

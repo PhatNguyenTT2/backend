@@ -1,44 +1,51 @@
 import api from './api'
 
 const authService = {
-  // Login - uses /api/user-accounts/login
+  // Login
   login: async (username, password) => {
-    const response = await api.post('/user-accounts/login', {
-      identifier: username,
-      password
-    })
+    try {
+      const response = await api.post('/login', { username, password })
 
-    if (response.data.success) {
-      const { token, user } = response.data.data
-      localStorage.setItem('adminToken', token)
-      localStorage.setItem('adminUser', JSON.stringify(user))
-      return { success: true, user, token }
+      if (response.data.success) {
+        const { token, user } = response.data.data
+        localStorage.setItem('adminToken', token)
+        localStorage.setItem('adminUser', JSON.stringify(user))
+        return { success: true, user, token }
+      }
+
+      return { success: false, error: 'Login failed' }
+    } catch (error) {
+      // Re-throw error for component to handle
+      throw error
     }
-
-    return { success: false, error: 'Login failed' }
   },
 
-  // Register - uses /api/user-accounts/signup (public endpoint)
+  // Register
   register: async (userData) => {
-    const { fullName, username, email, password } = userData
-    const response = await api.post('/user-accounts/signup', {
-      username,
-      email,
-      fullName,
-      password
-    })
+    try {
+      const { fullName, username, email, password } = userData
+      const response = await api.post('/login/register', {
+        username,
+        email,
+        fullName,
+        password
+      })
 
-    if (response.data.success) {
-      return { success: true, message: response.data.message }
+      if (response.data.success) {
+        return { success: true, message: response.data.message }
+      }
+
+      return { success: false, error: 'Registration failed' }
+    } catch (error) {
+      // Re-throw error for component to handle
+      throw error
     }
-
-    return { success: false, error: 'Registration failed' }
   },
 
-  // Logout - uses /api/user-accounts/logout
+  // Logout
   logout: async () => {
     try {
-      await api.post('/user-accounts/logout')
+      await api.post('/login/logout')
     } catch (error) {
       console.error('Logout error:', error)
     } finally {
@@ -47,9 +54,9 @@ const authService = {
     }
   },
 
-  // Get current user - uses /api/user-accounts/me
+  // Get current user
   getCurrentUser: async () => {
-    const response = await api.get('/user-accounts/me')
+    const response = await api.get('/login/me')
     return response.data.data.user
   },
 
