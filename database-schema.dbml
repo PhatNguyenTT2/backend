@@ -1,6 +1,7 @@
 // Database Schema for Inventory Management System
-// Generated: October 23, 2025
+// Generated: November 4, 2025
 // Total Models: 21
+// Updated: Added POS PIN Authentication fields to Employee table
 
 // ===========================
 // USER MANAGEMENT
@@ -35,9 +36,31 @@ Table Employee {
   address String
   dateOfBirth Date
   
+  // POS Authentication Fields (NEW)
+  posPinHash String [note: 'Hashed PIN (bcrypt), 4-6 digits, select: false']
+  pinLastChanged Date [default: 'now', note: 'Last PIN change timestamp']
+  pinExpiresAt Date [note: 'PIN expiry date (90 days from last change)']
+  pinFailedAttempts Number [default: 0, note: 'Failed login attempts counter']
+  pinLockedUntil Date [note: 'Lock timestamp after 5 failed attempts']
+  posLastLogin Date [note: 'Last POS login timestamp']
+  posDeviceId String [note: 'Associated POS device ID (optional)']
+  canAccessPOS Boolean [default: false, note: 'Permission to use POS system']
+  
+  Note: '''
+    POS PIN Rules:
+    - 4-6 digits only
+    - Hashed with bcrypt (same as password)
+    - Lock after 5 failed attempts for 15 minutes
+    - Expire after 90 days
+    - Default PIN: 1234 (must change on first login)
+  '''
+  
   Indexes {
     userAccount
     department
+    canAccessPOS
+    posDeviceId
+    posLastLogin
   }
 }
 
