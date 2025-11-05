@@ -181,8 +181,8 @@ export default function LoginSignup() {
           <button
             onClick={() => !loading && toggleMode()}
             className={`font-['Quicksand',sans-serif] font-bold text-[28px] pb-3 transition-colors ${isLogin
-                ? 'text-[#3bb77e] border-b-2 border-[#3bb77e]'
-                : 'text-[#7e7e7e]'
+              ? 'text-[#3bb77e] border-b-2 border-[#3bb77e]'
+              : 'text-[#7e7e7e]'
               }`}
             disabled={loading}
           >
@@ -191,8 +191,8 @@ export default function LoginSignup() {
           <button
             onClick={() => !loading && toggleMode()}
             className={`font-['Quicksand',sans-serif] font-bold text-[28px] pb-3 transition-colors ${!isLogin
-                ? 'text-[#3bb77e] border-b-2 border-[#3bb77e]'
-                : 'text-[#7e7e7e]'
+              ? 'text-[#3bb77e] border-b-2 border-[#3bb77e]'
+              : 'text-[#7e7e7e]'
               }`}
             disabled={loading}
           >
@@ -260,7 +260,7 @@ export default function LoginSignup() {
                 />
               </div>
 
-              {/* Remember Me & Forgot Password */}
+              {/* Remember Me & POS Login */}
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -276,10 +276,17 @@ export default function LoginSignup() {
                 </label>
                 <button
                   type="button"
-                  className="font-['Lato',sans-serif] text-[#3bb77e] text-[13px] hover:underline"
+                  onClick={() => navigate('/pos-login')}
+                  className="font-['Lato',sans-serif] text-[#3bb77e] text-[13px] hover:underline flex items-center gap-1"
                   disabled={loading}
+                  title="Login to POS Terminal"
                 >
-                  Forgot password?
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
+                    <path d="M3 10h18" stroke="currentColor" strokeWidth="2" />
+                    <circle cx="7" cy="15" r="1" fill="currentColor" />
+                  </svg>
+                  POS Login
                 </button>
               </div>
 

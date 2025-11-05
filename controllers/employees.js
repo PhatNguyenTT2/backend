@@ -2,41 +2,48 @@ const employeesRouter = require('express').Router()
 const Employee = require('../models/employee')
 const UserAccount = require('../models/userAccount')
 const bcrypt = require('bcrypt')
+const mongoose = require('mongoose')
 
 /**
  * @route   GET /api/employees
  * @desc    Get all employees (with optional filters)
  * @access  Private (Admin/Manager)
- * @query   department: string - Filter by department ID
  * @query   search: string - Search by name or phone
  * @query   isActive: boolean - Filter by user account active status
  */
 employeesRouter.get('/', async (request, response) => {
   try {
-    const { department, search, isActive } = request.query
+    const { search, isActive } = request.query
 
-    let employees
+    let query = {}
 
+    // Build search query
     if (search) {
-      // Use search method from model
-      employees = await Employee.searchEmployees(search)
-    } else {
-      // Build filter
-      const filter = {}
-      if (department) {
-        filter.department = department
-      }
+      query.$or = [
+        { fullName: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } }
+      ]
+    }
 
-      // Get all with details
-      employees = await Employee.getAllWithDetails(filter)
+    // Get all employees with populated userAccount
+    let employees = await Employee.find(query)
+      .populate({
+        path: 'userAccount',
+        select: 'username email userCode role isActive lastLogin',
+        populate: {
+          path: 'role',
+          select: 'roleName'
+        }
+      })
+      .sort({ createdAt: -1 })
+      .limit(search ? 20 : undefined)
 
-      // Filter by user account active status if provided
-      if (isActive !== undefined) {
-        const activeFilter = isActive === 'true'
-        employees = employees.filter(emp =>
-          emp.userAccount && emp.userAccount.isActive === activeFilter
-        )
-      }
+    // Filter by user account active status if provided
+    if (isActive !== undefined) {
+      const activeFilter = isActive === 'true'
+      employees = employees.filter(emp =>
+        emp.userAccount && emp.userAccount.isActive === activeFilter
+      )
     }
 
     response.json({
@@ -74,7 +81,6 @@ employeesRouter.get('/:id', async (request, response) => {
           select: 'roleName permissions'
         }
       })
-      .populate('department', 'departmentName departmentId location')
 
     if (!employee) {
       return response.status(404).json({
@@ -108,7 +114,7 @@ employeesRouter.get('/:id', async (request, response) => {
  * @access  Private (Admin only)
  * @body    { 
  *            userData: { username, email, password, role },
- *            employeeData: { fullName, department, phone, address, dateOfBirth }
+ *            employeeData: { fullName, phone, address, dateOfBirth }
  *          }
  */
 employeesRouter.post('/', async (request, response) => {
@@ -159,23 +165,47 @@ employeesRouter.post('/', async (request, response) => {
     const saltRounds = 10
     const passwordHash = await bcrypt.hash(userData.password, saltRounds)
 
-    // Prepare user data with hashed password
-    const userDataWithHash = {
-      username: userData.username,
-      email: userData.email,
-      passwordHash,
-      role: userData.role,
-      isActive: userData.isActive !== undefined ? userData.isActive : true
+    // Start transaction
+    const session = await mongoose.startSession()
+    session.startTransaction()
+
+    try {
+      // Create user account
+      const userAccount = new UserAccount({
+        username: userData.username,
+        email: userData.email,
+        passwordHash,
+        role: userData.role,
+        isActive: userData.isActive !== undefined ? userData.isActive : true
+      })
+      await userAccount.save({ session })
+
+      // Create employee profile
+      const employee = new Employee({
+        ...employeeData,
+        userAccount: userAccount._id
+      })
+      await employee.save({ session })
+
+      await session.commitTransaction()
+
+      // Populate and return employee
+      await employee.populate({
+        path: 'userAccount',
+        select: '-passwordHash -tokens'
+      })
+
+      response.status(201).json({
+        success: true,
+        data: { employee },
+        message: 'Employee and user account created successfully'
+      })
+    } catch (error) {
+      await session.abortTransaction()
+      throw error
+    } finally {
+      session.endSession()
     }
-
-    // Create employee with user account using transaction
-    const employee = await Employee.createWithUserAccount(userDataWithHash, employeeData)
-
-    response.status(201).json({
-      success: true,
-      data: { employee },
-      message: 'Employee and user account created successfully'
-    })
   } catch (error) {
     console.error('Error in create employee:', error)
 
@@ -216,12 +246,11 @@ employeesRouter.post('/', async (request, response) => {
  * @route   PUT /api/employees/:id
  * @desc    Update employee profile
  * @access  Private (Admin or own profile)
- * @body    { fullName, department, phone, address, dateOfBirth }
- * @note    Xử lý cả updateProfile() và changeDepartment() methods qua endpoint này
+ * @body    { fullName, phone, address, dateOfBirth }
  */
 employeesRouter.put('/:id', async (request, response) => {
   try {
-    const { fullName, department, phone, address, dateOfBirth } = request.body
+    const { fullName, phone, address, dateOfBirth } = request.body
 
     const employee = await Employee.findById(request.params.id)
 
@@ -235,31 +264,23 @@ employeesRouter.put('/:id', async (request, response) => {
       })
     }
 
-    // Use updateProfile method from model
-    const profileData = {}
-    if (fullName !== undefined) profileData.fullName = fullName
-    if (department !== undefined) profileData.department = department
-    if (phone !== undefined) profileData.phone = phone
-    if (address !== undefined) profileData.address = address
-    if (dateOfBirth !== undefined) profileData.dateOfBirth = dateOfBirth
+    // Update allowed fields
+    if (fullName !== undefined) employee.fullName = fullName
+    if (phone !== undefined) employee.phone = phone
+    if (address !== undefined) employee.address = address
+    if (dateOfBirth !== undefined) employee.dateOfBirth = dateOfBirth
 
-    await employee.updateProfile(profileData)
+    await employee.save()
 
     // Populate before returning
-    await employee.populate([
-      {
-        path: 'userAccount',
-        select: 'username email userCode role isActive',
-        populate: {
-          path: 'role',
-          select: 'roleName'
-        }
-      },
-      {
-        path: 'department',
-        select: 'departmentName departmentId location'
+    await employee.populate({
+      path: 'userAccount',
+      select: 'username email userCode role isActive',
+      populate: {
+        path: 'role',
+        select: 'roleName'
       }
-    ])
+    })
 
     response.json({
       success: true,

@@ -67,12 +67,11 @@ loginRouter.post('/', async (request, response) => {
 
     // Get employee profile
     const employee = await Employee.findOne({ userAccount: user._id })
-      .populate('department', 'departmentName')
 
     // Generate token
     const token = generateToken(user._id, user.username, user.role._id)
 
-    // Save token to user's tokens array
+    // Save token to user's tokens array and update last login
     user.tokens = user.tokens.concat({ token })
     user.lastLogin = new Date()
     await user.save()
@@ -89,7 +88,6 @@ loginRouter.post('/', async (request, response) => {
           userCode: user.userCode,
           fullName: employee?.fullName || user.username,
           phone: employee?.phone || '',
-          department: employee?.department?.departmentName || null,
           role: user.role.roleName,
           permissions: user.role.permissions
         }
@@ -164,49 +162,54 @@ loginRouter.post('/register', async (request, response) => {
       await adminRole.save()
     }
 
-    // Create user account data
-    const userData = {
-      username,
-      email,
-      passwordHash,
-      role: adminRole._id,
-      isActive: true
-    }
+    // Start transaction
+    const session = await require('mongoose').startSession()
+    session.startTransaction()
 
-    // Create employee data
-    const employeeData = {
-      fullName
-    }
+    try {
+      // Create user account
+      const userAccount = new UserAccount({
+        username,
+        email,
+        passwordHash,
+        role: adminRole._id,
+        isActive: true
+      })
+      await userAccount.save({ session })
 
-    // Use Employee static method to create both employee and user account
-    const employee = await Employee.createWithUserAccount(userData, employeeData)
+      // Create employee profile
+      const employee = new Employee({
+        fullName,
+        userAccount: userAccount._id
+      })
+      await employee.save({ session })
 
-    // Populate for response
-    const populatedEmployee = await Employee.findById(employee._id)
-      .populate({
-        path: 'userAccount',
-        select: 'username email userCode role isActive',
-        populate: {
-          path: 'role',
-          select: 'roleName permissions'
+      await session.commitTransaction()
+
+      // Populate for response
+      await userAccount.populate('role', 'roleName permissions')
+
+      // Return success (no auto-login, user needs to login)
+      response.status(201).json({
+        success: true,
+        message: 'Registration successful. Please login.',
+        data: {
+          user: {
+            id: userAccount._id,
+            username: userAccount.username,
+            email: userAccount.email,
+            userCode: userAccount.userCode,
+            fullName: fullName,
+            role: userAccount.role.roleName
+          }
         }
       })
-
-    // Return success (no auto-login, user needs to login)
-    response.status(201).json({
-      success: true,
-      message: 'Registration successful. Please login.',
-      data: {
-        user: {
-          id: populatedEmployee.userAccount._id,
-          username: populatedEmployee.userAccount.username,
-          email: populatedEmployee.userAccount.email,
-          userCode: populatedEmployee.userAccount.userCode,
-          fullName: populatedEmployee.fullName,
-          role: populatedEmployee.userAccount.role.roleName
-        }
-      }
-    })
+    } catch (error) {
+      await session.abortTransaction()
+      throw error
+    } finally {
+      session.endSession()
+    }
   } catch (error) {
     console.error('Registration error:', error)
     if (error.name === 'ValidationError') {
@@ -297,7 +300,6 @@ loginRouter.get('/me', async (request, response) => {
 
     // Get employee profile
     const employee = await Employee.findOne({ userAccount: user._id })
-      .populate('department', 'departmentName departmentId location')
 
     response.status(200).json({
       success: true,
@@ -311,7 +313,6 @@ loginRouter.get('/me', async (request, response) => {
           phone: employee?.phone || '',
           address: employee?.address || '',
           dateOfBirth: employee?.dateOfBirth || null,
-          department: employee?.department || null,
           role: user.role.roleName,
           permissions: user.role.permissions,
           isActive: user.isActive,

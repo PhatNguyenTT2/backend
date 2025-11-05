@@ -37,16 +37,13 @@ userAccountsRouter.get('/', async (request, response) => {
         ]
       })
         .populate('role', 'roleName permissions')
-        .populate({
-          path: 'employee',
-          populate: {
-            path: 'department',
-            select: 'departmentName'
-          }
-        })
+        .populate('employee')
         .sort({ createdAt: -1 })
     } else {
-      users = await UserAccount.findActiveUsers(filter)
+      users = await UserAccount.find({ ...filter, isActive: true })
+        .populate('role', 'roleName permissions')
+        .populate('employee')
+        .sort({ createdAt: -1 })
     }
 
     response.json({
@@ -77,13 +74,7 @@ userAccountsRouter.get('/:id', async (request, response) => {
   try {
     const user = await UserAccount.findById(request.params.id)
       .populate('role', 'roleName permissions')
-      .populate({
-        path: 'employee',
-        populate: {
-          path: 'department',
-          select: 'departmentName'
-        }
-      })
+      .populate('employee')
 
     if (!user) {
       return response.status(404).json({
@@ -136,7 +127,12 @@ userAccountsRouter.post('/', async (request, response) => {
     }
 
     // Check if username or email already exists
-    const existingUser = await UserAccount.findByUsernameOrEmail(username)
+    const existingUser = await UserAccount.findOne({
+      $or: [
+        { username: username },
+        { email: email.toLowerCase() }
+      ]
+    })
     if (existingUser) {
       return response.status(409).json({
         success: false,
@@ -244,13 +240,7 @@ userAccountsRouter.put('/:id', async (request, response) => {
 
     // Populate before returning
     await user.populate('role', 'roleName permissions')
-    await user.populate({
-      path: 'employee',
-      populate: {
-        path: 'department',
-        select: 'departmentName'
-      }
-    })
+    await user.populate('employee')
 
     response.json({
       success: true,
@@ -314,7 +304,9 @@ userAccountsRouter.delete('/:id', async (request, response) => {
     }
 
     // Soft delete: deactivate user and clear all tokens
-    await user.deactivate()
+    user.isActive = false
+    user.tokens = []
+    await user.save()
 
     response.json({
       success: true,

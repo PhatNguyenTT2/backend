@@ -20,7 +20,7 @@ const LoginSignup = () => {
       <div className="bg-white border-t border-[#ececec] py-6 px-8 mt-auto">
         <div className="max-w-[1440px] mx-auto text-center">
           <p className="font-['Lato',sans-serif] text-[#7e7e7e] text-[14px]">
-            © 2024 Mini Store Admin Dashboard. All rights reserved.
+            © 2025 Mart Admin Dashboard. All rights reserved.
           </p>
         </div>
       </div>

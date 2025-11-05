@@ -16,7 +16,7 @@ rolesRouter.get('/', async (request, response) => {
 
     if (code) {
       // Find by code
-      const role = await Role.findByCode(code)
+      const role = await Role.findOne({ roleCode: code.toUpperCase() })
       roles = role ? [role] : []
     } else if (search) {
       // Search by name or description
@@ -28,7 +28,7 @@ rolesRouter.get('/', async (request, response) => {
       }).sort({ roleName: 1 })
     } else {
       // Get all roles
-      roles = await Role.findAllRoles()
+      roles = await Role.find().sort({ roleName: 1 })
     }
 
     response.json({
@@ -196,14 +196,12 @@ rolesRouter.put('/:id', async (request, response) => {
       })
     }
 
-    // Prepare update data
-    const updateData = {}
-    if (roleName !== undefined) updateData.roleName = roleName
-    if (description !== undefined) updateData.description = description
-    if (permissions !== undefined) updateData.permissions = permissions
+    // Update allowed fields
+    if (roleName !== undefined) role.roleName = roleName
+    if (description !== undefined) role.description = description
+    if (permissions !== undefined) role.permissions = permissions
 
-    // Use updateRole method from model
-    await role.updateRole(updateData)
+    await role.save()
 
     response.json({
       success: true,

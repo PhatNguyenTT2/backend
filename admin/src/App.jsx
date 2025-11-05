@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { Dashboard, ViewProduct, DetailProduct, ListProduct, LoginSignup, Orders, Categories, Users, Employees, Customers, Suppliers, Inventories, SalesReports, PurchaseReports } from "./pages";
+import { POSLogin, POSMain } from "./pages/pos";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import Payments from "./pages/Payments";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -12,6 +13,10 @@ function App() {
         {/* Auth Routes - Public */}
         <Route path="/" element={<LoginSignup />} />
         <Route path="/signup" element={<LoginSignup />} />
+
+        {/* POS Routes - Separate authentication flow */}
+        <Route path="/pos-login" element={<POSLogin />} />
+        <Route path="/pos" element={<POSMain />} />
 
         {/* Dashboard Routes - Protected */}
         <Route
@@ -153,7 +158,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
       </Routes>
     </Router>
   );

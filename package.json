@@ -18,7 +18,9 @@
     "seed:products": "node scripts/seed-products.js",
     "seed:customers": "node scripts/seed-customers.js",
     "seed:admin": "node utils/seedAdmin.js",
-    "migrate:users": "node utils/migrateUsersRole.js"
+    "migrate:users": "node utils/migrateUsersRole.js",
+    "setup:pos-pins": "node scripts/setup-pos-pins.js setup-all",
+    "reset:pos-pin": "node scripts/setup-pos-pins.js reset"
   },
   "dependencies": {
     "axios": "^1.12.2",
