@@ -9,7 +9,7 @@ const posAuthService = {
    */
   login: async (employeeCode, pin) => {
     try {
-      const response = await api.post('/api/pos-login', {
+      const response = await api.post('/pos-login', {
         employeeCode,
         pin
       });
@@ -37,7 +37,7 @@ const posAuthService = {
         throw new Error('No token found');
       }
 
-      const response = await api.post('/api/pos-login/verify', {}, {
+      const response = await api.post('/pos-login/verify', {}, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -66,7 +66,7 @@ const posAuthService = {
         throw new Error('Not authenticated');
       }
 
-      const response = await api.post('/api/pos-login/change-pin', {
+      const response = await api.post('/pos-login/change-pin', {
         oldPin,
         newPin,
         confirmPin
@@ -90,7 +90,7 @@ const posAuthService = {
     try {
       const token = localStorage.getItem('posToken');
       if (token) {
-        await api.post('/api/pos-login/logout', {}, {
+        await api.post('/pos-login/logout', {}, {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -116,7 +116,7 @@ const posAuthService = {
         throw new Error('Not authenticated');
       }
 
-      const response = await api.get('/api/pos-login/status', {
+      const response = await api.get('/pos-login/status', {
         headers: {
           Authorization: `Bearer ${token}`
         }

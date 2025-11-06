@@ -14,7 +14,7 @@ const employeeService = {
    */
   getAllEmployees: async (params = {}) => {
     try {
-      const response = await api.get('/api/employees', { params })
+      const response = await api.get('/employees', { params })
       return response.data
     } catch (error) {
       console.error('Error fetching employees:', error)
@@ -29,7 +29,7 @@ const employeeService = {
    */
   getEmployeeById: async (employeeId) => {
     try {
-      const response = await api.get(`/api/employees/${employeeId}`)
+      const response = await api.get(`/employees/${employeeId}`)
       return response.data
     } catch (error) {
       console.error('Error fetching employee:', error)
@@ -55,7 +55,7 @@ const employeeService = {
    */
   createEmployee: async (data) => {
     try {
-      const response = await api.post('/api/employees', data)
+      const response = await api.post('/employees', data)
       return response.data
     } catch (error) {
       console.error('Error creating employee:', error)
@@ -75,7 +75,7 @@ const employeeService = {
    */
   updateEmployee: async (employeeId, profileData) => {
     try {
-      const response = await api.put(`/api/employees/${employeeId}`, profileData)
+      const response = await api.put(`/employees/${employeeId}`, profileData)
       return response.data
     } catch (error) {
       console.error('Error updating employee:', error)
@@ -91,7 +91,7 @@ const employeeService = {
    */
   deleteEmployee: async (employeeId) => {
     try {
-      const response = await api.delete(`/api/employees/${employeeId}`)
+      const response = await api.delete(`/employees/${employeeId}`)
       return response.data
     } catch (error) {
       console.error('Error deleting employee:', error)
@@ -106,7 +106,7 @@ const employeeService = {
    */
   searchEmployees: async (searchTerm) => {
     try {
-      const response = await api.get('/api/employees', {
+      const response = await api.get('/employees', {
         params: { search: searchTerm }
       })
       return response.data
@@ -122,7 +122,7 @@ const employeeService = {
    */
   getActiveEmployees: async () => {
     try {
-      const response = await api.get('/api/employees', {
+      const response = await api.get('/employees', {
         params: { isActive: true }
       })
       return response.data
@@ -138,7 +138,7 @@ const employeeService = {
    */
   getInactiveEmployees: async () => {
     try {
-      const response = await api.get('/api/employees', {
+      const response = await api.get('/employees', {
         params: { isActive: false }
       })
       return response.data
@@ -158,7 +158,7 @@ const employeeService = {
    */
   updateContactInfo: async (employeeId, contactData) => {
     try {
-      const response = await api.put(`/api/employees/${employeeId}`, contactData)
+      const response = await api.put(`/employees/${employeeId}`, contactData)
       return response.data
     } catch (error) {
       console.error('Error updating contact info:', error)

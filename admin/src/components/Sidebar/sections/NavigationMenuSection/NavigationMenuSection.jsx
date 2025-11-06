@@ -113,7 +113,7 @@ export const NavigationMenuSection = () => {
           arrow: true,
           submenu: [
             { name: 'Employees', href: '/employees' },
-            { name: 'Departments', href: '/departments' },
+            { name: 'Roles', href: '/roles' },
           ]
         },
         { name: 'Authentication', icon: Shield, arrow: true },

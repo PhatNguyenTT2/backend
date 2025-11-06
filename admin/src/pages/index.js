@@ -7,6 +7,7 @@ export { default as Orders } from "./Orders";
 export { default as Categories } from "./Categories";
 export { default as Users } from "./Users";
 export { default as Employees } from "./Employees";
+export { default as Roles } from "./Roles";
 export { default as Customers } from "./Customers";
 export { default as Suppliers } from "./Suppliers";
 export { default as Inventories } from "./Inventories";

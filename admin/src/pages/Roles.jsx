@@ -1,56 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { EmployeeList, EmployeeListHeader, AddEmployeeModal } from '../components/EmployeeList';
-import employeeService from '../services/employeeService';
+import { RolesList, RolesListHeader, AddRolesModal } from '../components/RolesList';
+import roleService from '../services/roleService';
 
-export const Employees = () => {
+export const Roles = () => {
   // Breadcrumb items
   const breadcrumbItems = [
     { label: 'Dashboard', href: '/dashboard' },
-    { label: 'Employees', href: null },
+    { label: 'Roles', href: null },
   ];
 
-  const [employees, setEmployees] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState('userCode');
+  const [sortField, setSortField] = useState('roleCode');
   const [sortOrder, setSortOrder] = useState('asc');
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Fetch employees on mount
+  // Fetch roles on mount
   useEffect(() => {
-    fetchEmployees();
+    fetchRoles();
   }, []);
 
-  // Fetch employees from API
-  const fetchEmployees = async (params = {}) => {
+  // Fetch roles from API
+  const fetchRoles = async (params = {}) => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await employeeService.getAllEmployees(params);
+      const response = await roleService.getAllRoles(params);
 
       if (response.success) {
-        // Transform data to match component format
-        const transformedEmployees = response.data.employees.map(emp => ({
-          id: emp.id,
-          userCode: emp.userAccount?.userCode || 'N/A',
-          fullName: emp.fullName,
-          phone: emp.phone,
-          address: emp.address,
-          dateOfBirth: emp.dateOfBirth
-        }));
-
-        setEmployees(transformedEmployees);
+        setRoles(response.data.roles || []);
       } else {
-        setError(response.error || 'Failed to fetch employees');
+        setError(response.error || 'Failed to fetch roles');
       }
     } catch (err) {
-      console.error('Error fetching employees:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to fetch employees');
+      console.error('Error fetching roles:', err);
+      setError(err.response?.data?.error?.message || err.message || 'Failed to fetch roles');
     } finally {
       setLoading(false);
     }
@@ -62,7 +52,7 @@ export const Employees = () => {
     setSortField(field);
     setSortOrder(newSortOrder);
 
-    const sortedEmployees = [...employees].sort((a, b) => {
+    const sortedRoles = [...roles].sort((a, b) => {
       let aVal = a[field] || '';
       let bVal = b[field] || '';
 
@@ -82,7 +72,7 @@ export const Employees = () => {
       }
     });
 
-    setEmployees(sortedEmployees);
+    setRoles(sortedRoles);
   };
 
   // Handle search
@@ -90,51 +80,52 @@ export const Employees = () => {
     setSearchQuery(query);
 
     if (!query.trim()) {
-      fetchEmployees();
+      fetchRoles();
       return;
     }
 
     // Search via API
-    fetchEmployees({ search: query });
+    fetchRoles({ search: query });
   };
 
-  // Handle add employee
-  const handleAddEmployee = () => {
+  // Handle add role
+  const handleAddRole = () => {
     setShowAddModal(true);
   };
 
   // Handle add success
-  const handleAddSuccess = (newEmployee) => {
-    console.log('Employee added successfully:', newEmployee);
+  const handleAddSuccess = (newRole) => {
+    console.log('Role added successfully:', newRole);
     // Refresh the list
-    fetchEmployees();
+    fetchRoles();
   };
 
-  // Handle edit employee
-  const handleEditEmployee = (employee) => {
-    console.log('Edit employee:', employee);
-    // TODO: Open edit employee modal
+  // Handle edit role
+  const handleEditRole = (role) => {
+    console.log('Edit role:', role);
+    // TODO: Open edit role modal
   };
 
-  // Handle delete employee
-  const handleDeleteEmployee = async (employeeId) => {
-    if (!window.confirm('Are you sure you want to delete this employee?')) {
+  // Handle delete role
+  const handleDeleteRole = async (roleId) => {
+    if (!window.confirm('Are you sure you want to delete this role?')) {
       return;
     }
 
     try {
-      const response = await employeeService.deleteEmployee(employeeId);
+      const response = await roleService.deleteRole(roleId);
 
       if (response.success) {
         // Remove from local state
-        setEmployees(employees.filter(emp => emp.id !== employeeId));
-        alert('Employee deleted successfully');
+        setRoles(roles.filter(role => role.id !== roleId));
+        alert('Role deleted successfully');
       } else {
-        alert(response.error || 'Failed to delete employee');
+        alert(response.error || 'Failed to delete role');
       }
     } catch (err) {
-      console.error('Error deleting employee:', err);
-      alert(err.response?.data?.error?.message || err.message || 'Failed to delete employee');
+      console.error('Error deleting role:', err);
+      const errorMessage = err.response?.data?.error?.message || err.message || 'Failed to delete role';
+      alert(errorMessage);
     }
   };
 
@@ -151,14 +142,14 @@ export const Employees = () => {
           </div>
         )}
 
-        {/* Employee List Header */}
-        <EmployeeListHeader
+        {/* Roles List Header */}
+        <RolesListHeader
           itemsPerPage={itemsPerPage}
           onItemsPerPageChange={setItemsPerPage}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onSearch={handleSearch}
-          onAddEmployee={handleAddEmployee}
+          onAddRole={handleAddRole}
         />
 
         {/* Loading State */}
@@ -170,42 +161,42 @@ export const Employees = () => {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
               <p className="text-gray-600 text-[14px] font-['Poppins',sans-serif]">
-                Loading employees...
+                Loading roles...
               </p>
             </div>
           </div>
         ) : (
           <>
-            {/* Employee List */}
-            <EmployeeList
-              employees={employees}
-              onEdit={handleEditEmployee}
-              onDelete={handleDeleteEmployee}
+            {/* Roles List */}
+            <RolesList
+              roles={roles}
+              onEdit={handleEditRole}
+              onDelete={handleDeleteRole}
               onSort={handleSort}
               sortField={sortField}
               sortOrder={sortOrder}
             />
 
             {/* Results Summary */}
-            {employees.length > 0 && (
+            {roles.length > 0 && (
               <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif]">
-                Showing {employees.length} employee{employees.length !== 1 ? 's' : ''}
+                Showing {roles.length} role{roles.length !== 1 ? 's' : ''}
               </div>
             )}
 
             {/* Empty State */}
-            {employees.length === 0 && !loading && (
+            {roles.length === 0 && !loading && (
               <div className="bg-white rounded-lg shadow-sm p-12 text-center">
                 <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
-                  No employees found
+                  No roles found
                 </p>
               </div>
             )}
           </>
         )}
 
-        {/* Add Employee Modal */}
-        <AddEmployeeModal
+        {/* Add Role Modal */}
+        <AddRolesModal
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           onSuccess={handleAddSuccess}
@@ -215,4 +206,4 @@ export const Employees = () => {
   );
 };
 
-export default Employees;
+export default Roles;

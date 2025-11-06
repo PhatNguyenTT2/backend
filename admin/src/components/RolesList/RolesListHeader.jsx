@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export const EmployeeListHeader = ({
+export const RolesListHeader = ({
   itemsPerPage = 20,
   onItemsPerPageChange,
   searchQuery = '',
   onSearchChange,
   onSearch,
-  onAddEmployee
+  onAddRole
 }) => {
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const actionsDropdownRef = useRef(null);
@@ -34,7 +34,7 @@ export const EmployeeListHeader = ({
         {/* Title */}
         <div className="flex items-center">
           <h2 className="text-[13px] font-normal font-['Poppins',sans-serif] text-black leading-[20px] whitespace-nowrap">
-            All Employees
+            All Roles
           </h2>
         </div>
 
@@ -64,7 +64,7 @@ export const EmployeeListHeader = ({
             <div className="flex h-[36px] gap-1">
               <input
                 type="text"
-                placeholder="Search by Name or Phone..."
+                placeholder="Search by Name or Description..."
                 value={searchQuery}
                 onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
                 onKeyPress={(e) => {
@@ -129,7 +129,7 @@ export const EmployeeListHeader = ({
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
               <button
                 onClick={() => {
-                  onAddEmployee && onAddEmployee();
+                  onAddRole && onAddRole();
                   setShowActionsDropdown(false);
                 }}
                 className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors flex items-center gap-2"
@@ -137,7 +137,7 @@ export const EmployeeListHeader = ({
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                Add Employee
+                Add Role
               </button>
 
               <div className="border-t border-gray-200 my-1"></div>

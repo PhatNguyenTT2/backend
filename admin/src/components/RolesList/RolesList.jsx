@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortField, sortOrder }) => {
+export const RolesList = ({ roles = [], onEdit, onDelete, onSort, sortField, sortOrder }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
@@ -69,64 +69,39 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortFie
     };
   }, [activeDropdown]);
 
-  // Format date
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
   return (
     <div className="bg-white rounded-lg shadow-sm">
       {/* Scrollable Container */}
       <div className="overflow-x-auto rounded-lg">
-        <div className="min-w-[1000px]">
+        <div className="min-w-[800px]">
           {/* Table Header */}
           <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
             {/* ID Column - Sortable */}
             <div
-              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('userCode')}
+              className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('roleCode')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
                 ID
-                {getSortIcon('userCode')}
+                {getSortIcon('roleCode')}
               </p>
             </div>
 
-            {/* Full Name Column - Sortable */}
+            {/* Role Name Column - Sortable */}
             <div
               className="flex-1 min-w-[180px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('fullName')}
+              onClick={() => handleSortClick('roleName')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                Full Name
-                {getSortIcon('fullName')}
+                Name
+                {getSortIcon('roleName')}
               </p>
             </div>
 
-            {/* Phone Column */}
-            <div className="w-[140px] px-3 flex items-center flex-shrink-0">
+            {/* Description Column */}
+            <div className="flex-1 min-w-[300px] px-3 flex items-center">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Phone
-              </p>
-            </div>
-
-            {/* Address Column */}
-            <div className="flex-1 min-w-[200px] px-3 flex items-center">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Address
-              </p>
-            </div>
-
-            {/* Date of Birth Column */}
-            <div className="w-[120px] px-3 flex items-center flex-shrink-0">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Birth Date
+                Description
               </p>
             </div>
 
@@ -140,47 +115,33 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortFie
 
           {/* Table Body */}
           <div className="flex flex-col">
-            {employees.map((employee, index) => {
-              const actionDropdownId = `action-${employee.id}`;
+            {roles.map((role, index) => {
+              const actionDropdownId = `action-${role.id}`;
 
               return (
                 <div
-                  key={employee.id}
-                  className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== employees.length - 1 ? 'border-b border-gray-100' : ''
+                  key={role.id}
+                  className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== roles.length - 1 ? 'border-b border-gray-100' : ''
                     }`}
                 >
-                  {/* ID - Display userCode */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  {/* ID - Display roleCode */}
+                  <div className="w-[140px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
-                      {employee.userCode}
+                      {role.roleCode}
                     </p>
                   </div>
 
-                  {/* Full Name */}
+                  {/* Role Name */}
                   <div className="flex-1 min-w-[180px] px-3 flex items-center">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {employee.fullName}
+                      {role.roleName}
                     </p>
                   </div>
 
-                  {/* Phone */}
-                  <div className="w-[140px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      {employee.phone || 'N/A'}
-                    </p>
-                  </div>
-
-                  {/* Address */}
-                  <div className="flex-1 min-w-[200px] px-3 flex items-center">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate" title={employee.address}>
-                      {employee.address || 'N/A'}
-                    </p>
-                  </div>
-
-                  {/* Date of Birth */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      {formatDate(employee.dateOfBirth)}
+                  {/* Description */}
+                  <div className="flex-1 min-w-[300px] px-3 flex items-center">
+                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate" title={role.description}>
+                      {role.description || 'N/A'}
                     </p>
                   </div>
 
@@ -204,10 +165,10 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortFie
           </div>
 
           {/* Empty State */}
-          {employees.length === 0 && (
+          {roles.length === 0 && (
             <div className="py-16 text-center">
               <p className="text-gray-500 text-[13px] font-['Poppins',sans-serif]">
-                No employees found
+                No roles found
               </p>
             </div>
           )}
@@ -216,9 +177,9 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortFie
 
       {/* Fixed Position Dropdown Menu */}
       {activeDropdown && (() => {
-        const employee = employees.find(e => activeDropdown === `action-${e.id}`);
+        const role = roles.find(r => activeDropdown === `action-${r.id}`);
 
-        if (!employee) return null;
+        if (!role) return null;
 
         return (
           <div
@@ -231,7 +192,7 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortFie
           >
             <button
               onClick={() => {
-                console.log('View Details:', employee);
+                console.log('View Details:', role);
                 setActiveDropdown(null);
               }}
               className="w-full px-4 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
@@ -249,7 +210,7 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortFie
 
             <button
               onClick={() => {
-                onEdit && onEdit(employee);
+                onEdit && onEdit(role);
                 setActiveDropdown(null);
               }}
               className="w-full px-4 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
@@ -266,8 +227,8 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortFie
 
             <button
               onClick={() => {
-                if (window.confirm(`Are you sure you want to delete ${employee.fullName}?`)) {
-                  onDelete && onDelete(employee.id);
+                if (window.confirm(`Are you sure you want to delete the role "${role.roleName}"?`)) {
+                  onDelete && onDelete(role.id);
                 }
                 setActiveDropdown(null);
               }}
