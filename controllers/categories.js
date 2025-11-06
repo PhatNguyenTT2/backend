@@ -1,7 +1,7 @@
 const categoriesRouter = require('express').Router();
 const Category = require('../models/category');
 const Product = require('../models/product');
-const { userExtractor } = require('../utils/middleware');
+const { userExtractor } = require('../utils/auth');
 
 /**
  * Categories Controller - Minimal CRUD Approach
@@ -115,9 +115,9 @@ categoriesRouter.get('/:id', async (request, response) => {
     }
 
     // Optionally get products in this category
-    const products = await Product.find({ 
+    const products = await Product.find({
       category: category._id,
-      isActive: true 
+      isActive: true
     })
       .select('productCode name originalPrice discountPercentage')
       .limit(10);
@@ -168,7 +168,7 @@ categoriesRouter.post('/', userExtractor, async (request, response) => {
     }
 
     // Check if category name already exists
-    const existingCategory = await Category.findOne({ 
+    const existingCategory = await Category.findOne({
       name: { $regex: new RegExp(`^${name}$`, 'i') }
     });
 

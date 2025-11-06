@@ -8,14 +8,13 @@ const employeeService = {
   /**
    * Get all employees with optional filters
    * @param {Object} params - Query parameters
-   * @param {string} params.department - Filter by department ID
    * @param {string} params.search - Search by name or phone
    * @param {boolean} params.isActive - Filter by user account active status
    * @returns {Promise<Object>} Response with employees array and count
    */
   getAllEmployees: async (params = {}) => {
     try {
-      const response = await api.get('/employees', { params })
+      const response = await api.get('/api/employees', { params })
       return response.data
     } catch (error) {
       console.error('Error fetching employees:', error)
@@ -26,11 +25,11 @@ const employeeService = {
   /**
    * Get employee by ID
    * @param {string} employeeId - Employee ID
-   * @returns {Promise<Object>} Employee data with user account and department
+   * @returns {Promise<Object>} Employee data with user account
    */
   getEmployeeById: async (employeeId) => {
     try {
-      const response = await api.get(`/employees/${employeeId}`)
+      const response = await api.get(`/api/employees/${employeeId}`)
       return response.data
     } catch (error) {
       console.error('Error fetching employee:', error)
@@ -49,7 +48,6 @@ const employeeService = {
    * @param {boolean} data.userData.isActive - Active status (optional, default true)
    * @param {Object} data.employeeData - Employee profile data
    * @param {string} data.employeeData.fullName - Full name (required)
-   * @param {string} data.employeeData.department - Department ID (optional)
    * @param {string} data.employeeData.phone - Phone number (optional)
    * @param {string} data.employeeData.address - Address (optional)
    * @param {string} data.employeeData.dateOfBirth - Date of birth (optional)
@@ -57,7 +55,7 @@ const employeeService = {
    */
   createEmployee: async (data) => {
     try {
-      const response = await api.post('/employees', data)
+      const response = await api.post('/api/employees', data)
       return response.data
     } catch (error) {
       console.error('Error creating employee:', error)
@@ -70,7 +68,6 @@ const employeeService = {
    * @param {string} employeeId - Employee ID
    * @param {Object} profileData - Updated profile data
    * @param {string} profileData.fullName - Full name (optional)
-   * @param {string} profileData.department - Department ID (optional)
    * @param {string} profileData.phone - Phone number (optional)
    * @param {string} profileData.address - Address (optional)
    * @param {string} profileData.dateOfBirth - Date of birth (optional)
@@ -78,7 +75,7 @@ const employeeService = {
    */
   updateEmployee: async (employeeId, profileData) => {
     try {
-      const response = await api.put(`/employees/${employeeId}`, profileData)
+      const response = await api.put(`/api/employees/${employeeId}`, profileData)
       return response.data
     } catch (error) {
       console.error('Error updating employee:', error)
@@ -94,7 +91,7 @@ const employeeService = {
    */
   deleteEmployee: async (employeeId) => {
     try {
-      const response = await api.delete(`/employees/${employeeId}`)
+      const response = await api.delete(`/api/employees/${employeeId}`)
       return response.data
     } catch (error) {
       console.error('Error deleting employee:', error)
@@ -109,7 +106,7 @@ const employeeService = {
    */
   searchEmployees: async (searchTerm) => {
     try {
-      const response = await api.get('/employees', {
+      const response = await api.get('/api/employees', {
         params: { search: searchTerm }
       })
       return response.data
@@ -120,29 +117,12 @@ const employeeService = {
   },
 
   /**
-   * Get employees by department
-   * @param {string} departmentId - Department ID
-   * @returns {Promise<Object>} Employees in specified department
-   */
-  getEmployeesByDepartment: async (departmentId) => {
-    try {
-      const response = await api.get('/employees', {
-        params: { department: departmentId }
-      })
-      return response.data
-    } catch (error) {
-      console.error('Error fetching employees by department:', error)
-      throw error
-    }
-  },
-
-  /**
    * Get active employees only
    * @returns {Promise<Object>} Active employees
    */
   getActiveEmployees: async () => {
     try {
-      const response = await api.get('/employees', {
+      const response = await api.get('/api/employees', {
         params: { isActive: true }
       })
       return response.data
@@ -158,30 +138,12 @@ const employeeService = {
    */
   getInactiveEmployees: async () => {
     try {
-      const response = await api.get('/employees', {
+      const response = await api.get('/api/employees', {
         params: { isActive: false }
       })
       return response.data
     } catch (error) {
       console.error('Error fetching inactive employees:', error)
-      throw error
-    }
-  },
-
-  /**
-   * Update employee department
-   * @param {string} employeeId - Employee ID
-   * @param {string} departmentId - New department ID
-   * @returns {Promise<Object>} Updated employee data
-   */
-  changeDepartment: async (employeeId, departmentId) => {
-    try {
-      const response = await api.put(`/employees/${employeeId}`, {
-        department: departmentId
-      })
-      return response.data
-    } catch (error) {
-      console.error('Error changing department:', error)
       throw error
     }
   },
@@ -196,7 +158,7 @@ const employeeService = {
    */
   updateContactInfo: async (employeeId, contactData) => {
     try {
-      const response = await api.put(`/employees/${employeeId}`, contactData)
+      const response = await api.put(`/api/employees/${employeeId}`, contactData)
       return response.data
     } catch (error) {
       console.error('Error updating contact info:', error)

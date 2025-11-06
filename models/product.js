@@ -122,7 +122,7 @@ productSchema.virtual('discountAmount').get(function () {
 // Virtual: Stock from inventory (when populated)
 productSchema.virtual('stock').get(function () {
   if (this.inventory) {
-    return this.inventory.quantity || 0;
+    return this.inventory.quantityAvailable || 0;
   }
   return 0;
 });

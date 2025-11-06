@@ -1,7 +1,7 @@
 const productsRouter = require('express').Router();
 const Product = require('../models/product');
 const Inventory = require('../models/inventory');
-const { userExtractor } = require('../utils/middleware');
+const { userExtractor } = require('../utils/auth');
 
 /**
  * Products Controller - Minimal CRUD Approach
@@ -81,7 +81,7 @@ productsRouter.get('/', async (request, response) => {
     // Get products with population
     let query = Product.find(filter)
       .populate('category', 'categoryCode name')
-      .populate('inventory', 'quantity')
+      .populate('inventory')
       .skip(skip)
       .limit(parseInt(limit))
       .sort({ createdAt: -1 });
@@ -92,8 +92,9 @@ productsRouter.get('/', async (request, response) => {
     let filteredProducts = products;
     if (lowStock === 'true') {
       filteredProducts = products.filter(p => {
-        const stock = p.inventory ? p.inventory.quantity : 0;
-        return stock < 10;
+        if (!p.inventory) return false;
+        const available = p.inventory.quantityAvailable || 0;
+        return available < 10;
       });
     }
 
@@ -133,7 +134,7 @@ productsRouter.get('/:id', async (request, response) => {
     const product = await Product.findById(request.params.id)
       .populate('category', 'categoryCode name description')
       .populate('detail')
-      .populate('inventory', 'quantity location')
+      .populate('inventory')
       .populate('batches');
 
     if (!product) {
@@ -209,15 +210,17 @@ productsRouter.post('/', userExtractor, async (request, response) => {
     // Create inventory entry for new product
     const inventory = new Inventory({
       product: savedProduct._id,
-      quantity: 0,
-      location: 'Main Warehouse'
+      quantityOnHand: 0,
+      quantityOnShelf: 0,
+      quantityReserved: 0,
+      warehouseLocation: 'Main Warehouse'
     });
     await inventory.save();
 
     // Populate and return
     const populatedProduct = await Product.findById(savedProduct._id)
       .populate('category', 'categoryCode name')
-      .populate('inventory', 'quantity location');
+      .populate('inventory');
 
     response.status(201).json({
       success: true,
@@ -312,7 +315,7 @@ productsRouter.put('/:id', userExtractor, async (request, response) => {
     // Populate and return
     const populatedProduct = await Product.findById(updatedProduct._id)
       .populate('category', 'categoryCode name')
-      .populate('inventory', 'quantity location');
+      .populate('inventory');
 
     response.json({
       success: true,

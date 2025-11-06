@@ -123,17 +123,6 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortFie
               </p>
             </div>
 
-            {/* Department Column - Sortable */}
-            <div
-              className="w-[150px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('departmentName')}
-            >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                Department
-                {getSortIcon('departmentName')}
-              </p>
-            </div>
-
             {/* Date of Birth Column */}
             <div className="w-[120px] px-3 flex items-center flex-shrink-0">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
@@ -186,19 +175,6 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortFie
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate" title={employee.address}>
                       {employee.address || 'N/A'}
                     </p>
-                  </div>
-
-                  {/* Department */}
-                  <div className="w-[150px] px-3 flex items-center flex-shrink-0">
-                    {employee.departmentName ? (
-                      <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-[11px] font-medium font-['Poppins',sans-serif]">
-                        {employee.departmentName}
-                      </span>
-                    ) : (
-                      <span className="text-[13px] font-normal font-['Poppins',sans-serif] text-gray-400">
-                        No Department
-                      </span>
-                    )}
                   </div>
 
                   {/* Date of Birth */}
