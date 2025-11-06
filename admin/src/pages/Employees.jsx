@@ -1,91 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { EmployeeList, EmployeeListHeader } from '../components/EmployeeList';
-
-// Mock data for demo
-const mockEmployees = [
-  {
-    id: '1',
-    userCode: 'EMP001',
-    fullName: 'Nguyễn Văn An',
-    phone: '0901234567',
-    address: '123 Nguyễn Huệ, Quận 1, TP.HCM',
-    departmentName: 'IT Department',
-    dateOfBirth: '1990-05-15'
-  },
-  {
-    id: '2',
-    userCode: 'EMP002',
-    fullName: 'Trần Thị Bình',
-    phone: '0912345678',
-    address: '456 Lê Lợi, Quận 3, TP.HCM',
-    departmentName: 'Sales',
-    dateOfBirth: '1992-08-20'
-  },
-  {
-    id: '3',
-    userCode: 'EMP003',
-    fullName: 'Lê Văn Cường',
-    phone: '0923456789',
-    address: '789 Trần Hưng Đạo, Quận 5, TP.HCM',
-    departmentName: 'Marketing',
-    dateOfBirth: '1988-03-10'
-  },
-  {
-    id: '4',
-    userCode: 'EMP004',
-    fullName: 'Phạm Thị Dung',
-    phone: '0934567890',
-    address: '321 Võ Văn Tần, Quận 3, TP.HCM',
-    departmentName: null,
-    dateOfBirth: '1995-11-25'
-  },
-  {
-    id: '5',
-    userCode: 'EMP005',
-    fullName: 'Hoàng Văn Đức',
-    phone: '0945678901',
-    address: '654 Pasteur, Quận 1, TP.HCM',
-    departmentName: 'IT Department',
-    dateOfBirth: '1991-07-18'
-  },
-  {
-    id: '6',
-    userCode: 'EMP006',
-    fullName: 'Vũ Thị Hoa',
-    phone: '0956789012',
-    address: '987 Hai Bà Trưng, Quận 1, TP.HCM',
-    departmentName: 'HR',
-    dateOfBirth: '1993-09-05'
-  },
-  {
-    id: '7',
-    userCode: 'EMP007',
-    fullName: 'Đặng Văn Khoa',
-    phone: '0967890123',
-    address: '147 Điện Biên Phủ, Quận Bình Thạnh, TP.HCM',
-    departmentName: 'Sales',
-    dateOfBirth: '1989-12-30'
-  },
-  {
-    id: '8',
-    userCode: 'EMP008',
-    fullName: 'Ngô Thị Lan',
-    phone: '0978901234',
-    address: '258 Cộng Hòa, Quận Tân Bình, TP.HCM',
-    departmentName: 'Finance',
-    dateOfBirth: '1994-04-22'
-  }
-];
-
-const mockDepartments = [
-  { id: 'dept1', departmentName: 'IT Department' },
-  { id: 'dept2', departmentName: 'Sales' },
-  { id: 'dept3', departmentName: 'Marketing' },
-  { id: 'dept4', departmentName: 'HR' },
-  { id: 'dept5', departmentName: 'Finance' }
-];
+import employeeService from '../services/employeeService';
 
 export const Employees = () => {
   // Breadcrumb items
@@ -94,14 +11,51 @@ export const Employees = () => {
     { label: 'Employees', href: null },
   ];
 
-  const [employees, setEmployees] = useState(mockEmployees);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState('userCode');
   const [sortOrder, setSortOrder] = useState('asc');
-  const [selectedDepartment, setSelectedDepartment] = useState('all');
 
-  // Handle sort
+  // Fetch employees on mount
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  // Fetch employees from API
+  const fetchEmployees = async (params = {}) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await employeeService.getAllEmployees(params);
+
+      if (response.success) {
+        // Transform data to match component format
+        const transformedEmployees = response.data.employees.map(emp => ({
+          id: emp.id,
+          userCode: emp.userAccount?.userCode || 'N/A',
+          fullName: emp.fullName,
+          phone: emp.phone,
+          address: emp.address,
+          dateOfBirth: emp.dateOfBirth
+        }));
+
+        setEmployees(transformedEmployees);
+      } else {
+        setError(response.error || 'Failed to fetch employees');
+      }
+    } catch (err) {
+      console.error('Error fetching employees:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to fetch employees');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle sort (client-side)
   const handleSort = (field) => {
     const newSortOrder = sortField === field && sortOrder === 'asc' ? 'desc' : 'asc';
     setSortField(field);
@@ -132,34 +86,15 @@ export const Employees = () => {
 
   // Handle search
   const handleSearch = (query) => {
-    console.log('Search query:', query);
+    setSearchQuery(query);
+
     if (!query.trim()) {
-      setEmployees(mockEmployees);
+      fetchEmployees();
       return;
     }
 
-    const filtered = mockEmployees.filter(emp =>
-      emp.fullName.toLowerCase().includes(query.toLowerCase()) ||
-      emp.userCode.toLowerCase().includes(query.toLowerCase()) ||
-      emp.phone.includes(query)
-    );
-    setEmployees(filtered);
-  };
-
-  // Handle department filter
-  const handleFilterByDepartment = (deptId) => {
-    setSelectedDepartment(deptId);
-
-    if (deptId === 'all') {
-      setEmployees(mockEmployees);
-    } else if (deptId === 'none') {
-      setEmployees(mockEmployees.filter(emp => !emp.departmentName));
-    } else {
-      const dept = mockDepartments.find(d => d.id === deptId);
-      if (dept) {
-        setEmployees(mockEmployees.filter(emp => emp.departmentName === dept.departmentName));
-      }
-    }
+    // Search via API
+    fetchEmployees({ search: query });
   };
 
   // Handle add employee
@@ -175,10 +110,25 @@ export const Employees = () => {
   };
 
   // Handle delete employee
-  const handleDeleteEmployee = (employeeId) => {
-    console.log('Delete employee:', employeeId);
-    setEmployees(employees.filter(emp => emp.id !== employeeId));
-    // TODO: Call API to delete employee
+  const handleDeleteEmployee = async (employeeId) => {
+    if (!window.confirm('Are you sure you want to delete this employee?')) {
+      return;
+    }
+
+    try {
+      const response = await employeeService.deleteEmployee(employeeId);
+
+      if (response.success) {
+        // Remove from local state
+        setEmployees(employees.filter(emp => emp.id !== employeeId));
+        alert('Employee deleted successfully');
+      } else {
+        alert(response.error || 'Failed to delete employee');
+      }
+    } catch (err) {
+      console.error('Error deleting employee:', err);
+      alert(err.response?.data?.error?.message || err.message || 'Failed to delete employee');
+    }
   };
 
   return (
@@ -186,6 +136,13 @@ export const Employees = () => {
       <div className="space-y-6">
         {/* Breadcrumb */}
         <Breadcrumb items={breadcrumbItems} />
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-[13px] font-['Poppins',sans-serif]">
+            {error}
+          </div>
+        )}
 
         {/* Employee List Header */}
         <EmployeeListHeader
@@ -195,34 +152,49 @@ export const Employees = () => {
           onSearchChange={setSearchQuery}
           onSearch={handleSearch}
           onAddEmployee={handleAddEmployee}
-          onFilterByDepartment={handleFilterByDepartment}
-          departments={mockDepartments}
         />
 
-        {/* Employee List */}
-        <EmployeeList
-          employees={employees}
-          onEdit={handleEditEmployee}
-          onDelete={handleDeleteEmployee}
-          onSort={handleSort}
-          sortField={sortField}
-          sortOrder={sortOrder}
-        />
-
-        {/* Results Summary */}
-        {employees.length > 0 && (
-          <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif]">
-            Showing {employees.length} of {mockEmployees.length} employees
-          </div>
-        )}
-
-        {/* Empty State */}
-        {employees.length === 0 && (
+        {/* Loading State */}
+        {loading ? (
           <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-            <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
-              No employees found
-            </p>
+            <div className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-6 w-6 text-emerald-600" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <p className="text-gray-600 text-[14px] font-['Poppins',sans-serif]">
+                Loading employees...
+              </p>
+            </div>
           </div>
+        ) : (
+          <>
+            {/* Employee List */}
+            <EmployeeList
+              employees={employees}
+              onEdit={handleEditEmployee}
+              onDelete={handleDeleteEmployee}
+              onSort={handleSort}
+              sortField={sortField}
+              sortOrder={sortOrder}
+            />
+
+            {/* Results Summary */}
+            {employees.length > 0 && (
+              <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif]">
+                Showing {employees.length} employee{employees.length !== 1 ? 's' : ''}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {employees.length === 0 && !loading && (
+              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+                <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
+                  No employees found
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </Layout>
