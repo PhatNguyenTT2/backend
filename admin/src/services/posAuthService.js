@@ -14,6 +14,19 @@ const posAuthService = {
     }
   },
 
+  getAvailableEmployees: async (params = {}) => {
+    try {
+      const response = await api.get('/pos-auth/available-employees', { params });
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching available employees:', error);
+      return {
+        success: false,
+        error: error.response?.data?.error?.message || error.message
+      };
+    }
+  },
+
   getPOSAuthStatus: async (employeeId) => {
     try {
       const response = await api.get(`/pos-auth/${employeeId}`);

@@ -1,236 +1,452 @@
-const bcrypt = require('bcrypt');
-const EmployeePOSAuth = require('../models/employeePOSAuth');
+const bcrypt = require('bcrypt')
+const EmployeePOSAuth = require('../models/employeePOSAuth')
+const Employee = require('../models/employee')
+const {
+  MAX_FAILED_ATTEMPTS,
+  LOCK_DURATION_MINUTES,
+  isAccountLocked,
+  formatPOSAuthRecord
+} = require('../utils/posAuthHelpers')
 
 /**
- * POS Authentication Service - Simplified
- * Handles PIN-based authentication for POS system
+ * Get all POS auth records with filtering
  */
+const getAllPOSAuthRecords = async (filters = {}) => {
+  const { status, search } = filters
 
-// Weak PINs that should not be allowed
-const WEAK_PINS = [
-  '1234', '0000', '1111', '2222', '3333', '4444',
-  '5555', '6666', '7777', '8888', '9999',
-  '1212', '2323', '4321'
-];
+  // Get POS auth records with populated employee data
+  const posAuthRecords = await EmployeePOSAuth.find({})
+    .populate({
+      path: 'employee',
+      populate: {
+        path: 'userAccount',
+        select: 'userCode email role isActive'
+      }
+    })
+    .lean()
 
-const MAX_FAILED_ATTEMPTS = 5;
-const LOCK_DURATION_MINUTES = 15;
+  // Filter out records without employee data
+  let accessList = posAuthRecords
+    .filter(record => record.employee)
+    .map(formatPOSAuthRecord)
+
+  // Apply search filter
+  if (search) {
+    const query = search.toLowerCase()
+    accessList = accessList.filter(access => {
+      const fullName = access.employee?.fullName?.toLowerCase() || ''
+      const userCode = access.employee?.userAccount?.userCode?.toLowerCase() || ''
+      return fullName.includes(query) || userCode.includes(query)
+    })
+  }
+
+  // Filter by status
+  if (status) {
+    accessList = accessList.filter(access => {
+      switch (status) {
+        case 'active':
+          return access.canAccessPOS && !access.isPinLocked
+        case 'locked':
+          return access.isPinLocked
+        case 'denied':
+          return !access.canAccessPOS
+        default:
+          return true
+      }
+    })
+  }
+
+  return accessList
+}
 
 /**
- * Set or update PIN for an employee
- * @param {ObjectId} employeeId - Employee ID
- * @param {string} pin - 4-6 digit PIN
- * @returns {Promise<EmployeePOSAuth>}
- */
-const setPosPin = async (employeeId, pin) => {
-  // Validate PIN format
-  if (!/^\d{4,6}$/.test(pin)) {
-    throw new Error('PIN must be 4-6 digits only');
-  }
-
-  // Check for weak PINs
-  if (WEAK_PINS.includes(pin)) {
-    throw new Error('This PIN is too common. Please choose a more secure PIN');
-  }
-
-  // Hash the PIN
-  const posPinHash = await bcrypt.hash(pin, 10);
-
-  // Find or create POS auth record
-  let posAuth = await EmployeePOSAuth.findOne({ employee: employeeId });
-
-  if (posAuth) {
-    // Update existing record
-    posAuth.posPinHash = posPinHash;
-    posAuth.pinFailedAttempts = 0;
-    posAuth.pinLockedUntil = null;
-  } else {
-    // Create new record
-    posAuth = new EmployeePOSAuth({
-      employee: employeeId,
-      posPinHash,
-      canAccessPOS: true
-    });
-  }
-
-  await posAuth.save();
-  return posAuth;
-};
-
-/**
- * Verify PIN for an employee
- * @param {ObjectId} employeeId - Employee ID
- * @param {string} pin - PIN to verify
- * @returns {Promise<{success: boolean, posAuth: EmployeePOSAuth}>}
- */
-const verifyPosPin = async (employeeId, pin) => {
-  // Find POS auth record (include PIN hash)
-  const posAuth = await EmployeePOSAuth.findOne({ employee: employeeId })
-    .select('+posPinHash');
-
-  if (!posAuth) {
-    throw new Error('POS authentication not set up for this employee');
-  }
-
-  // Check if employee can access POS
-  if (!posAuth.canAccessPOS) {
-    throw new Error('POS access is disabled for this employee');
-  }
-
-  // Check if PIN is locked
-  if (posAuth.pinLockedUntil && posAuth.pinLockedUntil > Date.now()) {
-    const minutesLeft = Math.ceil((posAuth.pinLockedUntil - Date.now()) / 60000);
-    throw new Error(`PIN locked. Try again in ${minutesLeft} minutes`);
-  }
-
-  // Verify PIN
-  const isValid = await bcrypt.compare(pin, posAuth.posPinHash);
-
-  if (!isValid) {
-    // Increment failed attempts
-    posAuth.pinFailedAttempts += 1;
-
-    // Lock after max failed attempts
-    if (posAuth.pinFailedAttempts >= MAX_FAILED_ATTEMPTS) {
-      posAuth.pinLockedUntil = Date.now() + LOCK_DURATION_MINUTES * 60 * 1000;
-      await posAuth.save();
-      throw new Error(`Too many failed attempts. PIN locked for ${LOCK_DURATION_MINUTES} minutes`);
-    }
-
-    await posAuth.save();
-    throw new Error(`Invalid PIN. ${MAX_FAILED_ATTEMPTS - posAuth.pinFailedAttempts} attempts remaining`);
-  }
-
-  // Success: Reset failed attempts and update last login
-  posAuth.pinFailedAttempts = 0;
-  posAuth.pinLockedUntil = null;
-  posAuth.posLastLogin = Date.now();
-  await posAuth.save();
-
-  return { success: true, posAuth };
-};
-
-/**
- * Check if employee can access POS
- * @param {ObjectId} employeeId - Employee ID
- * @returns {Promise<boolean>}
- */
-const canAccessPOS = async (employeeId) => {
-  const posAuth = await EmployeePOSAuth.findOne({ employee: employeeId });
-
-  if (!posAuth) return false;
-
-  // Check: enabled and not locked
-  return posAuth.canAccessPOS && !posAuth.isPinLocked;
-};
-
-/**
- * Enable POS access for employee
- * @param {ObjectId} employeeId - Employee ID
- * @returns {Promise<EmployeePOSAuth>}
- */
-const enablePOSAccess = async (employeeId) => {
-  const posAuth = await EmployeePOSAuth.findOne({ employee: employeeId });
-
-  if (!posAuth) {
-    throw new Error('POS authentication not set up. Please set PIN first');
-  }
-
-  posAuth.canAccessPOS = true;
-  posAuth.pinFailedAttempts = 0;
-  posAuth.pinLockedUntil = null;
-  await posAuth.save();
-
-  return posAuth;
-};
-
-/**
- * Disable POS access for employee
- * @param {ObjectId} employeeId - Employee ID
- * @returns {Promise<EmployeePOSAuth>}
- */
-const disablePOSAccess = async (employeeId) => {
-  const posAuth = await EmployeePOSAuth.findOne({ employee: employeeId });
-
-  if (!posAuth) {
-    throw new Error('POS authentication not found');
-  }
-
-  posAuth.canAccessPOS = false;
-  await posAuth.save();
-
-  return posAuth;
-};
-
-/**
- * Reset PIN failed attempts (admin function)
- * @param {ObjectId} employeeId - Employee ID
- * @returns {Promise<EmployeePOSAuth>}
- */
-const resetFailedAttempts = async (employeeId) => {
-  const posAuth = await EmployeePOSAuth.findOne({ employee: employeeId });
-
-  if (!posAuth) {
-    throw new Error('POS authentication not found');
-  }
-
-  posAuth.pinFailedAttempts = 0;
-  posAuth.pinLockedUntil = null;
-  await posAuth.save();
-
-  return posAuth;
-};
-
-/**
- * Get POS auth status for employee
- * @param {ObjectId} employeeId - Employee ID
- * @returns {Promise<Object>}
+ * Get POS auth status for specific employee
  */
 const getPOSAuthStatus = async (employeeId) => {
+  const employee = await Employee.findById(employeeId)
+    .populate({
+      path: 'userAccount',
+      select: 'userCode email role isActive'
+    })
+
+  if (!employee) {
+    throw { statusCode: 404, message: 'Employee not found' }
+  }
+
   const posAuth = await EmployeePOSAuth.findOne({ employee: employeeId })
-    .populate('employee', 'fullName');
 
   if (!posAuth) {
     return {
       hasAuth: false,
-      canAccess: false,
-      message: 'POS authentication not set up'
-    };
+      canAccessPOS: false,
+      employee: employee
+    }
   }
 
   return {
+    ...formatPOSAuthRecord(posAuth),
     hasAuth: true,
-    canAccess: posAuth.canAccessPOS && !posAuth.isPinLocked,
-    isPinLocked: posAuth.isPinLocked,
-    failedAttempts: posAuth.pinFailedAttempts,
-    minutesUntilUnlock: posAuth.minutesUntilUnlock,
-    lastLogin: posAuth.posLastLogin,
-    createdAt: posAuth.createdAt,
-    updatedAt: posAuth.updatedAt
-  };
-};
+    employee: employee
+  }
+}
+
+/**
+ * Get available employees (without POS auth)
+ * Only returns employees with Super Admin or Sales role
+ */
+const getAvailableEmployees = async (search = '') => {
+  let employeeQuery = {}
+  if (search) {
+    employeeQuery.$or = [
+      { fullName: { $regex: search, $options: 'i' } }
+    ]
+  }
+
+  const employees = await Employee.find(employeeQuery)
+    .populate({
+      path: 'userAccount',
+      select: 'userCode email role isActive',
+      populate: {
+        path: 'role',
+        select: 'roleName'
+      }
+    })
+    .lean()
+
+  console.log(`[getAvailableEmployees] Total employees found: ${employees.length}`)
+
+  // Get all existing POS auth employee IDs
+  const posAuthRecords = await EmployeePOSAuth.find().select('employee').lean()
+  const posAuthEmployeeIds = new Set(posAuthRecords.map(r => r.employee.toString()))
+
+  console.log(`[getAvailableEmployees] POS auth records: ${posAuthEmployeeIds.size}`)
+
+  // Filter: no POS auth, has active user account, and role is Super Admin or Sales
+  const availableEmployees = employees.filter(emp => {
+    const hasNoPosAuth = !posAuthEmployeeIds.has(emp._id.toString())
+    const hasUserAccount = emp.userAccount !== null
+    const isActive = emp.userAccount?.isActive === true
+    const roleName = emp.userAccount?.role?.roleName
+    const isAllowedRole = roleName === 'Super Admin' || roleName === 'Sales'
+
+    console.log(`[Filter] ${emp.fullName}: hasNoPosAuth=${hasNoPosAuth}, hasUserAccount=${hasUserAccount}, isActive=${isActive}, role=${roleName}, isAllowedRole=${isAllowedRole}`)
+
+    return hasNoPosAuth && hasUserAccount && isActive && isAllowedRole
+  })
+
+  console.log(`[getAvailableEmployees] Available employees after filter: ${availableEmployees.length}`)
+
+  return availableEmployees
+}/**
+ * Grant POS access to employee
+ */
+const grantPOSAccess = async (employeeId, pin) => {
+  // Check if employee exists and populate user account with role
+  const employee = await Employee.findById(employeeId)
+    .populate({
+      path: 'userAccount',
+      select: 'userCode email role isActive',
+      populate: {
+        path: 'role',
+        select: 'roleName'
+      }
+    })
+
+  if (!employee) {
+    throw { statusCode: 404, message: 'Employee not found' }
+  }
+
+  // Validate user account exists and is active
+  if (!employee.userAccount) {
+    throw {
+      statusCode: 400,
+      message: 'Employee does not have a user account',
+      code: 'NO_USER_ACCOUNT'
+    }
+  }
+
+  if (!employee.userAccount.isActive) {
+    throw {
+      statusCode: 400,
+      message: 'Employee user account is not active',
+      code: 'INACTIVE_USER_ACCOUNT'
+    }
+  }
+
+  // Validate role is Super Admin or Sales
+  const roleName = employee.userAccount.role?.roleName
+  if (roleName !== 'Super Admin' && roleName !== 'Sales') {
+    throw {
+      statusCode: 403,
+      message: 'POS access can only be granted to Super Admin or Sales roles',
+      code: 'INVALID_ROLE',
+      details: { currentRole: roleName, allowedRoles: ['Super Admin', 'Sales'] }
+    }
+  }
+
+  // Check if POS auth already exists
+  const existingAuth = await EmployeePOSAuth.findOne({ employee: employeeId })
+  if (existingAuth) {
+    throw {
+      statusCode: 409,
+      message: 'POS access already granted to this employee',
+      code: 'POS_AUTH_EXISTS'
+    }
+  }
+
+  // Hash the PIN
+  const saltRounds = 10
+  const posPinHash = await bcrypt.hash(pin, saltRounds)
+
+  // Create POS auth record
+  const posAuth = new EmployeePOSAuth({
+    employee: employeeId,
+    posPinHash,
+    canAccessPOS: true
+  })
+
+  await posAuth.save()
+
+  // Populate employee data
+  await posAuth.populate({
+    path: 'employee',
+    populate: {
+      path: 'userAccount',
+      select: 'userCode email role isActive',
+      populate: {
+        path: 'role',
+        select: 'roleName'
+      }
+    }
+  })
+
+  return posAuth
+}
+
+/**
+ * Update PIN for employee
+ */
+const updatePIN = async (employeeId, pin) => {
+  const posAuth = await EmployeePOSAuth.findOne({ employee: employeeId })
+
+  if (!posAuth) {
+    throw {
+      statusCode: 404,
+      message: 'POS auth record not found',
+      code: 'POS_AUTH_NOT_FOUND'
+    }
+  }
+
+  // Hash new PIN
+  const saltRounds = 10
+  posAuth.posPinHash = await bcrypt.hash(pin, saltRounds)
+  posAuth.pinFailedAttempts = 0
+  posAuth.pinLockedUntil = null
+
+  await posAuth.save()
+
+  return { employeeId, pinUpdated: true }
+}
+
+/**
+ * Enable POS access
+ */
+const enablePOSAccess = async (employeeId) => {
+  const posAuth = await EmployeePOSAuth.findOne({ employee: employeeId })
+
+  if (!posAuth) {
+    throw {
+      statusCode: 404,
+      message: 'POS auth record not found. Please grant POS access first',
+      code: 'POS_AUTH_NOT_FOUND'
+    }
+  }
+
+  posAuth.canAccessPOS = true
+  posAuth.pinFailedAttempts = 0
+  posAuth.pinLockedUntil = null
+
+  await posAuth.save()
+
+  return posAuth
+}
+
+/**
+ * Disable POS access
+ */
+const disablePOSAccess = async (employeeId) => {
+  const posAuth = await EmployeePOSAuth.findOne({ employee: employeeId })
+
+  if (!posAuth) {
+    throw {
+      statusCode: 404,
+      message: 'POS auth record not found',
+      code: 'POS_AUTH_NOT_FOUND'
+    }
+  }
+
+  posAuth.canAccessPOS = false
+  await posAuth.save()
+
+  return posAuth
+}
+
+/**
+ * Reset failed login attempts
+ */
+const resetFailedAttempts = async (employeeId) => {
+  const posAuth = await EmployeePOSAuth.findOne({ employee: employeeId })
+
+  if (!posAuth) {
+    throw {
+      statusCode: 404,
+      message: 'POS auth record not found',
+      code: 'POS_AUTH_NOT_FOUND'
+    }
+  }
+
+  posAuth.pinFailedAttempts = 0
+  posAuth.pinLockedUntil = null
+  await posAuth.save()
+
+  return {
+    pinFailedAttempts: 0,
+    isPinLocked: false
+  }
+}
+
+/**
+ * Revoke POS access (delete record)
+ */
+const revokePOSAccess = async (employeeId) => {
+  const posAuth = await EmployeePOSAuth.findOne({ employee: employeeId })
+
+  if (!posAuth) {
+    throw {
+      statusCode: 404,
+      message: 'POS auth record not found',
+      code: 'POS_AUTH_NOT_FOUND'
+    }
+  }
+
+  await EmployeePOSAuth.findByIdAndDelete(posAuth._id)
+
+  return { deleted: true }
+}
 
 /**
  * Get all locked accounts
- * @returns {Promise<Array>}
  */
 const getLockedAccounts = async () => {
-  const now = Date.now();
+  const now = Date.now()
 
   const lockedAuths = await EmployeePOSAuth.find({
     pinLockedUntil: { $gt: now }
-  }).populate('employee', 'fullName userAccount');
+  }).populate({
+    path: 'employee',
+    populate: {
+      path: 'userAccount',
+      select: 'userCode email role isActive'
+    }
+  })
 
-  return lockedAuths;
-};
+  return lockedAuths
+}
+
+/**
+ * Verify PIN for POS login
+ */
+const verifyPIN = async (employeeId, pin) => {
+  // Find POS auth record with PIN hash
+  const posAuth = await EmployeePOSAuth.findOne({ employee: employeeId })
+    .select('+posPinHash')
+    .populate({
+      path: 'employee',
+      populate: {
+        path: 'userAccount',
+        select: 'userCode email role isActive'
+      }
+    })
+
+  if (!posAuth) {
+    throw {
+      statusCode: 404,
+      message: 'POS authentication not set up for this employee',
+      code: 'POS_AUTH_NOT_FOUND'
+    }
+  }
+
+  // Check if employee can access POS
+  if (!posAuth.canAccessPOS) {
+    throw {
+      statusCode: 403,
+      message: 'POS access is disabled for this employee',
+      code: 'ACCESS_DENIED'
+    }
+  }
+
+  // Check if PIN is locked
+  if (isAccountLocked(posAuth.pinLockedUntil)) {
+    const minutesLeft = Math.ceil((posAuth.pinLockedUntil - Date.now()) / 60000)
+    throw {
+      statusCode: 423,
+      message: `PIN locked. Try again in ${minutesLeft} minutes`,
+      code: 'PIN_LOCKED',
+      minutesLeft
+    }
+  }
+
+  // Verify PIN
+  const isValid = await bcrypt.compare(pin, posAuth.posPinHash)
+
+  if (!isValid) {
+    // Increment failed attempts
+    posAuth.pinFailedAttempts += 1
+
+    // Lock after max failed attempts
+    if (posAuth.pinFailedAttempts >= MAX_FAILED_ATTEMPTS) {
+      posAuth.pinLockedUntil = Date.now() + LOCK_DURATION_MINUTES * 60 * 1000
+      await posAuth.save()
+
+      throw {
+        statusCode: 423,
+        message: `Too many failed attempts. PIN locked for ${LOCK_DURATION_MINUTES} minutes`,
+        code: 'PIN_LOCKED'
+      }
+    }
+
+    await posAuth.save()
+
+    throw {
+      statusCode: 401,
+      message: `Invalid PIN. ${MAX_FAILED_ATTEMPTS - posAuth.pinFailedAttempts} attempts remaining`,
+      code: 'INVALID_PIN',
+      attemptsRemaining: MAX_FAILED_ATTEMPTS - posAuth.pinFailedAttempts
+    }
+  }
+
+  // Success: Reset failed attempts and update last login
+  posAuth.pinFailedAttempts = 0
+  posAuth.pinLockedUntil = null
+  posAuth.posLastLogin = Date.now()
+  await posAuth.save()
+
+  return {
+    employee: posAuth.employee,
+    lastLogin: posAuth.posLastLogin
+  }
+}
 
 module.exports = {
-  setPosPin,
-  verifyPosPin,
-  canAccessPOS,
+  getAllPOSAuthRecords,
+  getPOSAuthStatus,
+  getAvailableEmployees,
+  grantPOSAccess,
+  updatePIN,
   enablePOSAccess,
   disablePOSAccess,
   resetFailedAttempts,
-  getPOSAuthStatus,
-  getLockedAccounts
-};
+  revokePOSAccess,
+  getLockedAccounts,
+  verifyPIN
+}

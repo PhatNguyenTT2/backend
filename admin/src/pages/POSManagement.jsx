@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { POSAccessList, POSListHeader } from '../components/POSList';
+import { EditPOSAccessModal, GrantPOSAccessModal } from '../components/POSList/POSModal';
 import posAuthService from '../services/posAuthService';
 
 export const POSManagement = () => {
@@ -20,6 +21,11 @@ export const POSManagement = () => {
   const [sortField, setSortField] = useState('fullName');
   const [sortOrder, setSortOrder] = useState('asc');
   const [itemsPerPage, setItemsPerPage] = useState(20);
+
+  // Modal states
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isGrantModalOpen, setIsGrantModalOpen] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   // Statistics
   const [stats, setStats] = useState({
@@ -184,7 +190,20 @@ export const POSManagement = () => {
   // Handle grant access
   const handleGrantAccess = () => {
     console.log('Grant POS Access clicked');
-    // TODO: Open GrantPOSAccessModal
+    setIsGrantModalOpen(true);
+  };
+
+  // Handle grant success
+  const handleGrantSuccess = async (newPOSAuth) => {
+    try {
+      // Show success message
+      alert(`POS access granted successfully to ${newPOSAuth.employee?.fullName}`);
+
+      // Refresh data
+      await fetchPOSAccess();
+    } catch (err) {
+      console.error('Error after granting access:', err);
+    }
   };
 
   // Handle view details
@@ -196,7 +215,36 @@ export const POSManagement = () => {
   // Handle edit settings
   const handleEditSettings = (access) => {
     console.log('Edit POS settings:', access);
-    // TODO: Open EditPOSSettingsModal
+    setSelectedEmployee(access);
+    setIsEditModalOpen(true);
+  };
+
+  // Handle edit success
+  const handleEditSuccess = async (updates) => {
+    try {
+      const employeeId = selectedEmployee.employee._id;
+
+      // Update POS access status
+      if (updates.canAccessPOS) {
+        await posAuthService.enablePOSAccess(employeeId);
+      } else {
+        await posAuthService.disablePOSAccess(employeeId);
+      }
+
+      // Update PIN if required
+      if (updates.requirePINReset && updates.newPIN) {
+        await posAuthService.updatePIN(employeeId, updates.newPIN);
+      }
+
+      // Show success message
+      alert('POS access settings updated successfully');
+
+      // Refresh data
+      await fetchPOSAccess();
+    } catch (err) {
+      console.error('Error updating POS settings:', err);
+      throw new Error(err.response?.data?.error?.message || err.message || 'Failed to update POS settings');
+    }
   };
 
   // Handle reset PIN
@@ -328,11 +376,22 @@ export const POSManagement = () => {
           </>
         )}
 
-        {/* Modals will be added here in Phase 1 */}
-        {/* TODO: 
-          - GrantPOSAccessModal
+        {/* Modals */}
+        <GrantPOSAccessModal
+          isOpen={isGrantModalOpen}
+          onClose={() => setIsGrantModalOpen(false)}
+          onSuccess={handleGrantSuccess}
+        />
+
+        <EditPOSAccessModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          employee={selectedEmployee}
+          onSuccess={handleEditSuccess}
+        />
+
+        {/* TODO: Add more modals
           - ViewPOSDetailsModal
-          - EditPOSSettingsModal
           - ResetPINModal
         */}
       </div>
