@@ -1,11 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { Dashboard, ViewProduct, DetailProduct, ListProduct, LoginSignup, Orders, Categories, Employees, Customers, Suppliers, Inventories, SalesReports, PurchaseReports, Roles } from "./pages";
+import { Dashboard, ViewProduct, DetailProduct, ListProduct, LoginSignup, Orders, Categories, Employees, Customers, Suppliers, Inventories, SalesReports, PurchaseReports, Roles, POSManagement } from "./pages";
 import { POSLogin, POSMain } from "./pages/pos";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import Payments from "./pages/Payments";
 import ProtectedRoute from "./components/ProtectedRoute";
 import "./App.css";
-import { POSAccessList } from "./components/POSAccessList";
 
 function App() {
   return (
@@ -155,7 +154,7 @@ function App() {
           path="/pos-management"
           element={
             <ProtectedRoute>
-              <POSAccessList />
+              <POSManagement />
             </ProtectedRoute>
           }
         />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { POSAccessList, POSAccessListHeader } from '../components/POSAccessList';
+import { POSAccessList, POSListHeader } from '../components/POSList';
 import posAuthService from '../services/posAuthService';
 
 export const POSManagement = () => {
@@ -19,6 +19,7 @@ export const POSManagement = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortField, setSortField] = useState('fullName');
   const [sortOrder, setSortOrder] = useState('asc');
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   // Statistics
   const [stats, setStats] = useState({
@@ -159,9 +160,15 @@ export const POSManagement = () => {
     setFilteredAccess(sorted);
   };
 
+  // Handle search change
+  const handleSearchChange = (query) => {
+    setSearchQuery(query);
+  };
+
   // Handle search
   const handleSearch = (query) => {
-    setSearchQuery(query);
+    // Search is applied via useEffect watching searchQuery
+    console.log('Search triggered:', query);
   };
 
   // Handle filter status
@@ -169,9 +176,9 @@ export const POSManagement = () => {
     setStatusFilter(status);
   };
 
-  // Handle refresh
-  const handleRefresh = () => {
-    fetchPOSAccess();
+  // Handle items per page change
+  const handleItemsPerPageChange = (value) => {
+    setItemsPerPage(value);
   };
 
   // Handle grant access
@@ -258,15 +265,18 @@ export const POSManagement = () => {
 
         {/* POS List Header */}
         <POSListHeader
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={handleItemsPerPageChange}
+          searchQuery={searchQuery}
+          onSearchChange={handleSearchChange}
+          onSearch={handleSearch}
+          onGrantAccess={handleGrantAccess}
           totalPOS={stats.total}
           activePOS={stats.active}
           lockedPOS={stats.locked}
           deniedPOS={stats.denied}
-          onSearch={handleSearch}
-          onFilterStatus={handleFilterStatus}
-          onRefresh={handleRefresh}
-          onGrantAccess={handleGrantAccess}
           statusFilter={statusFilter}
+          onFilterStatus={handleFilterStatus}
         />
 
         {/* Loading State */}
@@ -301,6 +311,18 @@ export const POSManagement = () => {
             {filteredAccess.length > 0 && (
               <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif]">
                 Showing {filteredAccess.length} of {stats.total} POS access record{filteredAccess.length !== 1 ? 's' : ''}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {filteredAccess.length === 0 && !loading && (
+              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+                <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                </svg>
+                <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
+                  No POS access records found
+                </p>
               </div>
             )}
           </>

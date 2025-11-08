@@ -4,6 +4,10 @@ const Employee = require('../models/employee');
 const UserAccount = require('../models/userAccount');
 const posAuthService = require('../services/posAuthService');
 
+// Constants
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCK_DURATION_MINUTES = 15;
+
 /**
  * @route   POST /api/pos-login
  * @desc    POS PIN Authentication
@@ -67,11 +71,69 @@ posLoginRouter.post('/', async (request, response) => {
       });
     }
 
-    // Verify PIN using posAuthService
+    // Verify PIN
     try {
       const result = await posAuthService.verifyPosPin(employee._id, pin);
-      // PIN verified successfully
+
+      if (!result.success) {
+        return response.status(401).json({
+          success: false,
+          error: {
+            message: 'PIN verification failed',
+            code: 'PIN_VERIFICATION_FAILED'
+          }
+        });
+      }
     } catch (error) {
+      // Handle specific error codes
+      if (error.message.includes('PIN locked')) {
+        const minutesMatch = error.message.match(/(\d+) minutes/);
+        const minutesLeft = minutesMatch ? parseInt(minutesMatch[1]) : LOCK_DURATION_MINUTES;
+
+        return response.status(423).json({
+          success: false,
+          error: {
+            message: error.message,
+            code: 'PIN_LOCKED',
+            minutesLeft
+          }
+        });
+      }
+
+      if (error.message.includes('Invalid PIN')) {
+        const attemptsMatch = error.message.match(/(\d+) attempts remaining/);
+        const attemptsRemaining = attemptsMatch ? parseInt(attemptsMatch[1]) : 0;
+
+        return response.status(401).json({
+          success: false,
+          error: {
+            message: error.message,
+            code: 'INVALID_PIN',
+            attemptsRemaining
+          }
+        });
+      }
+
+      if (error.message.includes('POS access is disabled')) {
+        return response.status(403).json({
+          success: false,
+          error: {
+            message: error.message,
+            code: 'ACCESS_DENIED'
+          }
+        });
+      }
+
+      if (error.message.includes('not set up')) {
+        return response.status(401).json({
+          success: false,
+          error: {
+            message: error.message,
+            code: 'POS_AUTH_NOT_FOUND'
+          }
+        });
+      }
+
       return response.status(401).json({
         success: false,
         error: {

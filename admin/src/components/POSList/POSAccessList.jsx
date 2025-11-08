@@ -132,25 +132,25 @@ export const POSAccessList = ({
         <div className="min-w-[1100px]">
           {/* Table Header */}
           <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
-            {/* Employee Column - Sortable */}
-            <div
-              className="flex-1 min-w-[200px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('fullName')}
-            >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                Employee
-                {getSortIcon('fullName')}
-              </p>
-            </div>
-
-            {/* User Code Column - Sortable */}
+            {/* ID Column - Sortable */}
             <div
               className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('userCode')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                User Code
+                ID
                 {getSortIcon('userCode')}
+              </p>
+            </div>
+
+            {/* Name Column - Sortable */}
+            <div
+              className="flex-1 min-w-[180px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('fullName')}
+            >
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+                Name
+                {getSortIcon('fullName')}
               </p>
             </div>
 
@@ -213,17 +213,17 @@ export const POSAccessList = ({
                   className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== posAccess.length - 1 ? 'border-b border-gray-100' : ''
                     }`}
                 >
-                  {/* Employee */}
-                  <div className="flex-1 min-w-[200px] px-3 flex items-center">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {access.employee?.fullName || 'N/A'}
-                    </p>
-                  </div>
-
-                  {/* User Code */}
+                  {/* ID - Display userCode */}
                   <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
                       {access.employee?.userAccount?.userCode || 'N/A'}
+                    </p>
+                  </div>
+
+                  {/* Name */}
+                  <div className="flex-1 min-w-[180px] px-3 flex items-center">
+                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
+                      {access.employee?.fullName || 'N/A'}
                     </p>
                   </div>
 
@@ -282,10 +282,7 @@ export const POSAccessList = ({
           {/* Empty State */}
           {posAccess.length === 0 && (
             <div className="py-16 text-center">
-              <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-              </svg>
-              <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
+              <p className="text-gray-500 text-[13px] font-['Poppins',sans-serif]">
                 No POS access records found
               </p>
             </div>
