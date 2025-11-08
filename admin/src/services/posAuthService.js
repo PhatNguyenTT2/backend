@@ -145,6 +145,96 @@ const posAuthService = {
   getCurrentEmployee: () => {
     const employee = localStorage.getItem('posEmployee');
     return employee ? JSON.parse(employee) : null;
+  },
+
+  // ============================================
+  // ADMIN MANAGEMENT METHODS
+  // ============================================
+
+  /**
+   * Get all POS access records (Admin only)
+   * @returns {Promise} Response with all POS access data
+   */
+  getAllPOSAccess: async () => {
+    try {
+      const response = await api.get('/employees/pos-access');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to fetch POS access data' };
+    }
+  },
+
+  /**
+   * Enable POS access for an employee (Admin only)
+   * @param {string} employeeId - Employee ID
+   * @returns {Promise} Response
+   */
+  enablePOSAccess: async (employeeId) => {
+    try {
+      const response = await api.post(`/employees/${employeeId}/pos-access/enable`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to enable POS access' };
+    }
+  },
+
+  /**
+   * Disable POS access for an employee (Admin only)
+   * @param {string} employeeId - Employee ID
+   * @returns {Promise} Response
+   */
+  disablePOSAccess: async (employeeId) => {
+    try {
+      const response = await api.post(`/employees/${employeeId}/pos-access/disable`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to disable POS access' };
+    }
+  },
+
+  /**
+   * Set PIN for an employee (Admin only)
+   * @param {string} employeeId - Employee ID
+   * @param {string} pin - New PIN (4-6 digits)
+   * @returns {Promise} Response
+   */
+  setPIN: async (employeeId, pin) => {
+    try {
+      const response = await api.post(`/employees/${employeeId}/pos-access/set-pin`, {
+        pin
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to set PIN' };
+    }
+  },
+
+  /**
+   * Reset failed attempts and unlock account (Admin only)
+   * @param {string} employeeId - Employee ID
+   * @returns {Promise} Response
+   */
+  resetFailedAttempts: async (employeeId) => {
+    try {
+      const response = await api.post(`/employees/${employeeId}/pos-access/reset-attempts`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to reset failed attempts' };
+    }
+  },
+
+  /**
+   * Get POS access status for specific employee (Admin only)
+   * @param {string} employeeId - Employee ID
+   * @returns {Promise} Response with POS access details
+   */
+  getEmployeePOSStatus: async (employeeId) => {
+    try {
+      const response = await api.get(`/employees/${employeeId}/pos-access/status`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to get POS status' };
+    }
   }
 };
 

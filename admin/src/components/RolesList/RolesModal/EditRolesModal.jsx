@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import roleService from '../../../services/roleService';
 
-export const AddRolesModal = ({ isOpen, onClose, onSuccess }) => {
+export const EditRolesModal = ({ isOpen, onClose, onSuccess, role }) => {
   const [formData, setFormData] = useState({
     roleName: '',
     description: '',
@@ -11,7 +11,7 @@ export const AddRolesModal = ({ isOpen, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Available permissions list (you can customize this)
+  // Available permissions list (same as AddRolesModal)
   const availablePermissions = [
     'view_dashboard',
     'manage_products',
@@ -27,17 +27,17 @@ export const AddRolesModal = ({ isOpen, onClose, onSuccess }) => {
     'manage_payments'
   ];
 
-  // Reset form when modal opens
+  // Load role data when modal opens
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && role) {
       setFormData({
-        roleName: '',
-        description: '',
-        permissions: []
+        roleName: role.roleName || '',
+        description: role.description || '',
+        permissions: role.permissions || []
       });
       setError(null);
     }
-  }, [isOpen]);
+  }, [isOpen, role]);
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -84,6 +84,11 @@ export const AddRolesModal = ({ isOpen, onClose, onSuccess }) => {
       return;
     }
 
+    if (!role || !role.id) {
+      setError('Role ID is missing');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -94,19 +99,19 @@ export const AddRolesModal = ({ isOpen, onClose, onSuccess }) => {
         permissions: formData.permissions
       };
 
-      const response = await roleService.createRole(payload);
+      const response = await roleService.updateRole(role.id, payload);
 
       if (response.success) {
         if (onSuccess) onSuccess(response.data.role);
         onClose && onClose();
       } else {
-        setError(response.error || 'Failed to create role');
+        setError(response.error || 'Failed to update role');
       }
     } catch (err) {
-      console.error('Error creating role:', err);
+      console.error('Error updating role:', err);
       const errorMessage = err.response?.data?.error?.message
         || err.message
-        || 'Failed to create role. Please try again.';
+        || 'Failed to update role. Please try again.';
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -120,9 +125,16 @@ export const AddRolesModal = ({ isOpen, onClose, onSuccess }) => {
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-[20px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-            Add Role
-          </h2>
+          <div>
+            <h2 className="text-[20px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
+              Edit Role
+            </h2>
+            {role && (
+              <p className="text-[12px] text-gray-500 font-['Poppins',sans-serif] mt-1">
+                Role ID: {role.roleCode}
+              </p>
+            )}
+          </div>
           <button
             onClick={onClose}
             disabled={loading}
@@ -232,10 +244,10 @@ export const AddRolesModal = ({ isOpen, onClose, onSuccess }) => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Creating...
+                  Updating...
                 </>
               ) : (
-                'Create Role'
+                'Update Role'
               )}
             </button>
           </div>

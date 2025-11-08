@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortField, sortOrder }) => {
+export const EmployeeList = ({ employees = [], onEdit, onDelete, onManageAccount, onViewDetails, onSort, sortField, sortOrder }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
@@ -231,7 +231,7 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortFie
           >
             <button
               onClick={() => {
-                console.log('View Details:', employee);
+                onViewDetails && onViewDetails(employee);
                 setActiveDropdown(null);
               }}
               className="w-full px-4 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
@@ -258,7 +258,23 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onSort, sortFie
                 <path d="M11.3333 2.00004C11.5084 1.82494 11.7163 1.68605 11.9451 1.59129C12.1739 1.49653 12.4191 1.44775 12.6666 1.44775C12.9142 1.44775 13.1594 1.49653 13.3882 1.59129C13.617 1.68605 13.8249 1.82494 14 2.00004C14.1751 2.17513 14.314 2.383 14.4087 2.61178C14.5035 2.84055 14.5523 3.08575 14.5523 3.33337C14.5523 3.58099 14.5035 3.82619 14.4087 4.05497C14.314 4.28374 14.1751 4.49161 14 4.66671L5.00001 13.6667L1.33334 14.6667L2.33334 11L11.3333 2.00004Z" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span className="text-[12px] font-['Poppins',sans-serif] text-[#212529]">
-                Edit
+                Edit Personal Info
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                onManageAccount && onManageAccount(employee);
+                setActiveDropdown(null);
+              }}
+              className="w-full px-4 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 10C9.65685 10 11 8.65685 11 7C11 5.34315 9.65685 4 8 4C6.34315 4 5 5.34315 5 7C5 8.65685 6.34315 10 8 10Z" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M8 1V2M8 14V15M3.93 3.93L4.64 4.64M11.36 11.36L12.07 12.07M1 8H2M14 8H15M3.93 12.07L4.64 11.36M11.36 4.64L12.07 3.93" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="text-[12px] font-['Poppins',sans-serif] text-[#212529]">
+                Manage Account
               </span>
             </button>
 

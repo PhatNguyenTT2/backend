@@ -114,6 +114,7 @@ export const NavigationMenuSection = () => {
           submenu: [
             { name: 'Employees', href: '/employees' },
             { name: 'Roles', href: '/roles' },
+            { name: 'POS', href: '/pos-management' }
           ]
         },
         { name: 'Authentication', icon: Shield, arrow: true },

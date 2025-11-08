@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { RolesList, RolesListHeader, AddRolesModal } from '../components/RolesList';
+import { RolesList, RolesListHeader, AddRolesModal, EditRolesModal } from '../components/RolesList';
 import roleService from '../services/roleService';
 
 export const Roles = () => {
@@ -19,6 +19,8 @@ export const Roles = () => {
   const [sortField, setSortField] = useState('roleCode');
   const [sortOrder, setSortOrder] = useState('asc');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedRole, setSelectedRole] = useState(null);
 
   // Fetch roles on mount
   useEffect(() => {
@@ -102,8 +104,15 @@ export const Roles = () => {
 
   // Handle edit role
   const handleEditRole = (role) => {
-    console.log('Edit role:', role);
-    // TODO: Open edit role modal
+    setSelectedRole(role);
+    setShowEditModal(true);
+  };
+
+  // Handle edit success
+  const handleEditSuccess = (updatedRole) => {
+    console.log('Role updated successfully:', updatedRole);
+    // Refresh the list
+    fetchRoles();
   };
 
   // Handle delete role
@@ -200,6 +209,17 @@ export const Roles = () => {
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           onSuccess={handleAddSuccess}
+        />
+
+        {/* Edit Role Modal */}
+        <EditRolesModal
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedRole(null);
+          }}
+          onSuccess={handleEditSuccess}
+          role={selectedRole}
         />
       </div>
     </Layout>

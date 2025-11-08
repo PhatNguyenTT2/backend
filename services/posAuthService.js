@@ -2,7 +2,7 @@ const bcrypt = require('bcrypt');
 const EmployeePOSAuth = require('../models/employeePOSAuth');
 
 /**
- * POS Authentication Service
+ * POS Authentication Service - Simplified
  * Handles PIN-based authentication for POS system
  */
 
@@ -42,8 +42,6 @@ const setPosPin = async (employeeId, pin) => {
   if (posAuth) {
     // Update existing record
     posAuth.posPinHash = posPinHash;
-    posAuth.pinLastChanged = Date.now();
-    posAuth.pinExpiresAt = Date.now() + 90 * 24 * 60 * 60 * 1000; // 90 days
     posAuth.pinFailedAttempts = 0;
     posAuth.pinLockedUntil = null;
   } else {
@@ -51,8 +49,6 @@ const setPosPin = async (employeeId, pin) => {
     posAuth = new EmployeePOSAuth({
       employee: employeeId,
       posPinHash,
-      pinLastChanged: Date.now(),
-      pinExpiresAt: Date.now() + 90 * 24 * 60 * 60 * 1000,
       canAccessPOS: true
     });
   }
@@ -85,11 +81,6 @@ const verifyPosPin = async (employeeId, pin) => {
   if (posAuth.pinLockedUntil && posAuth.pinLockedUntil > Date.now()) {
     const minutesLeft = Math.ceil((posAuth.pinLockedUntil - Date.now()) / 60000);
     throw new Error(`PIN locked. Try again in ${minutesLeft} minutes`);
-  }
-
-  // Check if PIN expired
-  if (posAuth.pinExpiresAt && posAuth.pinExpiresAt < Date.now()) {
-    throw new Error('PIN expired. Please contact admin to reset');
   }
 
   // Verify PIN
@@ -129,9 +120,8 @@ const canAccessPOS = async (employeeId) => {
 
   if (!posAuth) return false;
 
-  return posAuth.canAccessPOS &&
-    !posAuth.isPinExpired &&
-    !posAuth.isPinLocked;
+  // Check: enabled and not locked
+  return posAuth.canAccessPOS && !posAuth.isPinLocked;
 };
 
 /**
@@ -210,30 +200,14 @@ const getPOSAuthStatus = async (employeeId) => {
 
   return {
     hasAuth: true,
-    canAccess: posAuth.canAccessPOS && !posAuth.isPinExpired && !posAuth.isPinLocked,
-    isPinExpired: posAuth.isPinExpired,
+    canAccess: posAuth.canAccessPOS && !posAuth.isPinLocked,
     isPinLocked: posAuth.isPinLocked,
     failedAttempts: posAuth.pinFailedAttempts,
     minutesUntilUnlock: posAuth.minutesUntilUnlock,
     lastLogin: posAuth.posLastLogin,
-    pinLastChanged: posAuth.pinLastChanged,
-    pinExpiresAt: posAuth.pinExpiresAt
+    createdAt: posAuth.createdAt,
+    updatedAt: posAuth.updatedAt
   };
-};
-
-/**
- * Get all employees with expired PINs
- * @returns {Promise<Array>}
- */
-const getExpiredPINs = async () => {
-  const now = Date.now();
-
-  const expiredAuths = await EmployeePOSAuth.find({
-    pinExpiresAt: { $lt: now },
-    canAccessPOS: true
-  }).populate('employee', 'fullName userAccount');
-
-  return expiredAuths;
 };
 
 /**
@@ -258,6 +232,5 @@ module.exports = {
   disablePOSAccess,
   resetFailedAttempts,
   getPOSAuthStatus,
-  getExpiredPINs,
   getLockedAccounts
 };

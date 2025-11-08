@@ -70,13 +70,7 @@ posLoginRouter.post('/', async (request, response) => {
     // Verify PIN using posAuthService
     try {
       const result = await posAuthService.verifyPosPin(employee._id, pin);
-
-      // Update device ID if provided
-      if (deviceId && result.posAuth) {
-        result.posAuth.posDeviceId = deviceId;
-        await result.posAuth.save();
-      }
-
+      // PIN verified successfully
     } catch (error) {
       return response.status(401).json({
         success: false,
@@ -108,9 +102,8 @@ posLoginRouter.post('/', async (request, response) => {
       { expiresIn: '8h' }
     );
 
-    // Get POS auth status to check if PIN needs change
+    // Get POS auth status
     const authStatus = await posAuthService.getPOSAuthStatus(employee._id);
-    const needsPinChange = authStatus.isPinExpired || pin === '1234';
 
     // Response
     response.status(200).json({
@@ -132,12 +125,9 @@ posLoginRouter.post('/', async (request, response) => {
           expiresIn: '8h',
           deviceId: deviceId || null,
           lastLogin: authStatus.lastLogin
-        },
-        needsPinChange
+        }
       },
-      message: needsPinChange
-        ? 'Login successful. Please change your PIN'
-        : 'Login successful'
+      message: 'Login successful'
     });
 
   } catch (error) {
@@ -224,7 +214,7 @@ posLoginRouter.post('/verify', async (request, response) => {
       return response.status(403).json({
         success: false,
         error: {
-          message: 'POS access is disabled or PIN expired',
+          message: 'POS access is disabled or locked',
           code: 'POS_ACCESS_DENIED'
         }
       });
@@ -249,8 +239,7 @@ posLoginRouter.post('/verify', async (request, response) => {
         },
         session: {
           isValid: true,
-          lastLogin: authStatus.lastLogin,
-          needsPinChange: authStatus.isPinExpired
+          lastLogin: authStatus.lastLogin
         }
       }
     });
@@ -456,13 +445,12 @@ posLoginRouter.get('/status', async (request, response) => {
       data: {
         hasAuth: authStatus.hasAuth,
         canAccess: authStatus.canAccess,
-        isPinExpired: authStatus.isPinExpired,
         isPinLocked: authStatus.isPinLocked,
         failedAttempts: authStatus.failedAttempts,
         minutesUntilUnlock: authStatus.minutesUntilUnlock,
         lastLogin: authStatus.lastLogin,
-        pinLastChanged: authStatus.pinLastChanged,
-        pinExpiresAt: authStatus.pinExpiresAt
+        createdAt: authStatus.createdAt,
+        updatedAt: authStatus.updatedAt
       }
     });
 

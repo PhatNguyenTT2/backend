@@ -1,6 +1,7 @@
 const employeesRouter = require('express').Router()
 const Employee = require('../models/employee')
 const UserAccount = require('../models/userAccount')
+const EmployeePOSAuth = require('../models/employeePOSAuth')
 const bcrypt = require('bcrypt')
 const mongoose = require('mongoose')
 
@@ -29,10 +30,10 @@ employeesRouter.get('/', async (request, response) => {
     let employees = await Employee.find(query)
       .populate({
         path: 'userAccount',
-        select: 'username email userCode role isActive lastLogin',
+        select: 'username email userCode role isActive lastLogin createdAt updatedAt',
         populate: {
           path: 'role',
-          select: 'roleName'
+          select: 'roleName permissions'
         }
       })
       .sort({ createdAt: -1 })
@@ -75,7 +76,7 @@ employeesRouter.get('/:id', async (request, response) => {
     const employee = await Employee.findById(request.params.id)
       .populate({
         path: 'userAccount',
-        select: 'username email userCode role isActive lastLogin',
+        select: 'username email userCode role isActive lastLogin createdAt updatedAt',
         populate: {
           path: 'role',
           select: 'roleName permissions'
@@ -275,10 +276,10 @@ employeesRouter.put('/:id', async (request, response) => {
     // Populate before returning
     await employee.populate({
       path: 'userAccount',
-      select: 'username email userCode role isActive',
+      select: 'username email userCode role isActive createdAt updatedAt',
       populate: {
         path: 'role',
-        select: 'roleName'
+        select: 'roleName permissions'
       }
     })
 
@@ -345,6 +346,387 @@ employeesRouter.delete('/:id', async (request, response) => {
       success: false,
       error: {
         message: 'Failed to delete employee',
+        details: error.message
+      }
+    })
+  }
+})
+
+// ============================================
+// POS ACCESS MANAGEMENT ROUTES (Admin)
+// ============================================
+
+/**
+ * @route   GET /api/employees/pos-access
+ * @desc    Get all POS access records with employee details
+ * @access  Private (Admin only)
+ */
+employeesRouter.get('/pos-access', async (request, response) => {
+  try {
+    // Get all employees with POS auth and userAccount
+    const employees = await Employee.find()
+      .populate({
+        path: 'userAccount',
+        select: 'userCode email role isActive'
+      })
+      .lean()
+
+    // Get all POS auth records
+    const posAuthRecords = await EmployeePOSAuth.find()
+      .populate({
+        path: 'employee',
+        populate: {
+          path: 'userAccount',
+          select: 'userCode email role isActive'
+        }
+      })
+      .lean()
+
+    // Create a map of employee IDs to POS auth records
+    const posAuthMap = new Map()
+    posAuthRecords.forEach(record => {
+      if (record.employee) {
+        posAuthMap.set(record.employee._id.toString(), record)
+      }
+    })
+
+    // Build complete access list (including employees without POS auth)
+    const accessList = employees.map(emp => {
+      const posAuth = posAuthMap.get(emp._id.toString())
+
+      if (posAuth) {
+        // Employee has POS auth record
+        return {
+          id: posAuth._id,
+          employee: emp,
+          canAccessPOS: posAuth.canAccessPOS,
+          pinFailedAttempts: posAuth.pinFailedAttempts,
+          pinLockedUntil: posAuth.pinLockedUntil,
+          posLastLogin: posAuth.posLastLogin,
+          isPinLocked: posAuth.isPinLocked,
+          minutesUntilUnlock: posAuth.minutesUntilUnlock,
+          createdAt: posAuth.createdAt,
+          updatedAt: posAuth.updatedAt
+        }
+      } else {
+        // Employee doesn't have POS auth yet
+        return {
+          id: `no-auth-${emp._id}`,
+          employee: emp,
+          canAccessPOS: false,
+          pinFailedAttempts: 0,
+          pinLockedUntil: null,
+          posLastLogin: null,
+          isPinLocked: false,
+          minutesUntilUnlock: 0,
+          createdAt: null,
+          updatedAt: null
+        }
+      }
+    })
+
+    response.json({
+      success: true,
+      data: accessList
+    })
+  } catch (error) {
+    console.error('Error fetching POS access:', error)
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to fetch POS access data',
+        details: error.message
+      }
+    })
+  }
+})
+
+/**
+ * @route   GET /api/employees/:id/pos-access/status
+ * @desc    Get POS access status for specific employee
+ * @access  Private (Admin only)
+ */
+employeesRouter.get('/:id/pos-access/status', async (request, response) => {
+  try {
+    const { id } = request.params
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return response.status(400).json({
+        success: false,
+        error: { message: 'Invalid employee ID' }
+      })
+    }
+
+    const employee = await Employee.findById(id)
+      .populate({
+        path: 'userAccount',
+        select: 'userCode email role isActive'
+      })
+
+    if (!employee) {
+      return response.status(404).json({
+        success: false,
+        error: { message: 'Employee not found' }
+      })
+    }
+
+    const posAuth = await EmployeePOSAuth.findOne({ employee: id })
+
+    if (!posAuth) {
+      return response.json({
+        success: true,
+        data: {
+          hasAuth: false,
+          canAccessPOS: false,
+          employee: employee
+        }
+      })
+    }
+
+    response.json({
+      success: true,
+      data: {
+        hasAuth: true,
+        canAccessPOS: posAuth.canAccessPOS,
+        pinFailedAttempts: posAuth.pinFailedAttempts,
+        pinLockedUntil: posAuth.pinLockedUntil,
+        posLastLogin: posAuth.posLastLogin,
+        isPinLocked: posAuth.isPinLocked,
+        minutesUntilUnlock: posAuth.minutesUntilUnlock,
+        createdAt: posAuth.createdAt,
+        updatedAt: posAuth.updatedAt,
+        employee: employee
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching POS status:', error)
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to fetch POS status',
+        details: error.message
+      }
+    })
+  }
+})
+
+/**
+ * @route   POST /api/employees/:id/pos-access/enable
+ * @desc    Enable POS access for employee
+ * @access  Private (Admin only)
+ */
+employeesRouter.post('/:id/pos-access/enable', async (request, response) => {
+  try {
+    const { id } = request.params
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return response.status(400).json({
+        success: false,
+        error: { message: 'Invalid employee ID' }
+      })
+    }
+
+    const employee = await Employee.findById(id)
+    if (!employee) {
+      return response.status(404).json({
+        success: false,
+        error: { message: 'Employee not found' }
+      })
+    }
+
+    // Find or create POS auth record
+    let posAuth = await EmployeePOSAuth.findOne({ employee: id })
+
+    if (!posAuth) {
+      // Create new POS auth record (without PIN)
+      posAuth = new EmployeePOSAuth({
+        employee: id,
+        canAccessPOS: true
+      })
+    } else {
+      // Update existing record
+      posAuth.canAccessPOS = true
+    }
+
+    await posAuth.save()
+
+    response.json({
+      success: true,
+      message: 'POS access enabled successfully',
+      data: posAuth
+    })
+  } catch (error) {
+    console.error('Error enabling POS access:', error)
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to enable POS access',
+        details: error.message
+      }
+    })
+  }
+})
+
+/**
+ * @route   POST /api/employees/:id/pos-access/disable
+ * @desc    Disable POS access for employee
+ * @access  Private (Admin only)
+ */
+employeesRouter.post('/:id/pos-access/disable', async (request, response) => {
+  try {
+    const { id } = request.params
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return response.status(400).json({
+        success: false,
+        error: { message: 'Invalid employee ID' }
+      })
+    }
+
+    const posAuth = await EmployeePOSAuth.findOne({ employee: id })
+
+    if (!posAuth) {
+      return response.status(404).json({
+        success: false,
+        error: { message: 'POS access record not found' }
+      })
+    }
+
+    posAuth.canAccessPOS = false
+    await posAuth.save()
+
+    response.json({
+      success: true,
+      message: 'POS access disabled successfully',
+      data: posAuth
+    })
+  } catch (error) {
+    console.error('Error disabling POS access:', error)
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to disable POS access',
+        details: error.message
+      }
+    })
+  }
+})
+
+/**
+ * @route   POST /api/employees/:id/pos-access/set-pin
+ * @desc    Set PIN for employee (Admin only - for initial setup)
+ * @access  Private (Admin only)
+ * @body    pin: string (4-6 digits)
+ */
+employeesRouter.post('/:id/pos-access/set-pin', async (request, response) => {
+  try {
+    const { id } = request.params
+    const { pin } = request.body
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return response.status(400).json({
+        success: false,
+        error: { message: 'Invalid employee ID' }
+      })
+    }
+
+    // Validate PIN format
+    if (!pin || !/^\d{4,6}$/.test(pin)) {
+      return response.status(400).json({
+        success: false,
+        error: { message: 'PIN must be 4-6 digits' }
+      })
+    }
+
+    const employee = await Employee.findById(id)
+    if (!employee) {
+      return response.status(404).json({
+        success: false,
+        error: { message: 'Employee not found' }
+      })
+    }
+
+    // Find or create POS auth record
+    let posAuth = await EmployeePOSAuth.findOne({ employee: id })
+
+    if (!posAuth) {
+      posAuth = new EmployeePOSAuth({
+        employee: id,
+        canAccessPOS: true
+      })
+    }
+
+    // Hash the PIN
+    const saltRounds = 10
+    posAuth.posPinHash = await bcrypt.hash(pin, saltRounds)
+
+    await posAuth.save()
+
+    response.json({
+      success: true,
+      message: 'PIN set successfully',
+      data: {
+        employeeId: id,
+        hasPIN: true
+      }
+    })
+  } catch (error) {
+    console.error('Error setting PIN:', error)
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to set PIN',
+        details: error.message
+      }
+    })
+  }
+})
+
+/**
+ * @route   POST /api/employees/:id/pos-access/reset-attempts
+ * @desc    Reset failed attempts and unlock account
+ * @access  Private (Admin only)
+ */
+employeesRouter.post('/:id/pos-access/reset-attempts', async (request, response) => {
+  try {
+    const { id } = request.params
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return response.status(400).json({
+        success: false,
+        error: { message: 'Invalid employee ID' }
+      })
+    }
+
+    const posAuth = await EmployeePOSAuth.findOne({ employee: id })
+
+    if (!posAuth) {
+      return response.status(404).json({
+        success: false,
+        error: { message: 'POS access record not found' }
+      })
+    }
+
+    // Reset failed attempts and unlock
+    posAuth.pinFailedAttempts = 0
+    posAuth.pinLockedUntil = null
+
+    await posAuth.save()
+
+    response.json({
+      success: true,
+      message: 'Failed attempts reset and account unlocked successfully',
+      data: {
+        pinFailedAttempts: 0,
+        isPinLocked: false
+      }
+    })
+  } catch (error) {
+    console.error('Error resetting attempts:', error)
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to reset attempts',
         details: error.message
       }
     })

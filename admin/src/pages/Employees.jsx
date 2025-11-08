@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { EmployeeList, EmployeeListHeader, AddEmployeeModal } from '../components/EmployeeList';
+import { EmployeeList, EmployeeListHeader, AddEmployeeModal, EditEmployeeModal, UserAccountModal, ViewAccountModal } from '../components/EmployeeList';
 import employeeService from '../services/employeeService';
 
 export const Employees = () => {
@@ -19,6 +19,10 @@ export const Employees = () => {
   const [sortField, setSortField] = useState('userCode');
   const [sortOrder, setSortOrder] = useState('asc');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   // Fetch employees on mount
   useEffect(() => {
@@ -34,14 +38,19 @@ export const Employees = () => {
       const response = await employeeService.getAllEmployees(params);
 
       if (response.success) {
-        // Transform data to match component format
+        // Transform data to match component format - preserve full employee object
         const transformedEmployees = response.data.employees.map(emp => ({
           id: emp.id,
           userCode: emp.userAccount?.userCode || 'N/A',
           fullName: emp.fullName,
           phone: emp.phone,
           address: emp.address,
-          dateOfBirth: emp.dateOfBirth
+          dateOfBirth: emp.dateOfBirth,
+          // Preserve full data for editing
+          userAccount: emp.userAccount,
+          email: emp.userAccount?.email,
+          role: emp.userAccount?.role,
+          isActive: emp.userAccount?.isActive
         }));
 
         setEmployees(transformedEmployees);
@@ -113,7 +122,36 @@ export const Employees = () => {
   // Handle edit employee
   const handleEditEmployee = (employee) => {
     console.log('Edit employee:', employee);
-    // TODO: Open edit employee modal
+    setSelectedEmployee(employee);
+    setShowEditModal(true);
+  };
+
+  // Handle edit success
+  const handleEditSuccess = (updatedEmployee) => {
+    console.log('Employee updated successfully:', updatedEmployee);
+    // Refresh the list
+    fetchEmployees();
+  };
+
+  // Handle manage account
+  const handleManageAccount = (employee) => {
+    console.log('Manage account:', employee);
+    setSelectedEmployee(employee);
+    setShowAccountModal(true);
+  };
+
+  // Handle account update success
+  const handleAccountUpdateSuccess = (updatedAccount) => {
+    console.log('Account updated successfully:', updatedAccount);
+    // Refresh the list
+    fetchEmployees();
+  };
+
+  // Handle view details
+  const handleViewDetails = (employee) => {
+    console.log('View details:', employee);
+    setSelectedEmployee(employee);
+    setShowViewModal(true);
   };
 
   // Handle delete employee
@@ -181,6 +219,8 @@ export const Employees = () => {
               employees={employees}
               onEdit={handleEditEmployee}
               onDelete={handleDeleteEmployee}
+              onManageAccount={handleManageAccount}
+              onViewDetails={handleViewDetails}
               onSort={handleSort}
               sortField={sortField}
               sortOrder={sortOrder}
@@ -209,6 +249,29 @@ export const Employees = () => {
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           onSuccess={handleAddSuccess}
+        />
+
+        {/* Edit Employee Modal */}
+        <EditEmployeeModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={handleEditSuccess}
+          employee={selectedEmployee}
+        />
+
+        {/* User Account Modal */}
+        <UserAccountModal
+          isOpen={showAccountModal}
+          onClose={() => setShowAccountModal(false)}
+          onSuccess={handleAccountUpdateSuccess}
+          employee={selectedEmployee}
+        />
+
+        {/* View Account Modal */}
+        <ViewAccountModal
+          isOpen={showViewModal}
+          onClose={() => setShowViewModal(false)}
+          employee={selectedEmployee}
         />
       </div>
     </Layout>
