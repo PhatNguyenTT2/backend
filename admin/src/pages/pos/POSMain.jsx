@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import posAuthService from '../../services/posAuthService';
+import posLoginService from '../../services/posLoginService';
 
 export const POSMain = () => {
   const navigate = useNavigate();
@@ -11,28 +11,110 @@ export const POSMain = () => {
   const [cart, setCart] = useState([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [currentEmployee, setCurrentEmployee] = useState(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [loading, setLoading] = useState(true);
 
   // Load employee and verify session
   useEffect(() => {
     const checkAuth = async () => {
-      if (!posAuthService.isAuthenticated()) {
+      setLoading(true);
+
+      // Check if logged in
+      if (!posLoginService.isLoggedIn()) {
         navigate('/pos-login');
         return;
       }
 
       try {
         // Verify session is still valid
-        await posAuthService.verify();
-        const employee = posAuthService.getCurrentEmployee();
+        const result = await posLoginService.verifySession();
+
+        if (!result.success) {
+          console.error('Session verification failed:', result.error);
+          navigate('/pos-login');
+          return;
+        }
+
+        // Get employee info from storage
+        const employee = posLoginService.getCurrentEmployee();
         setCurrentEmployee(employee);
       } catch (error) {
-        console.error('Session verification failed:', error);
+        console.error('Session verification error:', error);
         navigate('/pos-login');
+      } finally {
+        setLoading(false);
       }
     };
 
     checkAuth();
+  }, [navigate]);  // Update time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Periodic session verification (every 5 minutes)
+  useEffect(() => {
+    const verifyInterval = setInterval(async () => {
+      if (posLoginService.isLoggedIn()) {
+        const result = await posLoginService.verifySession();
+        if (!result.success) {
+          console.error('Session expired or revoked');
+          alert('Your session has expired. Please login again.');
+          navigate('/pos-login');
+        }
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(verifyInterval);
   }, [navigate]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      // Ctrl/Cmd + K: Focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        document.getElementById('product-search')?.focus();
+      }
+
+      // Ctrl/Cmd + L: Logout
+      if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+        e.preventDefault();
+        handleLogout();
+      }
+
+      // Ctrl/Cmd + Delete: Clear cart
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Delete' && cart.length > 0) {
+        e.preventDefault();
+        clearCart();
+      }
+
+      // F2: Focus search
+      if (e.key === 'F2') {
+        e.preventDefault();
+        document.getElementById('product-search')?.focus();
+      }
+
+      // F9: Proceed to payment
+      if (e.key === 'F9' && cart.length > 0) {
+        e.preventDefault();
+        setShowPaymentModal(true);
+      }
+
+      // Escape: Close payment modal
+      if (e.key === 'Escape' && showPaymentModal) {
+        e.preventDefault();
+        setShowPaymentModal(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [cart.length, showPaymentModal]);
 
   // Mock data - Replace with API calls
   useEffect(() => {
@@ -123,10 +205,11 @@ export const POSMain = () => {
     }
 
     try {
-      await posAuthService.logout();
+      await posLoginService.logout();
+      navigate('/pos-login');
     } catch (error) {
       console.error('Logout error:', error);
-    } finally {
+      // Navigate to login even if logout API fails
       navigate('/pos-login');
     }
   };
@@ -139,6 +222,23 @@ export const POSMain = () => {
   });
 
   const totals = calculateTotals();
+
+  // Show loading screen
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <svg className="animate-spin h-12 w-12 text-emerald-600 mx-auto mb-4" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          <p className="text-[16px] font-semibold font-['Poppins',sans-serif] text-gray-700">
+            Loading POS...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-gray-100">
@@ -155,7 +255,12 @@ export const POSMain = () => {
               POS Terminal
             </h1>
             <p className="text-[12px] font-['Poppins',sans-serif] text-emerald-100">
-              {currentEmployee?.name} ({currentEmployee?.code})
+              {currentEmployee?.fullName || 'Employee'} ({currentEmployee?.userCode || 'N/A'})
+              {currentEmployee?.role && (
+                <span className="ml-2 px-2 py-0.5 bg-emerald-500 rounded text-[10px] font-semibold">
+                  {currentEmployee.role}
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -163,10 +268,10 @@ export const POSMain = () => {
         <div className="flex items-center gap-3">
           <div className="text-right mr-4">
             <p className="text-[12px] font-['Poppins',sans-serif] text-emerald-100">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              {currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
             <p className="text-[14px] font-semibold font-['Poppins',sans-serif]">
-              {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </p>
           </div>
           <button
@@ -187,13 +292,26 @@ export const POSMain = () => {
         <div className="flex-1 flex flex-col p-4 overflow-hidden">
           {/* Search and Categories */}
           <div className="mb-4">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search products..."
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-[15px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent mb-3"
-            />
+            <div className="relative">
+              <input
+                id="product-search"
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search products... (Ctrl+K or F2)"
+                className="w-full px-4 py-3 pl-10 border-2 border-gray-300 rounded-lg text-[15px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent mb-3"
+              />
+              <svg
+                className="absolute left-3 top-3.5 text-gray-400"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
+                <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </div>
 
             <div className="flex gap-2 overflow-x-auto pb-2">
               {categories.map(category => (
@@ -201,8 +319,8 @@ export const POSMain = () => {
                   key={category.id}
                   onClick={() => setSelectedCategory(category.id)}
                   className={`px-4 py-2 rounded-lg font-['Poppins',sans-serif] text-[13px] font-medium whitespace-nowrap transition-colors ${selectedCategory === category.id
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
                     }`}
                 >
                   {category.name}
@@ -370,9 +488,10 @@ export const POSMain = () => {
               {/* Checkout Button */}
               <button
                 onClick={() => setShowPaymentModal(true)}
-                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[16px] font-bold font-['Poppins',sans-serif] transition-colors"
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[16px] font-bold font-['Poppins',sans-serif] transition-colors flex items-center justify-center gap-2"
               >
-                Proceed to Payment
+                <span>Proceed to Payment</span>
+                <span className="text-[12px] font-normal opacity-75">(F9)</span>
               </button>
             </div>
           )}
