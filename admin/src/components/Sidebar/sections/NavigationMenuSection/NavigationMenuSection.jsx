@@ -28,6 +28,7 @@ import {
   ReceiptEuro
 } from 'lucide-react';
 import authService from '../../../../services/authService';
+import { hasPermission, PERMISSIONS } from '../../../../utils/permissions';
 
 export const NavigationMenuSection = () => {
   // Lấy trạng thái từ localStorage khi component mount
@@ -37,6 +38,7 @@ export const NavigationMenuSection = () => {
   });
   const location = useLocation();
   const navigate = useNavigate();
+  const currentUser = authService.getUser();
 
   // Lưu trạng thái vào localStorage mỗi khi thay đổi
   useEffect(() => {
@@ -65,35 +67,68 @@ export const NavigationMenuSection = () => {
     {
       category: 'Management',
       items: [
-        { name: 'Dashboard', icon: LayoutGrid, href: '/dashboard' },
-        { name: 'Orders', icon: ShoppingBag, arrow: false, href: '/orders' },
-        { name: 'Categories', icon: BookAIcon, href: '/categories' },
+        {
+          name: 'Dashboard',
+          icon: LayoutGrid,
+          href: '/dashboard',
+          permission: PERMISSIONS.VIEW_DASHBOARD
+        },
+        {
+          name: 'Orders',
+          icon: ShoppingBag,
+          arrow: false,
+          href: '/orders',
+          permission: PERMISSIONS.MANAGE_ORDERS
+        },
+        {
+          name: 'Categories',
+          icon: BookAIcon,
+          href: '/categories',
+          permission: PERMISSIONS.MANAGE_CATEGORIES
+        },
         {
           name: 'Products',
           icon: Package2,
           arrow: true,
+          permission: PERMISSIONS.MANAGE_PRODUCTS,
           submenu: [
             { name: 'List', href: '/products/list' },
             { name: 'View', href: '/products/view' },
           ]
         },
-        // { name: 'Buyer', icon: User2Icon, arrow: true },
-        { name: 'Customers', icon: User, href: '/customers' },
-        { name: 'Suppliers', icon: User2Icon, href: '/suppliers' },
+        {
+          name: 'Customers',
+          icon: User,
+          href: '/customers',
+          permission: PERMISSIONS.MANAGE_CUSTOMERS
+        },
+        {
+          name: 'Suppliers',
+          icon: User2Icon,
+          href: '/suppliers',
+          permission: PERMISSIONS.MANAGE_SUPPLIERS
+        },
         {
           name: 'Inventory',
           icon: LucideStore,
           arrow: true,
+          permission: PERMISSIONS.MANAGE_INVENTORY,
           submenu: [
             { name: 'Management', href: '/inventory/management' },
             { name: 'Purchase Orders', href: '/inventory/purchase-orders' }
           ]
         },
-        { name: 'Payments', icon: DollarSign, href: '/payments' },
+        {
+          name: 'Payments',
+          icon: DollarSign,
+          href: '/payments',
+          permission: PERMISSIONS.MANAGE_PAYMENTS
+        },
         {
           name: 'Reports',
           icon: ReceiptEuro,
           arrow: true,
+          permission: PERMISSIONS.VIEW_REPORTS,
           submenu: [
             { name: 'Sales', href: '/reports/sales' },
             { name: 'Purchase', href: '/reports/purchase' },
@@ -106,27 +141,73 @@ export const NavigationMenuSection = () => {
     {
       category: 'Admin',
       items: [
-        // { name: 'Profile', icon: UserCircle, arrow: true },
         {
           name: 'Users',
           icon: Users,
           arrow: true,
           submenu: [
-            { name: 'Employees', href: '/employees' },
-            { name: 'Roles', href: '/roles' },
-            { name: 'POS', href: '/pos-management' }
+            {
+              name: 'Employees',
+              href: '/employees',
+              permission: PERMISSIONS.MANAGE_EMPLOYEES
+            },
+            {
+              name: 'Roles',
+              href: '/roles',
+              permission: PERMISSIONS.MANAGE_ROLES
+            },
+            {
+              name: 'POS',
+              href: '/pos-management',
+              permission: PERMISSIONS.MANAGE_POS
+            }
           ]
-        },
-        { name: 'Authentication', icon: Shield, arrow: true },
-        { name: 'Settings', icon: Settings },
+        }
       ],
     },
   ];
 
+  // Filter menu items based on user permissions
+  const filterMenuByPermissions = (items) => {
+    return items
+      .map(category => ({
+        ...category,
+        items: category.items.filter(item => {
+          // If item has no permission requirement, show it
+          if (!item.permission && !item.submenu) return true;
+
+          // If item has permission requirement, check it
+          if (item.permission) {
+            return hasPermission(currentUser, item.permission);
+          }
+
+          // If item has submenu, filter submenu items
+          if (item.submenu) {
+            const filteredSubmenu = item.submenu.filter(subitem => {
+              if (!subitem.permission) return true;
+              return hasPermission(currentUser, subitem.permission);
+            });
+
+            // Only show parent if it has visible submenu items
+            if (filteredSubmenu.length > 0) {
+              item.submenu = filteredSubmenu;
+              return true;
+            }
+            return false;
+          }
+
+          return true;
+        })
+      }))
+      .filter(category => category.items.length > 0); // Remove empty categories
+  };
+
+  const filteredMenuItems = filterMenuByPermissions(menuItems);
+
   return (
     <nav className="pb-4 flex flex-col h-full">
       <div className="flex-1">
-        {menuItems.map((menu, index) => (
+        {filteredMenuItems.map((menu, index) => (
           <div key={index}>
             <h3 className="text-xs text-gray-500 uppercase tracking-wider font-bold my-4 px-4">
               {menu.category}

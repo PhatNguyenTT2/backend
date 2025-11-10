@@ -4,6 +4,7 @@ import { POSLogin, POSMain } from "./pages/pos";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import Payments from "./pages/Payments";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { PERMISSIONS } from "./utils/permissions";
 import "./App.css";
 
 function App() {
@@ -22,7 +23,7 @@ function App() {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.VIEW_DASHBOARD}>
               <Dashboard />
             </ProtectedRoute>
           }
@@ -30,7 +31,7 @@ function App() {
         <Route
           path="/products/view"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_PRODUCTS}>
               <ViewProduct />
             </ProtectedRoute>
           }
@@ -38,7 +39,7 @@ function App() {
         <Route
           path="/products/:id/:slug"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_PRODUCTS}>
               <DetailProduct />
             </ProtectedRoute>
           }
@@ -46,7 +47,7 @@ function App() {
         <Route
           path="/products/list"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_PRODUCTS}>
               <ListProduct />
             </ProtectedRoute>
           }
@@ -54,7 +55,7 @@ function App() {
         <Route
           path="/orders"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_ORDERS}>
               <Orders />
             </ProtectedRoute>
           }
@@ -62,7 +63,7 @@ function App() {
         <Route
           path="/categories"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_CATEGORIES}>
               <Categories />
             </ProtectedRoute>
           }
@@ -70,7 +71,7 @@ function App() {
         <Route
           path="/employees"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_EMPLOYEES}>
               <Employees />
             </ProtectedRoute>
           }
@@ -78,7 +79,7 @@ function App() {
         <Route
           path="/roles"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_ROLES}>
               <Roles />
             </ProtectedRoute>
           }
@@ -86,7 +87,7 @@ function App() {
         <Route
           path="/customers"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_CUSTOMERS}>
               <Customers />
             </ProtectedRoute>
           }
@@ -94,7 +95,7 @@ function App() {
         <Route
           path="/suppliers"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_SUPPLIERS}>
               <Suppliers />
             </ProtectedRoute>
           }
@@ -109,7 +110,7 @@ function App() {
         <Route
           path="/inventory/management"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
               <Inventories />
             </ProtectedRoute>
           }
@@ -117,7 +118,7 @@ function App() {
         <Route
           path="/inventory/purchase-orders"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
               <PurchaseOrders />
             </ProtectedRoute>
           }
@@ -127,7 +128,7 @@ function App() {
         <Route
           path="/payments"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_PAYMENTS}>
               <Payments />
             </ProtectedRoute>
           }
@@ -137,7 +138,7 @@ function App() {
         <Route
           path="/reports/sales"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.VIEW_REPORTS}>
               <SalesReports />
             </ProtectedRoute>
           }
@@ -145,7 +146,7 @@ function App() {
         <Route
           path="/reports/purchase"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.VIEW_REPORTS}>
               <PurchaseReports />
             </ProtectedRoute>
           }
@@ -153,7 +154,7 @@ function App() {
         <Route
           path="/pos-management"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_POS}>
               <POSManagement />
             </ProtectedRoute>
           }

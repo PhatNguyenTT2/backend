@@ -20,7 +20,7 @@ export const EditRolesModal = ({ isOpen, onClose, onSuccess, role }) => {
     'manage_customers',
     'manage_suppliers',
     'manage_employees',
-    'manage_users',
+    'manage_POS',
     'manage_roles',
     'manage_inventory',
     'view_reports',
