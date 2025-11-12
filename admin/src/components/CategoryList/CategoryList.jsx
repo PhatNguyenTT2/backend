@@ -5,6 +5,7 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
   const buttonRefs = useRef({});
+
   const getSortIcon = (field) => {
     if (sortField !== field) {
       return (
@@ -52,7 +53,7 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
       // Determine position based on dropdown type
       let leftPosition;
       if (categoryId.startsWith('active-')) {
-        // For Active Status: show dropdown to the right of button (like Order Status)
+        // For Active Status: show dropdown to the right of button
         leftPosition = buttonRect.left;
       } else {
         // For Actions: show dropdown aligned to the right
@@ -86,7 +87,7 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
 
   return (
     <div className="bg-white rounded-lg shadow-sm">
-      {/* Scrollable Container - overflow-x-auto allows horizontal scroll */}
+      {/* Scrollable Container */}
       <div className="overflow-x-auto rounded-lg">
         <div className="min-w-[1000px]">
           {/* Table Header */}
@@ -96,7 +97,7 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
               className="flex-1 min-w-[180px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('name')}
             >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
                 Name
                 {getSortIcon('name')}
               </p>
@@ -121,18 +122,18 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
               className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('productCount')}
             >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
                 Products
                 {getSortIcon('productCount')}
               </p>
             </div>
 
-            {/* Active Status Column */}
+            {/* Active Status Column - Sortable */}
             <div
               className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('isActive')}
             >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
                 Active
                 {getSortIcon('isActive')}
               </p>
@@ -148,87 +149,84 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
 
           {/* Table Body */}
           <div className="flex flex-col">
-            {categories.map((category, index) => {
-              const dropdownId = `category-${category.id}`;
-              const isDropdownActive = activeDropdown === dropdownId;
-
-              return (
-                <div
-                  key={category.id}
-                  className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== categories.length - 1 ? 'border-b border-gray-100' : ''}`}
-                >
-                  {/* Name */}
-                  <div className="flex-1 min-w-[180px] px-3 flex items-center">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {category.name || '-'}
-                    </p>
-                  </div>
-
-                  {/* Image */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    {category.image ? (
-                      <img
-                        src={category.image}
-                        alt={category.name}
-                        className="w-12 h-12 object-cover rounded border border-gray-200"
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"%3E%3Crect width="48" height="48" fill="%23f3f4f6"/%3E%3Ctext x="24" y="24" text-anchor="middle" dy=".3em" fill="%236b7280" font-family="sans-serif" font-size="12"%3ENo Image%3C/text%3E%3C/svg%3E';
-                        }}
-                      />
-                    ) : (
-                      <div className="w-12 h-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                        <span className="text-[10px] text-gray-400">No Image</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Description */}
-                  <div className="flex-1 min-w-[200px] px-3 flex items-center">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] line-clamp-2">
-                      {truncateText(category.description, 150)}
-                    </p>
-                  </div>
-
-                  {/* Product Count */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      {category.productCount ?? 0}
-                    </p>
-                  </div>
-
-                  {/* Active Status - Dropdown */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    <button
-                      onClick={(e) => toggleDropdown(`active-${category.id}`, e)}
-                      className={`${category.isActive !== false ? 'bg-[#10b981]' : 'bg-[#6b7280]'} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
-                    >
-                      <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
-                        {category.isActive !== false ? 'Active' : 'Inactive'}
-                      </span>
-                      <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M1 1L4 4L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
-                    <button
-                      onClick={(e) => toggleDropdown(`action-${category.id}`, e)}
-                      className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-                      title="Actions"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="3" cy="8" r="1.5" fill="#6B7280" />
-                        <circle cx="8" cy="8" r="1.5" fill="#6B7280" />
-                        <circle cx="13" cy="8" r="1.5" fill="#6B7280" />
-                      </svg>
-                    </button>
-                  </div>
+            {categories.map((category, index) => (
+              <div
+                key={category.id}
+                className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== categories.length - 1 ? 'border-b border-gray-100' : ''
+                  }`}
+              >
+                {/* Name */}
+                <div className="flex-1 min-w-[180px] px-3 flex items-center">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
+                    {category.name || '-'}
+                  </p>
                 </div>
-              );
-            })}
+
+                {/* Image */}
+                <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  {category.image ? (
+                    <img
+                      src={category.image}
+                      alt={category.name}
+                      className="w-12 h-12 object-cover rounded border border-gray-200"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"%3E%3Crect width="48" height="48" fill="%23f3f4f6"/%3E%3Ctext x="24" y="24" text-anchor="middle" dy=".3em" fill="%236b7280" font-family="sans-serif" font-size="12"%3ENo Image%3C/text%3E%3C/svg%3E';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-12 h-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                      <span className="text-[10px] text-gray-400">No Image</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Description */}
+                <div className="flex-1 min-w-[200px] px-3 flex items-center">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] line-clamp-2">
+                    {truncateText(category.description, 150)}
+                  </p>
+                </div>
+
+                {/* Product Count */}
+                <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
+                    {category.productCount ?? 0}
+                  </p>
+                </div>
+
+                {/* Active Status - Dropdown */}
+                <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <button
+                    onClick={(e) => toggleDropdown(`active-${category.id}`, e)}
+                    className={`${category.isActive !== false ? 'bg-[#10b981]' : 'bg-[#6b7280]'
+                      } px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
+                  >
+                    <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
+                      {category.isActive !== false ? 'Active' : 'Inactive'}
+                    </span>
+                    <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 1L4 4L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Actions */}
+                <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
+                  <button
+                    onClick={(e) => toggleDropdown(`action-${category.id}`, e)}
+                    className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                    title="Actions"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="3" cy="8" r="1.5" fill="#6B7280" />
+                      <circle cx="8" cy="8" r="1.5" fill="#6B7280" />
+                      <circle cx="13" cy="8" r="1.5" fill="#6B7280" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Empty State */}
@@ -242,7 +240,7 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
         </div>
       </div>
 
-      {/* Fixed Position Dropdown Menu - Rendered outside table container */}
+      {/* Fixed Position Dropdown Menu */}
       {activeDropdown && (() => {
         const category = categories.find(c =>
           `action-${c.id}` === activeDropdown || `active-${c.id}` === activeDropdown
@@ -273,7 +271,7 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
                   key={option.label}
                   onClick={() => {
                     if (onToggleActive) {
-                      onToggleActive(category);
+                      onToggleActive(category, option.value);
                     }
                     setActiveDropdown(null);
                   }}
@@ -281,7 +279,8 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
                   disabled={(category.isActive !== false) === option.value}
                 >
                   <span className={`${option.color} w-2 h-2 rounded-full`}></span>
-                  <span className={`text-[12px] font-['Poppins',sans-serif] ${(category.isActive !== false) === option.value ? 'text-emerald-600 font-medium' : 'text-[#212529]'}`}>
+                  <span className={`text-[12px] font-['Poppins',sans-serif] ${(category.isActive !== false) === option.value ? 'text-emerald-600 font-medium' : 'text-[#212529]'
+                    }`}>
                     {option.label}
                   </span>
                   {(category.isActive !== false) === option.value && (
@@ -328,8 +327,8 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
                 }}
                 disabled={category.isActive !== false || (category.productCount > 0)}
                 className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${category.isActive !== false || (category.productCount > 0)
-                  ? 'text-gray-400 cursor-not-allowed opacity-50'
-                  : 'text-gray-700 hover:bg-red-50 hover:text-red-600'
+                    ? 'text-gray-400 cursor-not-allowed opacity-50'
+                    : 'text-gray-700 hover:bg-red-50 hover:text-red-600'
                   }`}
                 title={
                   category.isActive !== false

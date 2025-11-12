@@ -3,12 +3,11 @@ const mongoose = require('mongoose');
 const categorySchema = new mongoose.Schema({
   categoryCode: {
     type: String,
-    required: [true, 'Category code is required'],
     unique: true,
     uppercase: true,
     trim: true,
     match: [/^CAT\d{10}$/, 'Category code must follow format CAT2025000001']
-    // Auto-generated in pre-save hook
+    // Auto-generated in pre-save hook - NOT required because it's auto-generated
   },
 
   name: {
@@ -55,10 +54,38 @@ categorySchema.virtual('productCount', {
 
 // Pre-save hook: Auto-generate category code
 categorySchema.pre('save', async function (next) {
-  if (this.isNew && !this.categoryCode) {
-    const year = new Date().getFullYear();
-    const count = await mongoose.model('Category').countDocuments();
-    this.categoryCode = `CAT${year}${String(count + 1).padStart(6, '0')}`;
+  console.log('=== PRE-SAVE HOOK CALLED ===');
+  console.log('categoryCode:', this.categoryCode);
+  console.log('isNew:', this.isNew);
+
+  if (!this.categoryCode) {
+    try {
+      const currentYear = new Date().getFullYear();
+      const Category = mongoose.model('Category');
+
+      // Find the last category code for the current year
+      const lastCategory = await Category
+        .findOne({ categoryCode: new RegExp(`^CAT${currentYear}`) })
+        .sort({ categoryCode: -1 })
+        .select('categoryCode')
+        .lean();
+
+
+      let sequenceNumber = 1;
+
+      if (lastCategory && lastCategory.categoryCode) {
+        // Extract the sequence number from the last category code
+        const match = lastCategory.categoryCode.match(/\d{6}$/);
+        if (match) {
+          sequenceNumber = parseInt(match[0]) + 1;
+        }
+      }
+
+      // Generate new category code with 6-digit padding
+      this.categoryCode = `CAT${currentYear}${String(sequenceNumber).padStart(6, '0')}`;
+    } catch (error) {
+      return next(error);
+    }
   }
   next();
 });

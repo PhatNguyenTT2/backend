@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { CategoryList, CategoryListHeader, AddCategoryModal, EditCategoryModal } from '../components/CategoryList';
-// import categoryService from '../services/categoryService';
+import categoryService from '../services/categoryService';
 
 export const Categories = () => {
   // Breadcrumb items
@@ -97,8 +97,11 @@ export const Categories = () => {
     try {
       setIsLoading(true);
       setError(null);
-      // Include inactive categories for admin panel
-      // const response = await categoryService.getCategories({ include_inactive: true });
+
+      // Include inactive categories for admin panel and get product count
+      const response = await categoryService.getAllCategories({
+        withProducts: true
+      });
 
       // Handle response structure: { success: true, data: { categories: [...] } }
       if (response.success && response.data && response.data.categories) {
@@ -167,24 +170,28 @@ export const Categories = () => {
     // Optional: Show success toast notification
   };
 
-  const handleToggleActive = async (category) => {
+  const handleToggleActive = async (category, newStatus) => {
     const isCurrentlyActive = category.isActive !== false;
-    const newStatus = !isCurrentlyActive;
+
+    // If newStatus is not provided, toggle it
+    if (newStatus === undefined) {
+      newStatus = !isCurrentlyActive;
+    }
 
     // Validation: Cannot deactivate if category has active products
-    if (isCurrentlyActive && category.productCount > 0) {
+    if (isCurrentlyActive && !newStatus && category.productCount > 0) {
       alert(`Cannot deactivate category with ${category.productCount} active product(s). Please deactivate all products in this category first.`);
       return;
     }
 
     try {
-      // await categoryService.updateCategory(category.id, {
-      //   isActive: newStatus
-      // });
+      await categoryService.updateCategory(category.id, {
+        isActive: newStatus
+      });
       fetchCategories(); // Refresh the list
     } catch (err) {
       console.error('Error toggling category status:', err);
-      alert(err.response?.data?.error || err.message || 'Failed to update category status');
+      alert(err.response?.data?.error?.message || err.message || 'Failed to update category status');
     }
   };
 
@@ -205,12 +212,12 @@ export const Categories = () => {
     }
 
     try {
-      // await categoryService.deleteCategory(category.id);
+      await categoryService.deleteCategory(category.id);
       alert('Category deleted successfully!');
       fetchCategories(); // Refresh the list
     } catch (err) {
       console.error('Error deleting category:', err);
-      alert(err.response?.data?.error || err.message || 'Failed to delete category');
+      alert(err.response?.data?.error?.message || err.message || 'Failed to delete category');
     }
   };
 

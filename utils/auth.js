@@ -36,10 +36,9 @@ const userExtractor = async (request, response, next) => {
     }
 
     // Find user and verify token exists in user's tokens array
-    // Populate role and department to have access to roleId and departmentId
+    // Populate role to have access to roleId
     const user = await User.findById(decodedToken.id)
       .populate('role')
-      .populate('department')
 
     if (!user) {
       return response.status(401).json({

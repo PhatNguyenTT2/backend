@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-// import categoryService from '../../services/categoryService';
+import categoryService from '../../services/categoryService';
 
-export const EditCategoryModal = ({ isOpen, onClose, onSuccess, category }) => {
+export const AddCategoryModal = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     name: '',
     image: '',
@@ -11,28 +11,23 @@ export const EditCategoryModal = ({ isOpen, onClose, onSuccess, category }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Pre-fill form when category changes or modal opens
+  // Reset form when modal opens
   useEffect(() => {
-    if (isOpen && category) {
+    if (isOpen) {
       setFormData({
-        name: category.name || '',
-        image: category.image || '',
-        description: category.description || ''
+        name: '',
+        image: '',
+        description: ''
       });
       setError(null);
     }
-  }, [isOpen, category]);
+  }, [isOpen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!formData.name.trim()) {
       setError('Category name is required');
-      return;
-    }
-
-    if (!category?.id) {
-      setError('Invalid category');
       return;
     }
 
@@ -47,27 +42,21 @@ export const EditCategoryModal = ({ isOpen, onClose, onSuccess, category }) => {
 
       if (formData.image.trim()) {
         categoryData.image = formData.image.trim();
-      } else {
-        // If image is empty, explicitly set to null to remove it
-        categoryData.image = null;
       }
 
       if (formData.description.trim()) {
         categoryData.description = formData.description.trim();
-      } else {
-        // If description is empty, explicitly set to null to remove it
-        categoryData.description = null;
       }
 
-      const response = await categoryService.updateCategory(category.id, categoryData);
+      const response = await categoryService.createCategory(categoryData);
 
       if (onSuccess) {
         onSuccess(response);
       }
       onClose();
     } catch (err) {
-      console.error('Error updating category:', err);
-      setError(err.response?.data?.error || err.error || err.message || 'Failed to update category. Please try again.');
+      console.error('Error creating category:', err);
+      setError(err.response?.data?.error?.message || err.message || 'Failed to create category. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -80,21 +69,16 @@ export const EditCategoryModal = ({ isOpen, onClose, onSuccess, category }) => {
     }));
   };
 
-  if (!isOpen || !category) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div>
-            <h2 className="text-[20px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-              Edit Category
-            </h2>
-            <p className="text-[12px] text-gray-500 font-['Poppins',sans-serif] mt-1">
-              Category ID: {category.id}
-            </p>
-          </div>
+          <h2 className="text-[20px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
+            Create New Category
+          </h2>
           <button
             onClick={onClose}
             disabled={loading}
@@ -146,7 +130,7 @@ export const EditCategoryModal = ({ isOpen, onClose, onSuccess, category }) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
             <p className="mt-1 text-[11px] text-gray-500 font-['Poppins',sans-serif]">
-              Enter the full URL of the category image. Leave empty to remove image.
+              Enter the full URL of the category image
             </p>
 
             {/* Image Preview */}
@@ -155,37 +139,14 @@ export const EditCategoryModal = ({ isOpen, onClose, onSuccess, category }) => {
                 <p className="text-[12px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
                   Preview:
                 </p>
-                <div className="flex items-start gap-3">
-                  <img
-                    src={formData.image}
-                    alt="Preview"
-                    className="w-32 h-32 object-cover rounded-lg border border-gray-200"
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"%3E%3Crect width="128" height="128" fill="%23f3f4f6"/%3E%3Ctext x="64" y="64" text-anchor="middle" dy=".3em" fill="%23ef4444" font-family="sans-serif" font-size="12"%3EInvalid URL%3C/text%3E%3C/svg%3E';
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleChange('image', '')}
-                    className="px-3 py-1.5 text-[12px] text-red-600 border border-red-300 rounded-lg hover:bg-red-50 font-['Poppins',sans-serif] font-medium"
-                  >
-                    Remove Image
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Show current image if exists but form is empty */}
-            {!formData.image && category.image && (
-              <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
-                <p className="text-[12px] text-gray-600 font-['Poppins',sans-serif] mb-2">
-                  Current image will be removed when you save
-                </p>
                 <img
-                  src={category.image}
-                  alt="Current"
-                  className="w-32 h-32 object-cover rounded-lg border border-gray-300 opacity-50"
+                  src={formData.image}
+                  alt="Preview"
+                  className="w-32 h-32 object-cover rounded-lg border border-gray-200"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"%3E%3Crect width="128" height="128" fill="%23f3f4f6"/%3E%3Ctext x="64" y="64" text-anchor="middle" dy=".3em" fill="%23ef4444" font-family="sans-serif" font-size="12"%3EInvalid URL%3C/text%3E%3C/svg%3E';
+                  }}
                 />
               </div>
             )}
@@ -206,54 +167,13 @@ export const EditCategoryModal = ({ isOpen, onClose, onSuccess, category }) => {
             />
             <div className="flex items-center justify-between mt-1">
               <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif]">
-                Maximum 500 characters. Leave empty to remove description.
+                Maximum 500 characters
               </p>
               <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif]">
                 {formData.description.length}/500
               </p>
             </div>
           </div>
-
-          {/* Metadata Info */}
-          {category.createdAt && (
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h4 className="text-[13px] font-semibold font-['Poppins',sans-serif] text-[#212529] mb-2">
-                Metadata
-              </h4>
-              <div className="space-y-1 text-[12px] font-['Poppins',sans-serif] text-gray-600">
-                <div className="flex justify-between">
-                  <span>Product Count:</span>
-                  <span className="font-medium text-gray-900">{category.productCount ?? 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Slug:</span>
-                  <span className="font-medium text-gray-900">{category.slug || 'Auto-generated'}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Created:</span>
-                  <span className="font-medium text-gray-900">
-                    {new Date(category.createdAt).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric'
-                    })}
-                  </span>
-                </div>
-                {category.updatedAt && (
-                  <div className="flex justify-between">
-                    <span>Last Updated:</span>
-                    <span className="font-medium text-gray-900">
-                      {new Date(category.updatedAt).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                      })}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t">
@@ -276,10 +196,10 @@ export const EditCategoryModal = ({ isOpen, onClose, onSuccess, category }) => {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Updating...
+                  Creating...
                 </>
               ) : (
-                'Update Category'
+                'Create Category'
               )}
             </button>
           </div>
