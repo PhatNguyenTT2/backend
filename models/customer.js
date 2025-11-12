@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
 
+/**
+ * Customer Model
+ * Manages customer information and purchase history
+ * Consolidated design: includes customer type and spending tracking
+ */
 const customerSchema = new mongoose.Schema({
   customerCode: {
     type: String,
@@ -8,7 +13,6 @@ const customerSchema = new mongoose.Schema({
     uppercase: true,
     trim: true,
     match: [/^CUST\d{10}$/, 'Customer code must follow format CUST2025000001']
-    // Auto-generate: CUST2025000001
   },
 
   fullName: {
@@ -29,7 +33,6 @@ const customerSchema = new mongoose.Schema({
 
   phone: {
     type: String,
-    required: [true, 'Phone number is required'],
     trim: true,
     match: [/^[0-9]{10,15}$/, 'Please provide a valid phone number']
   },
@@ -42,6 +45,7 @@ const customerSchema = new mongoose.Schema({
 
   dateOfBirth: {
     type: Date,
+    default: null,
     validate: {
       validator: function (value) {
         return !value || value < new Date();
@@ -59,6 +63,27 @@ const customerSchema = new mongoose.Schema({
     lowercase: true
   },
 
+  customerType: {
+    type: String,
+    enum: {
+      values: ['guest', 'retail', 'wholesale', 'vip'],
+      message: '{VALUE} is not a valid customer type'
+    },
+    default: 'guest'
+  },
+
+  totalSpent: {
+    type: mongoose.Schema.Types.Decimal128,
+    default: 0,
+    min: [0, 'Total spent cannot be negative'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString());
+      }
+      return 0;
+    }
+  },
+
   isActive: {
     type: Boolean,
     default: true
@@ -66,150 +91,85 @@ const customerSchema = new mongoose.Schema({
 
 }, {
   timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toJSON: { virtuals: true, getters: true },
+  toObject: { virtuals: true, getters: true }
 });
 
-// Virtual: Customer details
-customerSchema.virtual('details', {
-  ref: 'DetailCustomer',
-  localField: '_id',
-  foreignField: 'customer',
-  justOne: true
-});
-
-// Virtual: Orders count
-customerSchema.virtual('orderCount', {
-  ref: 'Order',
-  localField: '_id',
-  foreignField: 'customer',
-  count: true
-});
-
-// Indexes for faster queries
+// ============ INDEXES ============
 customerSchema.index({ customerCode: 1 });
+customerSchema.index({ fullName: 'text' });
 customerSchema.index({ email: 1 });
 customerSchema.index({ phone: 1 });
+customerSchema.index({ customerType: 1 });
+customerSchema.index({ totalSpent: -1 });
 customerSchema.index({ isActive: 1 });
 
-// Pre-save hook to generate customer code
+// ============ VIRTUALS ============
+// Virtual: Orders relationship
+customerSchema.virtual('orders', {
+  ref: 'Order',
+  localField: '_id',
+  foreignField: 'customer'
+});
+
+// Virtual: Check if customer is VIP based on spending
+customerSchema.virtual('isVIP').get(function () {
+  return this.customerType === 'vip';
+});
+
+// Virtual: Check if customer qualifies for upgrade
+customerSchema.virtual('qualifiesForUpgrade').get(function () {
+  const spentAmount = this.totalSpent;
+  if (this.customerType === 'guest' && spentAmount >= 1000000) return 'retail';
+  if (this.customerType === 'retail' && spentAmount >= 5000000) return 'wholesale';
+  if (this.customerType === 'wholesale' && spentAmount >= 10000000) return 'vip';
+  return null;
+});
+
+// ============ MIDDLEWARE ============
+// Auto-generate customer code before saving
 customerSchema.pre('save', async function (next) {
-  if (this.isNew && !this.customerCode) {
-    const year = new Date().getFullYear();
-    const count = await mongoose.model('Customer').countDocuments();
-    this.customerCode = `CUST${year}${String(count + 1).padStart(6, '0')}`;
+  if (!this.customerCode) {
+    try {
+      const currentYear = new Date().getFullYear();
+
+      // Find the last customer code for the current year
+      const lastCustomer = await this.constructor
+        .findOne({ customerCode: new RegExp(`^CUST${currentYear}`) })
+        .sort({ customerCode: -1 })
+        .select('customerCode')
+        .lean();
+
+      let sequenceNumber = 1;
+
+      if (lastCustomer && lastCustomer.customerCode) {
+        // Extract the sequence number from the last customer code
+        const match = lastCustomer.customerCode.match(/\d{6}$/);
+        if (match) {
+          sequenceNumber = parseInt(match[0]) + 1;
+        }
+      }
+
+      // Generate new customer code with 6-digit padding
+      this.customerCode = `CUST${currentYear}${String(sequenceNumber).padStart(6, '0')}`;
+    } catch (error) {
+      return next(error);
+    }
   }
   next();
 });
 
-// Method to update customer
-customerSchema.methods.updateCustomer = function (updates) {
-  const allowedUpdates = ['fullName', 'email', 'phone', 'address', 'dateOfBirth', 'gender'];
-  Object.keys(updates).forEach(key => {
-    if (allowedUpdates.includes(key)) {
-      this[key] = updates[key];
-    }
-  });
-  return this.save();
-};
-
-// Method to activate/deactivate
-customerSchema.methods.toggleActive = function () {
-  this.isActive = !this.isActive;
-  return this.save();
-};
-
-// Method to get customer with details
-customerSchema.methods.getWithDetails = function () {
-  return this.populate('details');
-};
-
-// Static method to find active customers
-customerSchema.statics.findActiveCustomers = function () {
-  return this.find({ isActive: true }).sort({ createdAt: -1 });
-};
-
-// Static method to search customers
-customerSchema.statics.searchCustomers = function (searchTerm) {
-  const searchRegex = new RegExp(searchTerm, 'i');
-  return this.find({
-    $or: [
-      { fullName: searchRegex },
-      { email: searchRegex },
-      { phone: searchRegex },
-      { customerCode: searchRegex }
-    ],
-    isActive: true
-  });
-};
-
-// Static method to get customers by type
-customerSchema.statics.getCustomersByType = async function (customerType) {
-  const DetailCustomer = mongoose.model('DetailCustomer');
-
-  const detailCustomers = await DetailCustomer.find({ customerType }).select('customer');
-  const customerIds = detailCustomers.map(dc => dc.customer);
-
-  return this.find({ _id: { $in: customerIds }, isActive: true });
-};
-
-// Static method to get statistics
-customerSchema.statics.getStatistics = async function () {
-  const stats = await this.aggregate([
-    {
-      $group: {
-        _id: null,
-        total: { $sum: 1 },
-        active: {
-          $sum: { $cond: ['$isActive', 1, 0] }
-        },
-        inactive: {
-          $sum: { $cond: ['$isActive', 0, 1] }
-        }
-      }
-    }
-  ]);
-
-  // Get gender distribution
-  const genderStats = await this.aggregate([
-    {
-      $match: { isActive: true }
-    },
-    {
-      $group: {
-        _id: '$gender',
-        count: { $sum: 1 }
-      }
-    }
-  ]);
-
-  return {
-    ...(stats[0] || { total: 0, active: 0, inactive: 0 }),
-    genderDistribution: genderStats
-  };
-};
-
-// Static method to get top customers by spending
-customerSchema.statics.getTopCustomers = async function (limit = 10) {
-  const DetailCustomer = mongoose.model('DetailCustomer');
-
-  const topDetails = await DetailCustomer.find()
-    .sort({ totalSpent: -1 })
-    .limit(limit)
-    .populate('customer');
-
-  return topDetails.map(detail => ({
-    customer: detail.customer,
-    totalSpent: detail.totalSpent,
-    customerType: detail.customerType
-  }));
-};
-
+// ============ JSON TRANSFORMATION ============
 customerSchema.set('toJSON', {
   transform: (document, returnedObject) => {
     returnedObject.id = returnedObject._id.toString();
     delete returnedObject._id;
     delete returnedObject.__v;
+
+    // Convert Decimal128 to number
+    if (returnedObject.totalSpent && typeof returnedObject.totalSpent === 'object') {
+      returnedObject.totalSpent = parseFloat(returnedObject.totalSpent.toString());
+    }
   }
 });
 

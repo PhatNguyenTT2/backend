@@ -1,9 +1,14 @@
 const mongoose = require('mongoose');
 
+/**
+ * Product Model
+ * Master product information
+ * Pricing details are managed at batch level (ProductBatch)
+ * References: Category (many-to-one)
+ */
 const productSchema = new mongoose.Schema({
   productCode: {
     type: String,
-    required: [true, 'Product code is required'],
     unique: true,
     uppercase: true,
     trim: true,
@@ -15,7 +20,7 @@ const productSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Product name is required'],
     trim: true,
-    maxlength: 255
+    maxlength: [255, 'Product name must be at most 255 characters']
   },
 
   image: {
@@ -29,35 +34,16 @@ const productSchema = new mongoose.Schema({
     required: [true, 'Category is required']
   },
 
-  costPrice: {
+  unitPrice: {
     type: mongoose.Schema.Types.Decimal128,
-    default: 0,
-    min: 0,
+    required: [true, 'Unit price is required'],
+    min: [0, 'Unit price cannot be negative'],
     get: function (value) {
       if (value) {
         return parseFloat(value.toString());
       }
       return 0;
     }
-  },
-
-  originalPrice: {
-    type: mongoose.Schema.Types.Decimal128,
-    required: [true, 'Original price is required'],
-    min: 0,
-    get: function (value) {
-      if (value) {
-        return parseFloat(value.toString());
-      }
-      return 0;
-    }
-  },
-
-  discountPercentage: {
-    type: Number,
-    default: 0,
-    min: 0,
-    max: 100
   },
 
   isActive: {
@@ -67,9 +53,8 @@ const productSchema = new mongoose.Schema({
 
   vendor: {
     type: String,
-    required: [true, 'Vendor is required'],
     trim: true,
-    maxlength: 100
+    maxlength: [100, 'Vendor name must be at most 100 characters']
   }
 
 }, {
@@ -78,21 +63,13 @@ const productSchema = new mongoose.Schema({
   toObject: { virtuals: true, getters: true }
 });
 
-// Indexes for faster queries
+// ============ INDEXES ============
 productSchema.index({ productCode: 1 });
-productSchema.index({ category: 1 });
 productSchema.index({ name: 'text' });
+productSchema.index({ category: 1 });
 productSchema.index({ isActive: 1 });
-productSchema.index({ vendor: 1 });
 
-// Virtual: Product detail relationship
-productSchema.virtual('detail', {
-  ref: 'DetailProduct',
-  localField: '_id',
-  foreignField: 'product',
-  justOne: true
-});
-
+// ============ VIRTUALS ============
 // Virtual: Product batches relationship
 productSchema.virtual('batches', {
   ref: 'ProductBatch',
@@ -108,18 +85,7 @@ productSchema.virtual('inventory', {
   justOne: true
 });
 
-// Virtual: Selling Price (after discount)
-productSchema.virtual('sellPrice').get(function () {
-  const discountAmount = this.originalPrice * (this.discountPercentage / 100);
-  return parseFloat((this.originalPrice - discountAmount).toFixed(2));
-});
-
-// Virtual: Discount Amount
-productSchema.virtual('discountAmount').get(function () {
-  return parseFloat((this.originalPrice * (this.discountPercentage / 100)).toFixed(2));
-});
-
-// Virtual: Stock from inventory (when populated)
+// Virtual: Total stock from inventory (when populated)
 productSchema.virtual('stock').get(function () {
   if (this.inventory) {
     return this.inventory.quantityAvailable || 0;
@@ -127,32 +93,40 @@ productSchema.virtual('stock').get(function () {
   return 0;
 });
 
-// Virtual: Profit Margin (%)
-productSchema.virtual('profitMargin').get(function () {
-  if (this.sellPrice && this.costPrice && this.sellPrice > 0) {
-    return parseFloat((((this.sellPrice - this.costPrice) / this.sellPrice) * 100).toFixed(2));
-  }
-  return 0;
-});
-
-// Virtual: Profit Amount
-productSchema.virtual('profitAmount').get(function () {
-  if (this.sellPrice && this.costPrice) {
-    return parseFloat((this.sellPrice - this.costPrice).toFixed(2));
-  }
-  return 0;
-});
-
-// Pre-save hook: Auto-generate product code
+// ============ MIDDLEWARE ============
+// Auto-generate product code before saving
 productSchema.pre('save', async function (next) {
-  if (this.isNew && !this.productCode) {
-    const year = new Date().getFullYear();
-    const count = await mongoose.model('Product').countDocuments();
-    this.productCode = `PROD${year}${String(count + 1).padStart(6, '0')}`;
+  if (!this.productCode) {
+    try {
+      const currentYear = new Date().getFullYear();
+
+      // Find the last product code for the current year
+      const lastProduct = await this.constructor
+        .findOne({ productCode: new RegExp(`^PROD${currentYear}`) })
+        .sort({ productCode: -1 })
+        .select('productCode')
+        .lean();
+
+      let sequenceNumber = 1;
+
+      if (lastProduct && lastProduct.productCode) {
+        // Extract the sequence number from the last product code
+        const match = lastProduct.productCode.match(/\d{6}$/);
+        if (match) {
+          sequenceNumber = parseInt(match[0]) + 1;
+        }
+      }
+
+      // Generate new product code with 6-digit padding
+      this.productCode = `PROD${currentYear}${String(sequenceNumber).padStart(6, '0')}`;
+    } catch (error) {
+      return next(error);
+    }
   }
   next();
 });
 
+// ============ JSON TRANSFORMATION ============
 productSchema.set('toJSON', {
   transform: (document, returnedObject) => {
     returnedObject.id = returnedObject._id.toString();
@@ -160,11 +134,8 @@ productSchema.set('toJSON', {
     delete returnedObject.__v;
 
     // Convert Decimal128 to number
-    if (returnedObject.costPrice && typeof returnedObject.costPrice === 'object') {
-      returnedObject.costPrice = parseFloat(returnedObject.costPrice.toString());
-    }
-    if (returnedObject.originalPrice && typeof returnedObject.originalPrice === 'object') {
-      returnedObject.originalPrice = parseFloat(returnedObject.originalPrice.toString());
+    if (returnedObject.unitPrice && typeof returnedObject.unitPrice === 'object') {
+      returnedObject.unitPrice = parseFloat(returnedObject.unitPrice.toString());
     }
   }
 });

@@ -1,5 +1,11 @@
-const mongoose = require('mongoose')
+const mongoose = require('mongoose');
 
+/**
+ * DetailPurchaseOrder Model
+ * Manages purchase order line items with batch information
+ * Each line represents a product with its batch and pricing
+ * References: PurchaseOrder, Product, ProductBatch
+ */
 const detailPurchaseOrderSchema = new mongoose.Schema({
   purchaseOrder: {
     type: mongoose.Schema.Types.ObjectId,
@@ -11,6 +17,12 @@ const detailPurchaseOrderSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
     required: [true, 'Product is required']
+  },
+
+  batch: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ProductBatch',
+    required: [true, 'Batch is required']
   },
 
   quantity: {
@@ -25,21 +37,21 @@ const detailPurchaseOrderSchema = new mongoose.Schema({
     min: [0, 'Unit price cannot be negative'],
     get: function (value) {
       if (value) {
-        return parseFloat(value.toString())
+        return parseFloat(value.toString());
       }
-      return 0
+      return 0;
     }
   },
 
   total: {
     type: mongoose.Schema.Types.Decimal128,
-    required: [true, 'Total is required'],
+    default: 0,
     min: [0, 'Total cannot be negative'],
     get: function (value) {
       if (value) {
-        return parseFloat(value.toString())
+        return parseFloat(value.toString());
       }
-      return 0
+      return 0;
     }
   }
 
@@ -47,136 +59,113 @@ const detailPurchaseOrderSchema = new mongoose.Schema({
   timestamps: true,
   toJSON: { virtuals: true, getters: true },
   toObject: { virtuals: true, getters: true }
-})
+});
 
-// Indexes for faster queries
-detailPurchaseOrderSchema.index({ purchaseOrder: 1 })
-detailPurchaseOrderSchema.index({ product: 1 })
-detailPurchaseOrderSchema.index({ purchaseOrder: 1, product: 1 })
+// ============ INDEXES ============
+detailPurchaseOrderSchema.index({ purchaseOrder: 1 });
+detailPurchaseOrderSchema.index({ product: 1 });
+detailPurchaseOrderSchema.index({ batch: 1 });
+detailPurchaseOrderSchema.index({ purchaseOrder: 1, product: 1 });
 
-// Pre-save hook to calculate total
+// ============ VIRTUALS ============
+// Virtual: Calculate total from quantity and unitPrice
+detailPurchaseOrderSchema.virtual('calculatedTotal').get(function () {
+  const qty = this.quantity || 0;
+  const price = this.unitPrice || 0;
+  return parseFloat((qty * price).toFixed(2));
+});
+
+// ============ MIDDLEWARE ============
+// Pre-save: Calculate total before saving
 detailPurchaseOrderSchema.pre('save', function (next) {
-  this.total = this.quantity * this.unitPrice
-  next()
-})
+  // Auto-calculate total from quantity * unitPrice
+  this.total = this.quantity * parseFloat(this.unitPrice.toString());
+  next();
+});
 
-// Post-save hook to update purchase order total
+// Post-save: Update PurchaseOrder totalPrice
 detailPurchaseOrderSchema.post('save', async function (doc) {
-  const PurchaseOrder = mongoose.model('PurchaseOrder')
-  const purchaseOrder = await PurchaseOrder.findById(doc.purchaseOrder)
-  if (purchaseOrder) {
-    await purchaseOrder.recalculateTotalPrice()
+  try {
+    await updatePurchaseOrderTotal(doc.purchaseOrder);
+  } catch (error) {
+    console.error('Error updating PurchaseOrder totalPrice:', error);
   }
-})
+});
 
-// Post-remove hook to update purchase order total
+// Post-remove: Update PurchaseOrder totalPrice after deletion
+detailPurchaseOrderSchema.post('remove', async function (doc) {
+  try {
+    await updatePurchaseOrderTotal(doc.purchaseOrder);
+  } catch (error) {
+    console.error('Error updating PurchaseOrder totalPrice:', error);
+  }
+});
+
+// Post-findOneAndDelete: Update PurchaseOrder totalPrice after deletion
 detailPurchaseOrderSchema.post('findOneAndDelete', async function (doc) {
   if (doc) {
-    const PurchaseOrder = mongoose.model('PurchaseOrder')
-    const purchaseOrder = await PurchaseOrder.findById(doc.purchaseOrder)
-    if (purchaseOrder) {
-      await purchaseOrder.recalculateTotalPrice()
+    try {
+      await updatePurchaseOrderTotal(doc.purchaseOrder);
+    } catch (error) {
+      console.error('Error updating PurchaseOrder totalPrice:', error);
     }
   }
-})
+});
 
-// Static method to create detail and update product cost price
-detailPurchaseOrderSchema.statics.createDetailAndUpdateProduct = async function (detailData) {
-  const Product = mongoose.model('Product')
-  const session = await mongoose.startSession()
-  session.startTransaction()
+// Helper function to update PurchaseOrder totalPrice
+async function updatePurchaseOrderTotal(purchaseOrderId) {
+  const PurchaseOrder = mongoose.model('PurchaseOrder');
+  const DetailPurchaseOrder = mongoose.model('DetailPurchaseOrder');
 
   try {
-    // Create detail
-    const detail = new this(detailData)
-    await detail.save({ session })
+    // Calculate subtotal from all details
+    const details = await DetailPurchaseOrder.find({
+      purchaseOrder: purchaseOrderId
+    }).lean();
 
-    // Update product cost price (optional - only if you want to track latest cost)
-    const product = await Product.findById(detailData.product).session(session)
-    if (product) {
-      product.costPrice = detailData.unitPrice
-      await product.save({ session })
+    const subtotal = details.reduce((sum, detail) => {
+      const total = detail.total ? parseFloat(detail.total.toString()) : 0;
+      return sum + total;
+    }, 0);
+
+    // Get purchase order to apply shipping and discount
+    const po = await PurchaseOrder.findById(purchaseOrderId);
+
+    if (po) {
+      const shippingFee = po.shippingFee ? parseFloat(po.shippingFee.toString()) : 0;
+      const discountPercentage = po.discountPercentage ? parseFloat(po.discountPercentage.toString()) : 0;
+
+      // Calculate discount amount
+      const discountAmount = subtotal * (discountPercentage / 100);
+
+      // Calculate total: subtotal - discount + shipping
+      const totalPrice = subtotal - discountAmount + shippingFee;
+
+      // Update PurchaseOrder
+      po.totalPrice = totalPrice;
+      await po.save();
     }
-
-    await session.commitTransaction()
-    return detail
   } catch (error) {
-    await session.abortTransaction()
-    throw error
-  } finally {
-    session.endSession()
+    console.error('Error in updatePurchaseOrderTotal:', error);
+    throw error;
   }
 }
 
-// Static method to get details by purchase order
-detailPurchaseOrderSchema.statics.getByPurchaseOrder = function (purchaseOrderId) {
-  return this.find({ purchaseOrder: purchaseOrderId })
-    .populate('product', 'name sku image costPrice price')
-    .sort({ createdAt: 1 })
-}
-
-// Static method to get total quantity and amount for a product in a purchase order
-detailPurchaseOrderSchema.statics.getTotalQuantityByProduct = async function (purchaseOrderId, productId) {
-  const details = await this.find({
-    purchaseOrder: purchaseOrderId,
-    product: productId
-  })
-
-  const totalQuantity = details.reduce((sum, detail) => sum + detail.quantity, 0)
-  const totalAmount = details.reduce((sum, detail) => sum + detail.total, 0)
-
-  return { totalQuantity, totalAmount }
-}
-
-// Static method to validate if product already exists in purchase order
-detailPurchaseOrderSchema.statics.productExistsInPO = async function (purchaseOrderId, productId, excludeDetailId = null) {
-  const query = {
-    purchaseOrder: purchaseOrderId,
-    product: productId
-  }
-
-  if (excludeDetailId) {
-    query._id = { $ne: excludeDetailId }
-  }
-
-  const existingDetail = await this.findOne(query)
-  return !!existingDetail
-}
-
-// Instance method to update quantity
-detailPurchaseOrderSchema.methods.updateQuantity = function (newQuantity) {
-  if (newQuantity < 1) {
-    throw new Error('Quantity must be at least 1')
-  }
-  this.quantity = newQuantity
-  // total will be recalculated in pre-save hook
-  return this.save()
-}
-
-// Instance method to update unit price
-detailPurchaseOrderSchema.methods.updateUnitPrice = function (newUnitPrice) {
-  if (newUnitPrice < 0) {
-    throw new Error('Unit price cannot be negative')
-  }
-  this.unitPrice = newUnitPrice
-  // total will be recalculated in pre-save hook
-  return this.save()
-}
-
+// ============ JSON TRANSFORMATION ============
 detailPurchaseOrderSchema.set('toJSON', {
   transform: (document, returnedObject) => {
-    returnedObject.id = returnedObject._id.toString()
-    delete returnedObject._id
-    delete returnedObject.__v
+    returnedObject.id = returnedObject._id.toString();
+    delete returnedObject._id;
+    delete returnedObject.__v;
 
     // Convert Decimal128 to number
     if (returnedObject.unitPrice && typeof returnedObject.unitPrice === 'object') {
-      returnedObject.unitPrice = parseFloat(returnedObject.unitPrice.toString())
+      returnedObject.unitPrice = parseFloat(returnedObject.unitPrice.toString());
     }
     if (returnedObject.total && typeof returnedObject.total === 'object') {
-      returnedObject.total = parseFloat(returnedObject.total.toString())
+      returnedObject.total = parseFloat(returnedObject.total.toString());
     }
   }
-})
+});
 
-module.exports = mongoose.model('DetailPurchaseOrder', detailPurchaseOrderSchema)
+module.exports = mongoose.model('DetailPurchaseOrder', detailPurchaseOrderSchema);

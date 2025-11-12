@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 /**
  * ProductBatch Model
- * Manages product batches with expiry tracking
+ * Manages product batches with expiry tracking and pricing
  * References: Product (many-to-one)
  */
 const productBatchSchema = new mongoose.Schema({
@@ -12,9 +12,36 @@ const productBatchSchema = new mongoose.Schema({
     required: [true, 'Product is required']
   },
 
+  costPrice: {
+    type: mongoose.Schema.Types.Decimal128,
+    required: [true, 'Cost price is required'],
+    min: [0, 'Cost price cannot be negative']
+  },
+
+  unitPrice: {
+    type: mongoose.Schema.Types.Decimal128,
+    required: [true, 'Unit price is required'],
+    min: [0, 'Unit price cannot be negative']
+  },
+
+  promotionApplied: {
+    type: String,
+    enum: {
+      values: ['none', 'discount', 'buy1get1'],
+      message: '{VALUE} is not a valid promotion type'
+    },
+    default: 'none'
+  },
+
+  discountPercentage: {
+    type: mongoose.Schema.Types.Decimal128,
+    default: 0,
+    min: [0, 'Discount percentage cannot be negative'],
+    max: [100, 'Discount percentage cannot exceed 100']
+  },
+
   batchCode: {
     type: String,
-    required: [true, 'Batch code is required'],
     unique: true,
     uppercase: true,
     trim: true
@@ -56,12 +83,44 @@ const productBatchSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// ============ MIDDLEWARE ============
+// Auto-generate batch code before saving
+productBatchSchema.pre('save', async function (next) {
+  if (!this.batchCode) {
+    try {
+      const currentYear = new Date().getFullYear();
+
+      // Find the last batch code for the current year
+      const lastBatch = await this.constructor
+        .findOne({ batchCode: new RegExp(`^BATCH${currentYear}`) })
+        .sort({ batchCode: -1 })
+        .select('batchCode')
+        .lean();
+
+      let sequenceNumber = 1;
+
+      if (lastBatch && lastBatch.batchCode) {
+        // Extract the sequence number from the last batch code
+        const match = lastBatch.batchCode.match(/\d{6}$/);
+        if (match) {
+          sequenceNumber = parseInt(match[0]) + 1;
+        }
+      }
+
+      // Generate new batch code with 6-digit padding
+      this.batchCode = `BATCH${currentYear}${String(sequenceNumber).padStart(6, '0')}`;
+    } catch (error) {
+      return next(error);
+    }
+  }
+  next();
+});
+
 // ============ INDEXES ============
 productBatchSchema.index({ product: 1 });
 productBatchSchema.index({ batchCode: 1 });
-productBatchSchema.index({ expiryDate: 1 });
 productBatchSchema.index({ status: 1 });
-productBatchSchema.index({ product: 1, status: 1 });
+productBatchSchema.index({ expiryDate: 1 });
 
 // ============ VIRTUALS ============
 // Virtual to check if batch is expired

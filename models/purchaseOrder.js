@@ -1,10 +1,19 @@
-const mongoose = require('mongoose')
+const mongoose = require('mongoose');
 
+/**
+ * PurchaseOrder Model
+ * Manages purchase orders from suppliers
+ * References: Supplier (many-to-one), Employee (many-to-one)
+ * Related: DetailPurchaseOrder (one-to-many)
+ */
 const purchaseOrderSchema = new mongoose.Schema({
   poNumber: {
     type: String,
     unique: true,
-    // Auto-generate: PO2025000001
+    uppercase: true,
+    trim: true,
+    match: [/^PO\d{10}$/, 'PO number must follow format PO2025000001']
+    // Auto-generated in pre-save hook
   },
 
   supplier: {
@@ -20,7 +29,15 @@ const purchaseOrderSchema = new mongoose.Schema({
   },
 
   expectedDeliveryDate: {
-    type: Date
+    type: Date,
+    default: null,
+    validate: {
+      validator: function (value) {
+        if (!value) return true;
+        return value >= this.orderDate;
+      },
+      message: 'Expected delivery date must be after order date'
+    }
   },
 
   shippingFee: {
@@ -29,9 +46,9 @@ const purchaseOrderSchema = new mongoose.Schema({
     min: [0, 'Shipping fee cannot be negative'],
     get: function (value) {
       if (value) {
-        return parseFloat(value.toString())
+        return parseFloat(value.toString());
       }
-      return 0
+      return 0;
     }
   },
 
@@ -42,9 +59,9 @@ const purchaseOrderSchema = new mongoose.Schema({
     max: [100, 'Discount percentage cannot exceed 100'],
     get: function (value) {
       if (value) {
-        return parseFloat(value.toString())
+        return parseFloat(value.toString());
       }
-      return 0
+      return 0;
     }
   },
 
@@ -54,9 +71,9 @@ const purchaseOrderSchema = new mongoose.Schema({
     min: [0, 'Total price cannot be negative'],
     get: function (value) {
       if (value) {
-        return parseFloat(value.toString())
+        return parseFloat(value.toString());
       }
-      return 0
+      return 0;
     }
   },
 
@@ -80,7 +97,8 @@ const purchaseOrderSchema = new mongoose.Schema({
 
   notes: {
     type: String,
-    trim: true
+    trim: true,
+    maxlength: [1000, 'Notes must be at most 1000 characters']
   },
 
   createdBy: {
@@ -92,233 +110,112 @@ const purchaseOrderSchema = new mongoose.Schema({
   timestamps: true,
   toJSON: { virtuals: true, getters: true },
   toObject: { virtuals: true, getters: true }
-})
+});
 
-// Virtual for purchase order details
+// ============ INDEXES ============
+purchaseOrderSchema.index({ poNumber: 1 });
+purchaseOrderSchema.index({ supplier: 1 });
+purchaseOrderSchema.index({ status: 1 });
+purchaseOrderSchema.index({ paymentStatus: 1 });
+purchaseOrderSchema.index({ orderDate: -1 });
+purchaseOrderSchema.index({ createdBy: 1 });
+
+// ============ VIRTUALS ============
+// Virtual: Purchase order details relationship
 purchaseOrderSchema.virtual('details', {
   ref: 'DetailPurchaseOrder',
   localField: '_id',
   foreignField: 'purchaseOrder'
-})
+});
 
-// Virtual field: Calculate subtotal from details (for display purposes)
+// Virtual: Calculate subtotal from details (when populated)
 purchaseOrderSchema.virtual('subtotal').get(function () {
   if (this.details && Array.isArray(this.details)) {
-    return this.details.reduce((sum, detail) => sum + detail.total, 0)
+    return this.details.reduce((sum, detail) => {
+      const price = detail.unitPrice || 0;
+      const quantity = detail.quantity || 0;
+      return sum + (price * quantity);
+    }, 0);
   }
-  return 0
-})
+  return 0;
+});
 
-// Virtual field: Calculate discount amount (for display purposes)
+// Virtual: Calculate discount amount
 purchaseOrderSchema.virtual('discountAmount').get(function () {
-  if (this.details && Array.isArray(this.details)) {
-    const subtotal = this.details.reduce((sum, detail) => sum + detail.total, 0)
-    return (subtotal * this.discountPercentage) / 100
-  }
-  return 0
-})
+  const subtotal = this.subtotal || 0;
+  const discountPercent = this.discountPercentage || 0;
+  return parseFloat((subtotal * (discountPercent / 100)).toFixed(2));
+});
 
-// Indexes for faster queries
-purchaseOrderSchema.index({ poNumber: 1 })
-purchaseOrderSchema.index({ supplier: 1 })
-purchaseOrderSchema.index({ status: 1 })
-purchaseOrderSchema.index({ paymentStatus: 1 })
-purchaseOrderSchema.index({ orderDate: -1 })
+// Virtual: Check if order is overdue
+purchaseOrderSchema.virtual('isOverdue').get(function () {
+  if (!this.expectedDeliveryDate) return false;
+  if (this.status === 'received' || this.status === 'cancelled') return false;
+  return new Date() > this.expectedDeliveryDate;
+});
 
-// Pre-save hook to generate PO number
+// Virtual: Days until delivery
+purchaseOrderSchema.virtual('daysUntilDelivery').get(function () {
+  if (!this.expectedDeliveryDate) return null;
+  if (this.status === 'received' || this.status === 'cancelled') return null;
+  const today = new Date();
+  const expected = new Date(this.expectedDeliveryDate);
+  const diffTime = expected - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+});
+
+// ============ MIDDLEWARE ============
+// Auto-generate PO number before saving
 purchaseOrderSchema.pre('save', async function (next) {
-  if (this.isNew && !this.poNumber) {
-    const year = new Date().getFullYear()
-    const count = await mongoose.model('PurchaseOrder').countDocuments()
-    this.poNumber = `PO${year}${String(count + 1).padStart(6, '0')}`
-  }
-  next()
-})
+  if (!this.poNumber) {
+    try {
+      const currentYear = new Date().getFullYear();
 
-// Method to recalculate and save totalPrice
-purchaseOrderSchema.methods.recalculateTotalPrice = async function () {
-  const DetailPurchaseOrder = mongoose.model('DetailPurchaseOrder')
-  const details = await DetailPurchaseOrder.find({ purchaseOrder: this._id })
+      // Find the last PO number for the current year
+      const lastPO = await this.constructor
+        .findOne({ poNumber: new RegExp(`^PO${currentYear}`) })
+        .sort({ poNumber: -1 })
+        .select('poNumber')
+        .lean();
 
-  const subtotal = details.reduce((sum, detail) => sum + detail.total, 0)
-  const discountAmount = (subtotal * this.discountPercentage) / 100
-  this.totalPrice = subtotal - discountAmount + this.shippingFee
+      let sequenceNumber = 1;
 
-  return this.save()
-}
-
-// Method to get calculated totals with populated details (for backward compatibility)
-purchaseOrderSchema.methods.getCalculatedTotals = async function () {
-  const DetailPurchaseOrder = mongoose.model('DetailPurchaseOrder')
-  const details = await DetailPurchaseOrder.find({ purchaseOrder: this._id })
-
-  const subtotal = details.reduce((sum, detail) => sum + detail.total, 0)
-  const discountAmount = (subtotal * this.discountPercentage) / 100
-  const total = subtotal - discountAmount + this.shippingFee
-
-  return {
-    subtotal,
-    discountAmount,
-    total,
-    details
-  }
-}
-
-// Method to approve purchase order
-purchaseOrderSchema.methods.approve = function () {
-  if (this.status !== 'pending') {
-    throw new Error('Only pending purchase orders can be approved')
-  }
-  this.status = 'approved'
-  return this.save()
-}
-
-// Method to mark as received
-purchaseOrderSchema.methods.markAsReceived = function () {
-  if (this.status !== 'approved') {
-    throw new Error('Only approved purchase orders can be marked as received')
-  }
-  this.status = 'received'
-  return this.save()
-}
-
-// Method to cancel purchase order
-purchaseOrderSchema.methods.cancel = function () {
-  if (this.status === 'received') {
-    throw new Error('Cannot cancel received purchase orders')
-  }
-  this.status = 'cancelled'
-  return this.save()
-}
-
-// Method to update payment status
-purchaseOrderSchema.methods.updatePaymentStatus = async function (paidAmount) {
-  if (paidAmount === 0) {
-    this.paymentStatus = 'unpaid'
-  } else if (paidAmount >= this.totalPrice) {
-    this.paymentStatus = 'paid'
-  } else {
-    this.paymentStatus = 'partial'
-  }
-  return this.save()
-}
-
-// Static method to get purchase orders with details and calculated totals
-purchaseOrderSchema.statics.findWithDetails = async function (query = {}) {
-  const orders = await this.find(query)
-    .populate('supplier', 'companyName email phone')
-    .populate('createdBy', 'username fullName')
-    .populate({
-      path: 'details',
-      populate: {
-        path: 'product',
-        select: 'name sku image'
-      }
-    })
-    .sort({ orderDate: -1 })
-
-  // Virtual fields will automatically calculate subtotal, discountAmount, and total
-  // when details are populated
-  return orders
-}
-
-// Static method to get purchase order statistics
-purchaseOrderSchema.statics.getStatistics = async function (options = {}) {
-  const { startDate, endDate, supplierId } = options
-
-  const matchStage = {}
-
-  if (startDate || endDate) {
-    matchStage.orderDate = {}
-    if (startDate) matchStage.orderDate.$gte = new Date(startDate)
-    if (endDate) matchStage.orderDate.$lte = new Date(endDate)
-  }
-
-  if (supplierId) {
-    matchStage.supplier = new mongoose.Types.ObjectId(supplierId)
-  }
-
-  const pipeline = [
-    { $match: matchStage },
-    {
-      $group: {
-        _id: null,
-        totalOrders: { $sum: 1 },
-        totalAmount: { $sum: { $toDouble: '$totalPrice' } },
-        pendingOrders: {
-          $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
-        },
-        approvedOrders: {
-          $sum: { $cond: [{ $eq: ['$status', 'approved'] }, 1, 0] }
-        },
-        receivedOrders: {
-          $sum: { $cond: [{ $eq: ['$status', 'received'] }, 1, 0] }
-        },
-        cancelledOrders: {
-          $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] }
-        },
-        unpaidAmount: {
-          $sum: {
-            $cond: [
-              { $eq: ['$paymentStatus', 'unpaid'] },
-              { $toDouble: '$totalPrice' },
-              0
-            ]
-          }
-        },
-        partialPaidAmount: {
-          $sum: {
-            $cond: [
-              { $eq: ['$paymentStatus', 'partial'] },
-              { $toDouble: '$totalPrice' },
-              0
-            ]
-          }
+      if (lastPO && lastPO.poNumber) {
+        // Extract the sequence number from the last PO number
+        const match = lastPO.poNumber.match(/\d{6}$/);
+        if (match) {
+          sequenceNumber = parseInt(match[0]) + 1;
         }
       }
-    }
-  ]
 
-  const result = await this.aggregate(pipeline)
-
-  if (result.length === 0) {
-    return {
-      totalOrders: 0,
-      totalAmount: 0,
-      averageAmount: 0,
-      pendingOrders: 0,
-      approvedOrders: 0,
-      receivedOrders: 0,
-      cancelledOrders: 0,
-      unpaidAmount: 0,
-      partialPaidAmount: 0
+      // Generate new PO number with 6-digit padding
+      this.poNumber = `PO${currentYear}${String(sequenceNumber).padStart(6, '0')}`;
+    } catch (error) {
+      return next(error);
     }
   }
+  next();
+});
 
-  const stats = result[0]
-  stats.averageAmount = stats.totalOrders > 0 ? stats.totalAmount / stats.totalOrders : 0
-  delete stats._id
-
-  return stats
-}
-
+// ============ JSON TRANSFORMATION ============
 purchaseOrderSchema.set('toJSON', {
   transform: (document, returnedObject) => {
-    returnedObject.id = returnedObject._id.toString()
-    delete returnedObject._id
-    delete returnedObject.__v
+    returnedObject.id = returnedObject._id.toString();
+    delete returnedObject._id;
+    delete returnedObject.__v;
 
     // Convert Decimal128 to number
     if (returnedObject.shippingFee && typeof returnedObject.shippingFee === 'object') {
-      returnedObject.shippingFee = parseFloat(returnedObject.shippingFee.toString())
+      returnedObject.shippingFee = parseFloat(returnedObject.shippingFee.toString());
     }
     if (returnedObject.discountPercentage && typeof returnedObject.discountPercentage === 'object') {
-      returnedObject.discountPercentage = parseFloat(returnedObject.discountPercentage.toString())
+      returnedObject.discountPercentage = parseFloat(returnedObject.discountPercentage.toString());
     }
     if (returnedObject.totalPrice && typeof returnedObject.totalPrice === 'object') {
-      returnedObject.totalPrice = parseFloat(returnedObject.totalPrice.toString())
+      returnedObject.totalPrice = parseFloat(returnedObject.totalPrice.toString());
     }
   }
-})
+});
 
-module.exports = mongoose.model('PurchaseOrder', purchaseOrderSchema)
+module.exports = mongoose.model('PurchaseOrder', purchaseOrderSchema);
