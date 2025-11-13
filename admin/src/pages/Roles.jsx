@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { RolesList, RolesListHeader, AddRolesModal, EditRolesModal } from '../components/RolesList';
+import { RolesList, RolesListHeader, AddRolesModal, EditRolesModal, ViewRolesModal } from '../components/RolesList';
 import roleService from '../services/roleService';
 
 export const Roles = () => {
@@ -20,6 +20,7 @@ export const Roles = () => {
   const [sortOrder, setSortOrder] = useState('asc');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState(null);
 
   // Fetch roles on mount
@@ -33,10 +34,21 @@ export const Roles = () => {
     setError(null);
 
     try {
-      const response = await roleService.getAllRoles(params);
+      // Include employee count
+      const response = await roleService.getAllRoles({
+        ...params,
+        withEmployees: true
+      });
 
       if (response.success) {
-        setRoles(response.data.roles || []);
+        // Sort by roleCode ascending (default)
+        const sortedRoles = (response.data.roles || []).sort((a, b) => {
+          const aVal = (a.roleCode || '').toLowerCase();
+          const bVal = (b.roleCode || '').toLowerCase();
+          return aVal > bVal ? 1 : -1;
+        });
+
+        setRoles(sortedRoles);
       } else {
         setError(response.error || 'Failed to fetch roles');
       }
@@ -100,6 +112,12 @@ export const Roles = () => {
     console.log('Role added successfully:', newRole);
     // Refresh the list
     fetchRoles();
+  };
+
+  // Handle view details
+  const handleViewDetails = (role) => {
+    setSelectedRole(role);
+    setShowViewModal(true);
   };
 
   // Handle edit role
@@ -181,6 +199,7 @@ export const Roles = () => {
               roles={roles}
               onEdit={handleEditRole}
               onDelete={handleDeleteRole}
+              onViewDetails={handleViewDetails}
               onSort={handleSort}
               sortField={sortField}
               sortOrder={sortOrder}
@@ -219,6 +238,16 @@ export const Roles = () => {
             setSelectedRole(null);
           }}
           onSuccess={handleEditSuccess}
+          role={selectedRole}
+        />
+
+        {/* View Role Modal */}
+        <ViewRolesModal
+          isOpen={showViewModal}
+          onClose={() => {
+            setShowViewModal(false);
+            setSelectedRole(null);
+          }}
           role={selectedRole}
         />
       </div>

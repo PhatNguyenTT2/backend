@@ -11,6 +11,22 @@ export const POSLogin = () => {
   const [attemptsRemaining, setAttemptsRemaining] = useState(null);
   const [minutesLocked, setMinutesLocked] = useState(null);
 
+  // Format employee code handler
+  const handleEmployeeCodeChange = (value) => {
+    // Remove all non-digit characters
+    const digits = value.replace(/\D/g, '');
+
+    // Format as USER + digits (max 3 digits, no auto-padding)
+    if (digits.length > 0) {
+      const formattedCode = 'USER' + digits.slice(0, 3);
+      setEmployeeCode(formattedCode);
+    } else if (value.toUpperCase().startsWith('USER')) {
+      setEmployeeCode(value.toUpperCase());
+    } else {
+      setEmployeeCode('');
+    }
+  };
+
   // Check if already logged in
   useEffect(() => {
     if (posLoginService.isLoggedIn()) {
@@ -18,14 +34,16 @@ export const POSLogin = () => {
     }
   }, [navigate]);
 
-  // Clear error when inputs change
+  // Clear error only when employee code changes (not PIN)
+  // PIN is cleared programmatically on error, so we don't want to clear error when PIN changes
   useEffect(() => {
     if (error) {
       setError('');
       setAttemptsRemaining(null);
       setMinutesLocked(null);
     }
-  }, [employeeCode, pin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeCode]);
 
   // Handle number pad click
   const handleNumberClick = (num) => {
@@ -80,13 +98,30 @@ export const POSLogin = () => {
         const errorData = response.error;
 
         if (typeof errorData === 'object') {
-          setError(errorData.message || 'Login failed');
-
           // Handle specific error codes
-          if (errorData.code === 'INVALID_PIN' && errorData.attemptsRemaining !== undefined) {
-            setAttemptsRemaining(errorData.attemptsRemaining);
+          if (errorData.code === 'INVALID_PIN') {
+            // Show attempts remaining prominently
+            const remaining = errorData.attemptsRemaining !== undefined ? errorData.attemptsRemaining : null;
+            setAttemptsRemaining(remaining);
+
+            if (remaining !== null && remaining > 0) {
+              setError(`Incorrect PIN. You have ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`);
+            } else if (remaining === 0) {
+              setError('Incorrect PIN. Your account will be locked on next failed attempt.');
+            } else {
+              setError(errorData.message || 'Invalid PIN');
+            }
           } else if (errorData.code === 'PIN_LOCKED' && errorData.minutesLeft) {
             setMinutesLocked(errorData.minutesLeft);
+            setError(errorData.message || `Account locked for ${errorData.minutesLeft} minutes`);
+          } else if (errorData.code === 'INVALID_CREDENTIALS') {
+            setError('Invalid employee code or PIN. Please check and try again.');
+          } else if (errorData.code === 'ACCOUNT_INACTIVE') {
+            setError('Your account is inactive. Please contact administrator.');
+          } else if (errorData.code === 'POS_AUTH_NOT_FOUND') {
+            setError('POS access not set up for this employee. Contact administrator.');
+          } else {
+            setError(errorData.message || 'Login failed');
           }
         } else {
           setError(errorData || 'Login failed');
@@ -97,7 +132,11 @@ export const POSLogin = () => {
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError('An unexpected error occurred. Please try again.');
+      if (err.response?.status === 404) {
+        setError('Service unavailable. Please contact system administrator.');
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
       setPin('');
     } finally {
       setLoading(false);
@@ -158,25 +197,64 @@ export const POSLogin = () => {
         <form onSubmit={handleLogin} className="p-6">
           {/* Error Message */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex items-start gap-2">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0 mt-0.5">
-                  <circle cx="12" cy="12" r="10" stroke="#EF4444" strokeWidth="2" />
-                  <path d="M12 8v4M12 16h.01" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" />
+            <div className={`mb-4 p-4 rounded-lg border-2 ${attemptsRemaining !== null && attemptsRemaining <= 1
+              ? 'bg-orange-50 border-orange-300'
+              : 'bg-red-50 border-red-200'
+              }`}>
+              <div className="flex items-start gap-3">
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="flex-shrink-0 mt-0.5"
+                >
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke={attemptsRemaining !== null && attemptsRemaining <= 1 ? "#F97316" : "#EF4444"}
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M12 8v4M12 16h.01"
+                    stroke={attemptsRemaining !== null && attemptsRemaining <= 1 ? "#F97316" : "#EF4444"}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
                 </svg>
                 <div className="flex-1">
-                  <span className="text-[13px] font-['Poppins',sans-serif] text-red-700 block">
+                  <span className={`text-[14px] font-semibold font-['Poppins',sans-serif] block ${attemptsRemaining !== null && attemptsRemaining <= 1
+                    ? 'text-orange-800'
+                    : 'text-red-800'
+                    }`}>
                     {error}
                   </span>
-                  {attemptsRemaining !== null && attemptsRemaining >= 0 && (
-                    <span className="text-[11px] font-['Poppins',sans-serif] text-red-600 block mt-1">
-                      {attemptsRemaining} attempt{attemptsRemaining !== 1 ? 's' : ''} remaining
-                    </span>
+
+                  {/* Warning for low attempts */}
+                  {attemptsRemaining !== null && attemptsRemaining > 0 && attemptsRemaining <= 2 && (
+                    <div className="mt-2 p-2 bg-orange-100 rounded border border-orange-200">
+                      <span className="text-[12px] font-medium font-['Poppins',sans-serif] text-orange-900 flex items-center gap-1">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                          <path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        Warning: Only {attemptsRemaining} attempt{attemptsRemaining !== 1 ? 's' : ''} left before account lock!
+                      </span>
+                    </div>
                   )}
+
+                  {/* Lock notification */}
                   {minutesLocked !== null && (
-                    <span className="text-[11px] font-['Poppins',sans-serif] text-red-600 block mt-1">
-                      Try again in {minutesLocked} minute{minutesLocked !== 1 ? 's' : ''}
-                    </span>
+                    <div className="mt-2 p-2 bg-red-100 rounded border border-red-200">
+                      <span className="text-[12px] font-medium font-['Poppins',sans-serif] text-red-900 flex items-center gap-1">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                          <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="2" />
+                          <path d="M8 11V7a4 4 0 018 0v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                        Account locked. Try again in {minutesLocked} minute{minutesLocked !== 1 ? 's' : ''}.
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -188,15 +266,24 @@ export const POSLogin = () => {
             <label className="block text-[14px] font-semibold font-['Poppins',sans-serif] text-gray-700 mb-2">
               Employee Code
             </label>
-            <input
-              type="text"
-              value={employeeCode}
-              onChange={(e) => setEmployeeCode(e.target.value.toUpperCase())}
-              placeholder="USER001"
-              disabled={loading}
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg text-[16px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-              autoFocus
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                <span className="text-[16px] font-semibold font-['Poppins',sans-serif] text-gray-500">USER</span>
+              </div>
+              <input
+                type="text"
+                value={employeeCode.replace('USER', '')}
+                onChange={(e) => handleEmployeeCodeChange(e.target.value)}
+                placeholder="001"
+                maxLength="3"
+                disabled={loading}
+                className="w-full pl-[70px] pr-4 py-3 border-2 border-gray-300 rounded-lg text-[16px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                autoFocus
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-gray-500 font-['Poppins',sans-serif]">
+              Enter 3-digit employee number (e.g., 001 → USER001)
+            </p>
           </div>
 
           {/* PIN Input */}

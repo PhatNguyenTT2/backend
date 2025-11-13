@@ -320,10 +320,17 @@ employeesRouter.put('/:id', async (request, response) => {
  * @note    Hard delete - nếu muốn soft delete, deactivate user account thay vì xóa employee
  */
 employeesRouter.delete('/:id', async (request, response) => {
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
   try {
     const employee = await Employee.findById(request.params.id)
+      .populate('userAccount')
+      .session(session)
 
     if (!employee) {
+      await session.abortTransaction()
+      session.endSession()
       return response.status(404).json({
         success: false,
         error: {
@@ -333,14 +340,43 @@ employeesRouter.delete('/:id', async (request, response) => {
       })
     }
 
+    // Check if employee account is inactive before allowing deletion
+    if (employee.userAccount && employee.userAccount.isActive) {
+      await session.abortTransaction()
+      session.endSession()
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Cannot delete an active employee. Please deactivate the account first.',
+          code: 'EMPLOYEE_STILL_ACTIVE'
+        }
+      })
+    }
+
+    // Delete associated POS authentication if exists
+    await EmployeePOSAuth.findOneAndDelete(
+      { employee: request.params.id },
+      { session }
+    )
+
+    // Delete associated user account if exists
+    if (employee.userAccount) {
+      await UserAccount.findByIdAndDelete(employee.userAccount._id, { session })
+    }
+
     // Delete employee
-    await Employee.findByIdAndDelete(request.params.id)
+    await Employee.findByIdAndDelete(request.params.id, { session })
+
+    await session.commitTransaction()
+    session.endSession()
 
     response.json({
       success: true,
-      message: 'Employee deleted successfully'
+      message: 'Employee and associated data deleted successfully'
     })
   } catch (error) {
+    await session.abortTransaction()
+    session.endSession()
     console.error('Error in delete employee:', error)
     response.status(500).json({
       success: false,

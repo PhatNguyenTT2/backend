@@ -92,9 +92,20 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
         <div className="min-w-[1000px]">
           {/* Table Header */}
           <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
+            {/* Category Code Column - Sortable */}
+            <div
+              className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('categoryCode')}
+            >
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
+                ID
+                {getSortIcon('categoryCode')}
+              </p>
+            </div>
+
             {/* Name Column - Sortable */}
             <div
-              className="flex-1 min-w-[180px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
+              className="flex-1 min-w-[160px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('name')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
@@ -104,14 +115,14 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
             </div>
 
             {/* Image Column */}
-            <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+            <div className="w-[80px] px-3 flex items-center flex-shrink-0">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                 Image
               </p>
             </div>
 
             {/* Description Column */}
-            <div className="flex-1 min-w-[200px] px-3 flex items-center">
+            <div className="flex-1 min-w-[180px] px-3 flex items-center">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                 Description
               </p>
@@ -119,7 +130,7 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
 
             {/* Product Count Column - Sortable */}
             <div
-              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('productCount')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
@@ -155,41 +166,49 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
                 className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== categories.length - 1 ? 'border-b border-gray-100' : ''
                   }`}
               >
+
+                {/* Category Code */}
+                <div className="w-[140px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[12px] font-medium font-['Poppins',sans-serif] text-gray-600 leading-[20px] truncate">
+                    {category.categoryCode || '-'}
+                  </p>
+                </div>
+
                 {/* Name */}
-                <div className="flex-1 min-w-[180px] px-3 flex items-center">
+                <div className="flex-1 min-w-[160px] px-3 flex items-center">
                   <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
                     {category.name || '-'}
                   </p>
                 </div>
 
                 {/* Image */}
-                <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                <div className="w-[80px] px-3 flex items-center flex-shrink-0">
                   {category.image ? (
                     <img
                       src={category.image}
                       alt={category.name}
-                      className="w-12 h-12 object-cover rounded border border-gray-200"
+                      className="w-10 h-10 object-cover rounded border border-gray-200"
                       onError={(e) => {
                         e.target.onerror = null;
                         e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"%3E%3Crect width="48" height="48" fill="%23f3f4f6"/%3E%3Ctext x="24" y="24" text-anchor="middle" dy=".3em" fill="%236b7280" font-family="sans-serif" font-size="12"%3ENo Image%3C/text%3E%3C/svg%3E';
                       }}
                     />
                   ) : (
-                    <div className="w-12 h-12 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                      <span className="text-[10px] text-gray-400">No Image</span>
+                    <div className="w-10 h-10 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                      <span className="text-[9px] text-gray-400">No Image</span>
                     </div>
                   )}
                 </div>
 
                 {/* Description */}
-                <div className="flex-1 min-w-[200px] px-3 flex items-center">
+                <div className="flex-1 min-w-[180px] px-3 flex items-center">
                   <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] line-clamp-2">
                     {truncateText(category.description, 150)}
                   </p>
                 </div>
 
                 {/* Product Count */}
-                <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                <div className="w-[100px] px-3 flex items-center flex-shrink-0">
                   <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
                     {category.productCount ?? 0}
                   </p>
@@ -327,8 +346,8 @@ export const CategoryList = ({ categories = [], onSort, sortField, sortOrder, on
                 }}
                 disabled={category.isActive !== false || (category.productCount > 0)}
                 className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${category.isActive !== false || (category.productCount > 0)
-                    ? 'text-gray-400 cursor-not-allowed opacity-50'
-                    : 'text-gray-700 hover:bg-red-50 hover:text-red-600'
+                  ? 'text-gray-400 cursor-not-allowed opacity-50'
+                  : 'text-gray-700 hover:bg-red-50 hover:text-red-600'
                   }`}
                 title={
                   category.isActive !== false

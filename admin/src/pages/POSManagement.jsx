@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { POSAccessList, POSListHeader } from '../components/POSList';
-import { EditPOSAccessModal, GrantPOSAccessModal } from '../components/POSList/POSModal';
+import { EditPOSAccessModal, GrantPOSAccessModal, ViewPOSAccessModal } from '../components/POSList/POSModal';
 import posAuthService from '../services/posAuthService';
 
 export const POSManagement = () => {
@@ -25,6 +25,7 @@ export const POSManagement = () => {
   // Modal states
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isGrantModalOpen, setIsGrantModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   // Statistics
@@ -209,7 +210,8 @@ export const POSManagement = () => {
   // Handle view details
   const handleViewDetails = (access) => {
     console.log('View POS details:', access);
-    // TODO: Open ViewPOSDetailsModal
+    setSelectedEmployee(access);
+    setIsViewModalOpen(true);
   };
 
   // Handle edit settings
@@ -260,7 +262,7 @@ export const POSManagement = () => {
     }
 
     try {
-      const response = await posAuthService.resetFailedAttempts(access.employee.id);
+      const response = await posAuthService.resetFailedAttempts(access.employee._id);
 
       if (response.success) {
         alert('Account unlocked successfully');
@@ -270,7 +272,7 @@ export const POSManagement = () => {
       }
     } catch (err) {
       console.error('Error unlocking account:', err);
-      alert(err.response?.data?.error || err.message || 'Failed to unlock account');
+      alert(err.response?.data?.error?.message || err.message || 'Failed to unlock account');
     }
   };
 
@@ -284,7 +286,14 @@ export const POSManagement = () => {
         return;
       }
 
-      const response = await posAuthService.disablePOSAccess(access.employee.id);
+      // Check if access is active (not locked, not denied)
+      const isActive = access.canAccessPOS && !access.isPinLocked;
+      if (!isActive) {
+        alert('Can only revoke access for active POS accounts');
+        return;
+      }
+
+      const response = await posAuthService.disablePOSAccess(access.employee._id);
 
       if (response.success) {
         alert('POS access revoked successfully');
@@ -294,7 +303,7 @@ export const POSManagement = () => {
       }
     } catch (err) {
       console.error('Error revoking access:', err);
-      alert(err.response?.data?.error || err.message || 'Failed to revoke access');
+      alert(err.response?.data?.error?.message || err.message || 'Failed to revoke access');
     }
   };
 
@@ -390,8 +399,16 @@ export const POSManagement = () => {
           onSuccess={handleEditSuccess}
         />
 
+        <ViewPOSAccessModal
+          isOpen={isViewModalOpen}
+          onClose={() => {
+            setIsViewModalOpen(false);
+            setSelectedEmployee(null);
+          }}
+          employee={selectedEmployee}
+        />
+
         {/* TODO: Add more modals
-          - ViewPOSDetailsModal
           - ResetPINModal
         */}
       </div>

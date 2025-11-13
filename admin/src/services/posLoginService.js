@@ -47,6 +47,17 @@ const posLoginService = {
         };
       }
 
+      // Handle specific HTTP status codes
+      if (error.response?.status === 404) {
+        return {
+          success: false,
+          error: {
+            message: 'POS login service is unavailable. Please contact administrator.',
+            code: 'SERVICE_UNAVAILABLE'
+          }
+        };
+      }
+
       // Network or other errors
       return {
         success: false,

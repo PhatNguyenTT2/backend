@@ -282,18 +282,28 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onManageAccount
 
             <button
               onClick={() => {
+                if (employee.isActive) {
+                  alert('Cannot delete an active employee. Please deactivate the account first.');
+                  setActiveDropdown(null);
+                  return;
+                }
                 if (window.confirm(`Are you sure you want to delete ${employee.fullName}?`)) {
                   onDelete && onDelete(employee.id);
                 }
                 setActiveDropdown(null);
               }}
-              className="w-full px-4 py-2 text-left hover:bg-red-50 transition-colors flex items-center gap-2"
+              disabled={employee.isActive}
+              className={`w-full px-4 py-2 text-left transition-colors flex items-center gap-2 ${employee.isActive
+                  ? 'opacity-50 cursor-not-allowed bg-gray-50'
+                  : 'hover:bg-red-50 cursor-pointer'
+                }`}
+              title={employee.isActive ? 'Employee must be inactive before deletion' : 'Delete employee'}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M2 4H3.33333H14" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M5.33334 4.00001V2.66668C5.33334 2.31305 5.47381 1.97392 5.72386 1.72387C5.97391 1.47382 6.31305 1.33334 6.66668 1.33334H9.33334C9.68697 1.33334 10.0261 1.47382 10.2761 1.72387C10.5262 1.97392 10.6667 2.31305 10.6667 2.66668V4.00001M12.6667 4.00001V13.3333C12.6667 13.687 12.5262 14.0261 12.2761 14.2761C12.0261 14.5262 11.687 14.6667 11.3333 14.6667H4.66668C4.31305 14.6667 3.97391 14.5262 3.72386 14.2761C3.47381 14.0261 3.33334 13.687 3.33334 13.3333V4.00001H12.6667Z" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 4H3.33333H14" stroke={employee.isActive ? "#9CA3AF" : "#EF4444"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M5.33334 4.00001V2.66668C5.33334 2.31305 5.47381 1.97392 5.72386 1.72387C5.97391 1.47382 6.31305 1.33334 6.66668 1.33334H9.33334C9.68697 1.33334 10.0261 1.47382 10.2761 1.72387C10.5262 1.97392 10.6667 2.31305 10.6667 2.66668V4.00001M12.6667 4.00001V13.3333C12.6667 13.687 12.5262 14.0261 12.2761 14.2761C12.0261 14.5262 11.687 14.6667 11.3333 14.6667H4.66668C4.31305 14.6667 3.97391 14.5262 3.72386 14.2761C3.47381 14.0261 3.33334 13.687 3.33334 13.3333V4.00001H12.6667Z" stroke={employee.isActive ? "#9CA3AF" : "#EF4444"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span className="text-[12px] font-['Poppins',sans-serif] text-red-600">
+              <span className={`text-[12px] font-['Poppins',sans-serif] ${employee.isActive ? 'text-gray-400' : 'text-red-600'}`}>
                 Delete
               </span>
             </button>

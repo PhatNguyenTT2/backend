@@ -10,6 +10,7 @@ const roleService = {
    * @param {Object} params - Query parameters
    * @param {string} params.code - Filter by role code (e.g., ROLE001)
    * @param {string} params.search - Search by role name or description
+   * @param {boolean} params.withEmployees - Include employee count
    * @returns {Promise<Object>} Response with roles array and count
    */
   getAllRoles: async (params = {}) => {
@@ -25,11 +26,13 @@ const roleService = {
   /**
    * Get role by ID
    * @param {string} roleId - Role ID
+   * @param {boolean} withEmployees - Include employee count
    * @returns {Promise<Object>} Role data
    */
-  getRoleById: async (roleId) => {
+  getRoleById: async (roleId, withEmployees = false) => {
     try {
-      const response = await api.get(`/roles/${roleId}`)
+      const params = withEmployees ? { withEmployees: true } : {}
+      const response = await api.get(`/roles/${roleId}`, { params })
       return response.data
     } catch (error) {
       console.error('Error fetching role:', error)

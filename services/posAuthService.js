@@ -20,7 +20,11 @@ const getAllPOSAuthRecords = async (filters = {}) => {
       path: 'employee',
       populate: {
         path: 'userAccount',
-        select: 'userCode email role isActive'
+        select: 'userCode email role isActive',
+        populate: {
+          path: 'role',
+          select: 'roleCode roleName'
+        }
       }
     })
     .lean()

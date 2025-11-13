@@ -53,7 +53,14 @@ export const Employees = () => {
           isActive: emp.userAccount?.isActive
         }));
 
-        setEmployees(transformedEmployees);
+        // Sort by userCode ascending (default)
+        const sortedEmployees = transformedEmployees.sort((a, b) => {
+          const aVal = (a.userCode || '').toLowerCase();
+          const bVal = (b.userCode || '').toLowerCase();
+          return aVal > bVal ? 1 : -1;
+        });
+
+        setEmployees(sortedEmployees);
       } else {
         setError(response.error || 'Failed to fetch employees');
       }

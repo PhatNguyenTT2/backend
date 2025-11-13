@@ -339,21 +339,6 @@ export const POSAccessList = ({
               </span>
             </button>
 
-            <button
-              onClick={() => {
-                onResetPIN && onResetPIN(access);
-                setActiveDropdown(null);
-              }}
-              className="w-full px-4 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M13.65 2.35C12.2 0.9 10.21 0 8 0C3.58 0 0.01 3.58 0.01 8C0.01 12.42 3.58 16 8 16C11.73 16 14.84 13.45 15.73 10H13.65C12.83 12.33 10.61 14 8 14C4.69 14 2 11.31 2 8C2 4.69 4.69 2 8 2C9.66 2 11.14 2.69 12.22 3.78L9 7H16V0L13.65 2.35Z" fill="#6B7280" />
-              </svg>
-              <span className="text-[12px] font-['Poppins',sans-serif] text-[#212529]">
-                Reset PIN
-              </span>
-            </button>
-
             {access.isPinLocked && (
               <button
                 onClick={() => {
@@ -376,17 +361,29 @@ export const POSAccessList = ({
 
             <button
               onClick={() => {
+                const isActive = access.canAccessPOS && !access.isPinLocked;
+                if (!isActive) {
+                  alert('Can only revoke access for active POS accounts');
+                  setActiveDropdown(null);
+                  return;
+                }
                 if (window.confirm(`Are you sure you want to revoke POS access for ${access.employee?.fullName}?`)) {
                   onRevoke && onRevoke(access.id);
                 }
                 setActiveDropdown(null);
               }}
-              className="w-full px-4 py-2 text-left hover:bg-red-50 transition-colors flex items-center gap-2"
+              disabled={!access.canAccessPOS || access.isPinLocked}
+              className={`w-full px-4 py-2 text-left transition-colors flex items-center gap-2 ${!access.canAccessPOS || access.isPinLocked
+                  ? 'opacity-50 cursor-not-allowed bg-gray-50'
+                  : 'hover:bg-red-50 cursor-pointer'
+                }`}
+              title={!access.canAccessPOS || access.isPinLocked ? 'Can only revoke access for active POS accounts' : 'Revoke POS access'}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 6V12.6667C10 13.0203 9.85953 13.3594 9.60948 13.6095C9.35943 13.8595 9.02029 14 8.66667 14H3.33333C2.97971 14 2.64057 13.8595 2.39052 13.6095C2.14048 13.3594 2 13.0203 2 12.6667V6M12.6667 6V12.6667C12.6667 13.0203 12.5262 13.3594 12.2761 13.6095C12.0261 13.8595 11.687 14 11.3333 14H10.6667M4.66667 6V3.33333C4.66667 2.97971 4.80714 2.64057 5.05719 2.39052C5.30724 2.14048 5.64638 2 6 2H10C10.3536 2 10.6928 2.14048 10.9428 2.39052C11.1929 2.64057 11.3333 2.97971 11.3333 3.33333V6" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M10 6V12.6667C10 13.0203 9.85953 13.3594 9.60948 13.6095C9.35943 13.8595 9.02029 14 8.66667 14H3.33333C2.97971 14 2.64057 13.8595 2.39052 13.6095C2.14048 13.3594 2 13.0203 2 12.6667V6M12.6667 6V12.6667C12.6667 13.0203 12.5262 13.3594 12.2761 13.6095C12.0261 13.8595 11.687 14 11.3333 14H10.6667M4.66667 6V3.33333C4.66667 2.97971 4.80714 2.64057 5.05719 2.39052C5.30724 2.14048 5.64638 2 6 2H10C10.3536 2 10.6928 2.14048 10.9428 2.39052C11.1929 2.64057 11.3333 2.97971 11.3333 3.33333V6" stroke={!access.canAccessPOS || access.isPinLocked ? "#9CA3AF" : "#EF4444"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span className="text-[12px] font-['Poppins',sans-serif] text-red-600">
+              <span className={`text-[12px] font-['Poppins',sans-serif] ${!access.canAccessPOS || access.isPinLocked ? 'text-gray-400' : 'text-red-600'
+                }`}>
                 Revoke Access
               </span>
             </button>

@@ -10,17 +10,16 @@ const Role = require('../models/role')
  */
 rolesRouter.get('/', async (request, response) => {
   try {
-    const { code, search } = request.query
+    const { code, search, withEmployees } = request.query
 
-    let roles
+    let query
 
     if (code) {
       // Find by code
-      const role = await Role.findOne({ roleCode: code.toUpperCase() })
-      roles = role ? [role] : []
+      query = Role.findOne({ roleCode: code.toUpperCase() })
     } else if (search) {
       // Search by name or description
-      roles = await Role.find({
+      query = Role.find({
         $or: [
           { roleName: new RegExp(search, 'i') },
           { description: new RegExp(search, 'i') }
@@ -28,7 +27,31 @@ rolesRouter.get('/', async (request, response) => {
       }).sort({ roleName: 1 })
     } else {
       // Get all roles
-      roles = await Role.find().sort({ roleName: 1 })
+      query = Role.find().sort({ roleName: 1 })
+    }
+
+    // Populate employee count if requested
+    if (withEmployees === 'true') {
+      query = query.populate('userCount')
+    }
+
+    let roles = await query
+
+    // Convert single result to array for consistent response
+    if (code && roles) {
+      roles = [roles]
+    } else if (code && !roles) {
+      roles = []
+    }
+
+    // Add employeeCount field from virtual userCount
+    if (withEmployees === 'true') {
+      roles = roles.map(role => {
+        const roleObj = role.toJSON()
+        roleObj.employeeCount = roleObj.userCount || 0
+        delete roleObj.userCount
+        return roleObj
+      })
     }
 
     response.json({
@@ -57,7 +80,16 @@ rolesRouter.get('/', async (request, response) => {
  */
 rolesRouter.get('/:id', async (request, response) => {
   try {
-    const role = await Role.findById(request.params.id)
+    const { withEmployees } = request.query
+
+    let query = Role.findById(request.params.id)
+
+    // Populate employee count if requested
+    if (withEmployees === 'true') {
+      query = query.populate('userCount')
+    }
+
+    let role = await query
 
     if (!role) {
       return response.status(404).json({
@@ -67,6 +99,14 @@ rolesRouter.get('/:id', async (request, response) => {
           code: 'ROLE_NOT_FOUND'
         }
       })
+    }
+
+    // Add employeeCount field from virtual userCount
+    if (withEmployees === 'true') {
+      const roleObj = role.toJSON()
+      roleObj.employeeCount = roleObj.userCount || 0
+      delete roleObj.userCount
+      role = roleObj
     }
 
     response.json({

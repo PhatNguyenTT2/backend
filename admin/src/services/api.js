@@ -27,11 +27,26 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    console.log('Interceptor caught error:', error.response?.status, error.config?.url);
+
     if (error.response?.status === 401) {
-      // Token invalid or expired
-      localStorage.removeItem('adminToken')
-      localStorage.removeItem('adminUser')
-      window.location.href = '/'
+      // Don't redirect if it's a login attempt (allow login errors to be handled by the component)
+      const url = error.config?.url || ''
+      const isLoginRequest = url.includes('/pos-login') || url.includes('/login')
+
+      console.log('401 error - URL:', url, 'isLoginRequest:', isLoginRequest);
+
+      if (!isLoginRequest) {
+        // Token invalid or expired for authenticated requests
+        console.log('Not a login request, redirecting to /');
+        localStorage.removeItem('adminToken')
+        localStorage.removeItem('adminUser')
+        localStorage.removeItem('posToken')
+        localStorage.removeItem('posEmployee')
+        window.location.href = '/'
+      } else {
+        console.log('Login request, allowing error to propagate');
+      }
     }
     return Promise.reject(error)
   }

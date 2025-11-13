@@ -23,7 +23,7 @@ const employeePOSAuthSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0,
-    max: 10  // Hard limit
+    max: 5  // Hard limit - matches MAX_FAILED_ATTEMPTS in posAuthHelpers
   },
 
   pinLockedUntil: {

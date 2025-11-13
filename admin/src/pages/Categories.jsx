@@ -24,7 +24,7 @@ export const Categories = () => {
   // Filters and sorting
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState('name');
+  const [sortField, setSortField] = useState('categoryCode');
   const [sortOrder, setSortOrder] = useState('asc');
 
   // Pagination state
@@ -64,7 +64,7 @@ export const Categories = () => {
       if (sortField === 'productCount' || sortField === 'order') {
         aVal = Number(aVal) || 0;
         bVal = Number(bVal) || 0;
-      } else if (sortField === 'name') {
+      } else if (sortField === 'name' || sortField === 'categoryCode') {
         aVal = String(aVal).toLowerCase();
         bVal = String(bVal).toLowerCase();
       }
