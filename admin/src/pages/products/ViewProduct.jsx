@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Layout } from '../../components/Layout';
 import { Breadcrumb } from '../../components/Breadcrumb';
 import { FilterProduct } from '../../components/FilterProduct';
-import { ProductList } from '../../components/ProductList';
+import { ProductList } from '../../components/ViewProduct';
 
 const ViewProduct = () => {
   // Breadcrumb items

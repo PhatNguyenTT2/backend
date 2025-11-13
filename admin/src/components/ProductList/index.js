@@ -1,3 +1,4 @@
 export { ProductList } from './ProductList';
 export { ProductListHeader } from './ProductListHeader';
-export { SortBy } from './SortBy';
+export { AddProductModal } from './AddProductModal';
+export { EditProductModal } from './EditProductModal';

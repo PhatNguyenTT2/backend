@@ -92,7 +92,7 @@ export const NavigationMenuSection = () => {
           arrow: true,
           permission: PERMISSIONS.MANAGE_PRODUCTS,
           submenu: [
-            { name: 'List', href: '/products/list' },
+            { name: 'List', href: '/products/' },
             { name: 'View', href: '/products/view' },
           ]
         },

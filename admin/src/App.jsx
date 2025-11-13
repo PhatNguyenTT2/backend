@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { Dashboard, ViewProduct, DetailProduct, ListProduct, LoginSignup, Orders, Categories, Employees, Customers, Suppliers, Inventories, SalesReports, PurchaseReports, Roles, POSManagement } from "./pages";
+import { Dashboard, ViewProduct, Products, LoginSignup, Orders, Categories, Employees, Customers, Suppliers, Inventories, SalesReports, PurchaseReports, Roles, POSManagement } from "./pages";
 import { POSLogin, POSMain } from "./pages/pos";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import Payments from "./pages/Payments";
@@ -37,18 +37,10 @@ function App() {
           }
         />
         <Route
-          path="/products/:id/:slug"
+          path="/products"
           element={
             <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_PRODUCTS}>
-              <DetailProduct />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/products/list"
-          element={
-            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_PRODUCTS}>
-              <ListProduct />
+              <Products />
             </ProtectedRoute>
           }
         />
