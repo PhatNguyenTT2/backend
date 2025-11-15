@@ -6,8 +6,13 @@ import { useNavigate } from 'react-router-dom';
  * Hiển thị thông tin sản phẩm dạng card
  * Chỉ sử dụng các field có trong Product model:
  * - productCode, name, image, category, unitPrice, vendor, isActive
+ * 
+ * Props:
+ * - product: Product object
+ * - onAddToCart: Callback function when adding to cart (optional)
+ * - onClick: Callback function when clicking card (optional)
  */
-export const ProductCard = ({ product }) => {
+export const ProductCard = ({ product, onAddToCart, onClick }) => {
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
 
@@ -27,13 +32,22 @@ export const ProductCard = ({ product }) => {
   const imageUrl = product.image || null;
 
   const handleClick = () => {
-    navigate(`/products/${productId}`);
+    // If onClick prop is provided, use it (for POS mode)
+    if (onClick) {
+      onClick(product);
+    } else {
+      // Otherwise navigate to product detail (for normal product list)
+      navigate(`/products/${productId}`);
+    }
   };
 
   const handleAddToCart = (e) => {
     e.stopPropagation();
-    console.log('Add to cart:', productId);
-    // TODO: Implement add to cart logic
+    if (onAddToCart) {
+      onAddToCart(product);
+    } else {
+      console.log('Add to cart:', productId);
+    }
   };
 
   return (

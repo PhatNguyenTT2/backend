@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import posLoginService from '../../services/posLoginService';
+import productService from '../../services/productService';
+import categoryService from '../../services/categoryService';
+import {
+  POSHeader,
+  POSSearchBar,
+  POSCategoryFilter,
+  POSProductGrid,
+  POSCart,
+  POSPaymentModal,
+  POSLoadingScreen
+} from '../../components/POSMain';
 
 export const POSMain = () => {
   const navigate = useNavigate();
@@ -13,20 +24,19 @@ export const POSMain = () => {
   const [currentEmployee, setCurrentEmployee] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(false);
 
   // Load employee and verify session
   useEffect(() => {
     const checkAuth = async () => {
       setLoading(true);
 
-      // Check if logged in
       if (!posLoginService.isLoggedIn()) {
         navigate('/pos-login');
         return;
       }
 
       try {
-        // Verify session is still valid
         const result = await posLoginService.verifySession();
 
         if (!result.success) {
@@ -35,7 +45,6 @@ export const POSMain = () => {
           return;
         }
 
-        // Get employee info from storage
         const employee = posLoginService.getCurrentEmployee();
         setCurrentEmployee(employee);
       } catch (error) {
@@ -47,7 +56,77 @@ export const POSMain = () => {
     };
 
     checkAuth();
-  }, [navigate]);  // Update time every second
+  }, [navigate]);
+
+  // Load categories from backend
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await categoryService.getActiveCategories();
+
+        // Backend returns: { success: true, data: { categories: [...], pagination: {...} } }
+        const categoriesData = response.data?.categories || [];
+
+        const allCategories = [
+          { _id: 'all', id: 'all', name: 'All Products', categoryCode: 'ALL' },
+          ...categoriesData.map(cat => ({
+            ...cat,
+            id: cat._id || cat.id
+          }))
+        ];
+
+        setCategories(allCategories);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        setCategories([{ _id: 'all', id: 'all', name: 'All Products', categoryCode: 'ALL' }]);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  // Load products from backend (with filters)
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoadingProducts(true);
+      try {
+        const filters = {
+          isActive: true,
+          withInventory: true  // Request inventory data
+        };
+
+        if (selectedCategory !== 'all') {
+          filters.category = selectedCategory;
+        }
+
+        if (searchTerm.trim()) {
+          filters.search = searchTerm.trim();
+        }
+
+        const response = await productService.getAllProducts(filters);
+
+        // Backend returns: { success: true, data: { products: [...], pagination: {...} } }
+        const productsData = response.data?.products || [];
+
+        const transformedProducts = productsData.map(product => ({
+          ...product,
+          id: product._id || product.id,
+          price: product.unitPrice || 0,
+          stock: product.inventory?.quantityAvailable || 0,
+          categoryName: product.category?.name || 'Uncategorized'
+        }));
+
+        setProducts(transformedProducts);
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        setProducts([]);
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+
+    fetchProducts();
+  }, [selectedCategory, searchTerm]);  // Update time every second
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -67,7 +146,7 @@ export const POSMain = () => {
           navigate('/pos-login');
         }
       }
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 5 * 60 * 1000);
 
     return () => clearInterval(verifyInterval);
   }, [navigate]);
@@ -75,37 +154,31 @@ export const POSMain = () => {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e) => {
-      // Ctrl/Cmd + K: Focus search
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         document.getElementById('product-search')?.focus();
       }
 
-      // Ctrl/Cmd + L: Logout
       if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
         e.preventDefault();
         handleLogout();
       }
 
-      // Ctrl/Cmd + Delete: Clear cart
       if ((e.ctrlKey || e.metaKey) && e.key === 'Delete' && cart.length > 0) {
         e.preventDefault();
         clearCart();
       }
 
-      // F2: Focus search
       if (e.key === 'F2') {
         e.preventDefault();
         document.getElementById('product-search')?.focus();
       }
 
-      // F9: Proceed to payment
       if (e.key === 'F9' && cart.length > 0) {
         e.preventDefault();
         setShowPaymentModal(true);
       }
 
-      // Escape: Close payment modal
       if (e.key === 'Escape' && showPaymentModal) {
         e.preventDefault();
         setShowPaymentModal(false);
@@ -116,43 +189,29 @@ export const POSMain = () => {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [cart.length, showPaymentModal]);
 
-  // Mock data - Replace with API calls
-  useEffect(() => {
-    // Mock categories
-    setCategories([
-      { id: 'all', name: 'All Products' },
-      { id: 'electronics', name: 'Electronics' },
-      { id: 'clothing', name: 'Clothing' },
-      { id: 'food', name: 'Food & Beverage' },
-    ]);
-
-    // Mock products
-    setProducts([
-      { id: 1, name: 'Laptop Dell XPS 13', price: 1299.99, category: 'electronics', stock: 15, image: null },
-      { id: 2, name: 'iPhone 14 Pro', price: 999.99, category: 'electronics', stock: 25, image: null },
-      { id: 3, name: 'T-Shirt Cotton', price: 19.99, category: 'clothing', stock: 50, image: null },
-      { id: 4, name: 'Coffee Arabica', price: 12.99, category: 'food', stock: 100, image: null },
-      { id: 5, name: 'Wireless Mouse', price: 29.99, category: 'electronics', stock: 30, image: null },
-      { id: 6, name: 'Jeans Blue', price: 49.99, category: 'clothing', stock: 40, image: null },
-    ]);
-  }, []);
-
-  // Add to cart
+  // Add to cart with stock validation
   const addToCart = (product) => {
     const existingItem = cart.find(item => item.id === product.id);
+    const currentQuantityInCart = existingItem ? existingItem.quantity : 0;
+    const availableStock = product.stock || product.inventory?.quantityAvailable || 0;
+
+    if (currentQuantityInCart >= availableStock) {
+      alert(`Not enough stock. Available: ${availableStock}`);
+      return;
+    }
 
     if (existingItem) {
-      if (existingItem.quantity >= product.stock) {
-        alert('Not enough stock');
-        return;
-      }
       setCart(cart.map(item =>
         item.id === product.id
           ? { ...item, quantity: item.quantity + 1 }
           : item
       ));
     } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
+      setCart([...cart, {
+        ...product,
+        quantity: 1,
+        price: product.unitPrice || product.price || 0
+      }]);
     }
   };
 
@@ -163,9 +222,13 @@ export const POSMain = () => {
       return;
     }
 
-    const product = products.find(p => p.id === productId);
-    if (newQuantity > product.stock) {
-      alert('Not enough stock');
+    const cartItem = cart.find(item => item.id === productId);
+    if (!cartItem) return;
+
+    const availableStock = cartItem.stock || cartItem.inventory?.quantityAvailable || 0;
+
+    if (newQuantity > availableStock) {
+      alert(`Not enough stock. Available: ${availableStock}`);
       return;
     }
 
@@ -209,333 +272,77 @@ export const POSMain = () => {
       navigate('/pos-login');
     } catch (error) {
       console.error('Logout error:', error);
-      // Navigate to login even if logout API fails
       navigate('/pos-login');
     }
   };
 
-  // Filter products
-  const filteredProducts = products.filter(product => {
-    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory;
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  // Handle payment
+  const handlePayment = (paymentMethod) => {
+    console.log('Processing payment with method:', paymentMethod);
+    console.log('Cart items:', cart);
+    console.log('Total:', calculateTotals().total);
+
+    // TODO: Implement actual payment processing
+    alert(`Payment with ${paymentMethod} will be implemented`);
+    setShowPaymentModal(false);
+  };
 
   const totals = calculateTotals();
 
-  // Show loading screen
   if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <svg className="animate-spin h-12 w-12 text-emerald-600 mx-auto mb-4" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-          <p className="text-[16px] font-semibold font-['Poppins',sans-serif] text-gray-700">
-            Loading POS...
-          </p>
-        </div>
-      </div>
-    );
+    return <POSLoadingScreen />;
   }
 
   return (
     <div className="h-screen flex flex-col bg-gray-100">
-      {/* Header */}
-      <div className="bg-emerald-600 text-white p-4 shadow-lg flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
-            <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
-            <path d="M3 10h18" stroke="currentColor" strokeWidth="2" />
-            <circle cx="7" cy="15" r="1" fill="currentColor" />
-          </svg>
-          <div>
-            <h1 className="text-[20px] font-bold font-['Poppins',sans-serif]">
-              POS Terminal
-            </h1>
-            <p className="text-[12px] font-['Poppins',sans-serif] text-emerald-100">
-              {currentEmployee?.fullName || 'Employee'} ({currentEmployee?.userCode || 'N/A'})
-              {currentEmployee?.role && (
-                <span className="ml-2 px-2 py-0.5 bg-emerald-500 rounded text-[10px] font-semibold">
-                  {currentEmployee.role}
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
+      <POSHeader
+        currentEmployee={currentEmployee}
+        currentTime={currentTime}
+        onLogout={handleLogout}
+      />
 
-        <div className="flex items-center gap-3">
-          <div className="text-right mr-4">
-            <p className="text-[12px] font-['Poppins',sans-serif] text-emerald-100">
-              {currentTime.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-            <p className="text-[14px] font-semibold font-['Poppins',sans-serif]">
-              {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-            </p>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 bg-white text-emerald-600 rounded-lg hover:bg-emerald-50 transition-colors text-[13px] font-semibold font-['Poppins',sans-serif] flex items-center gap-2"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Logout
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Products Section */}
         <div className="flex-1 flex flex-col p-4 overflow-hidden">
-          {/* Search and Categories */}
           <div className="mb-4">
-            <div className="relative">
-              <input
-                id="product-search"
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search products... (Ctrl+K or F2)"
-                className="w-full px-4 py-3 pl-10 border-2 border-gray-300 rounded-lg text-[15px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent mb-3"
-              />
-              <svg
-                className="absolute left-3 top-3.5 text-gray-400"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-              >
-                <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
-                <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </div>
+            <POSSearchBar
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+            />
 
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {categories.map(category => (
-                <button
-                  key={category.id}
-                  onClick={() => setSelectedCategory(category.id)}
-                  className={`px-4 py-2 rounded-lg font-['Poppins',sans-serif] text-[13px] font-medium whitespace-nowrap transition-colors ${selectedCategory === category.id
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white text-gray-700 hover:bg-gray-100'
-                    }`}
-                >
-                  {category.name}
-                </button>
-              ))}
-            </div>
+            <POSCategoryFilter
+              categories={categories}
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
+            />
           </div>
 
-          {/* Products Grid */}
           <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {filteredProducts.map(product => (
-                <button
-                  key={product.id}
-                  onClick={() => addToCart(product)}
-                  disabled={product.stock === 0}
-                  className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all p-4 text-left disabled:opacity-50 disabled:cursor-not-allowed group"
-                >
-                  {/* Product Image Placeholder */}
-                  <div className="aspect-square bg-gray-100 rounded-lg mb-3 flex items-center justify-center group-hover:bg-gray-200 transition-colors">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" className="text-gray-400">
-                      <rect x="2" y="2" width="20" height="20" rx="2" stroke="currentColor" strokeWidth="2" />
-                      <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" />
-                      <path d="M2 17l5-5 3 3 7-7 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-
-                  <h3 className="text-[14px] font-semibold font-['Poppins',sans-serif] text-gray-900 mb-1 line-clamp-2">
-                    {product.name}
-                  </h3>
-
-                  <div className="flex items-center justify-between">
-                    <p className="text-[18px] font-bold font-['Poppins',sans-serif] text-emerald-600">
-                      ${product.price}
-                    </p>
-                    <p className={`text-[11px] font-medium font-['Poppins',sans-serif] ${product.stock > 10 ? 'text-green-600' : product.stock > 0 ? 'text-orange-600' : 'text-red-600'
-                      }`}>
-                      Stock: {product.stock}
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {filteredProducts.length === 0 && (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500 text-[15px] font-['Poppins',sans-serif]">
-                  No products found
-                </p>
-              </div>
-            )}
+            <POSProductGrid
+              products={products}
+              loading={loadingProducts}
+              searchTerm={searchTerm}
+              onProductClick={addToCart}
+            />
           </div>
         </div>
 
-        {/* Cart Section */}
-        <div className="w-96 bg-white shadow-2xl flex flex-col">
-          {/* Cart Header */}
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[18px] font-bold font-['Poppins',sans-serif] text-gray-900">
-                Current Order
-              </h2>
-              {cart.length > 0 && (
-                <button
-                  onClick={clearCart}
-                  className="text-[12px] font-medium font-['Poppins',sans-serif] text-red-600 hover:text-red-700"
-                >
-                  Clear All
-                </button>
-              )}
-            </div>
-            <p className="text-[13px] font-['Poppins',sans-serif] text-gray-500">
-              {cart.length} item{cart.length !== 1 ? 's' : ''}
-            </p>
-          </div>
-
-          {/* Cart Items */}
-          <div className="flex-1 overflow-y-auto p-4">
-            {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" className="mb-3">
-                  <circle cx="9" cy="21" r="1" stroke="currentColor" strokeWidth="2" />
-                  <circle cx="20" cy="21" r="1" stroke="currentColor" strokeWidth="2" />
-                  <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <p className="text-[14px] font-['Poppins',sans-serif]">
-                  Cart is empty
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {cart.map(item => (
-                  <div key={item.id} className="bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="text-[13px] font-semibold font-['Poppins',sans-serif] text-gray-900 flex-1 pr-2">
-                        {item.name}
-                      </h3>
-                      <button
-                        onClick={() => removeFromCart(item.id)}
-                        className="text-red-500 hover:text-red-700 flex-shrink-0"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                          <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          className="w-8 h-8 bg-white rounded border border-gray-300 hover:bg-gray-100 flex items-center justify-center"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                            <path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                          </svg>
-                        </button>
-                        <span className="w-12 text-center text-[14px] font-semibold font-['Poppins',sans-serif]">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="w-8 h-8 bg-white rounded border border-gray-300 hover:bg-gray-100 flex items-center justify-center"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                          </svg>
-                        </button>
-                      </div>
-
-                      <div className="text-right">
-                        <p className="text-[11px] font-['Poppins',sans-serif] text-gray-500">
-                          ${item.price} each
-                        </p>
-                        <p className="text-[15px] font-bold font-['Poppins',sans-serif] text-emerald-600">
-                          ${(item.price * item.quantity).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Cart Footer - Totals & Checkout */}
-          {cart.length > 0 && (
-            <div className="border-t border-gray-200 p-4 space-y-3">
-              {/* Totals */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-[13px] font-['Poppins',sans-serif]">
-                  <span className="text-gray-600">Subtotal:</span>
-                  <span className="font-semibold">${totals.subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-[13px] font-['Poppins',sans-serif]">
-                  <span className="text-gray-600">Tax (10%):</span>
-                  <span className="font-semibold">${totals.tax.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-[18px] font-bold font-['Poppins',sans-serif] pt-2 border-t border-gray-200">
-                  <span className="text-gray-900">Total:</span>
-                  <span className="text-emerald-600">${totals.total.toFixed(2)}</span>
-                </div>
-              </div>
-
-              {/* Checkout Button */}
-              <button
-                onClick={() => setShowPaymentModal(true)}
-                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[16px] font-bold font-['Poppins',sans-serif] transition-colors flex items-center justify-center gap-2"
-              >
-                <span>Proceed to Payment</span>
-                <span className="text-[12px] font-normal opacity-75">(F9)</span>
-              </button>
-            </div>
-          )}
-        </div>
+        <POSCart
+          cart={cart}
+          onUpdateQuantity={updateQuantity}
+          onRemoveItem={removeFromCart}
+          onClearCart={clearCart}
+          onCheckout={() => setShowPaymentModal(true)}
+          totals={totals}
+        />
       </div>
 
-      {/* Payment Modal - Simple version for now */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-[20px] font-bold font-['Poppins',sans-serif] text-gray-900 mb-4">
-              Payment
-            </h2>
-
-            <div className="mb-6">
-              <p className="text-[14px] font-['Poppins',sans-serif] text-gray-600 mb-2">
-                Total Amount:
-              </p>
-              <p className="text-[32px] font-bold font-['Poppins',sans-serif] text-emerald-600">
-                ${totals.total.toFixed(2)}
-              </p>
-            </div>
-
-            <div className="space-y-3 mb-6">
-              <button className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[15px] font-semibold font-['Poppins',sans-serif] transition-colors">
-                Cash Payment
-              </button>
-              <button className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[15px] font-semibold font-['Poppins',sans-serif] transition-colors">
-                Card Payment
-              </button>
-              <button className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[15px] font-semibold font-['Poppins',sans-serif] transition-colors">
-                E-Wallet
-              </button>
-            </div>
-
-            <button
-              onClick={() => setShowPaymentModal(false)}
-              className="w-full py-3 border-2 border-gray-300 text-gray-700 rounded-lg text-[15px] font-semibold font-['Poppins',sans-serif] hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <POSPaymentModal
+        isOpen={showPaymentModal}
+        totals={totals}
+        onClose={() => setShowPaymentModal(false)}
+        onPayment={handlePayment}
+      />
     </div>
   );
 };

@@ -122,7 +122,7 @@ export const SupplierListHeader = ({
               value={searchQuery}
               onChange={handleSearchInputChange}
               onKeyPress={handleSearchKeyPress}
-              placeholder="Search by ID, Name, Email..."
+              placeholder="Search by Code, Name, Phone..."
               className="w-[300px] h-[38px] pl-10 pr-4 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] text-[#212529] placeholder-gray-400 focus:outline-none focus:border-[#3bb77e] focus:ring-1 focus:ring-[#3bb77e] transition-all"
             />
             <svg

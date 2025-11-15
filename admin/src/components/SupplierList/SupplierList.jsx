@@ -3,7 +3,7 @@ import { AddSupplierModal } from './AddSupplierModal';
 import { EditSupplierModal } from './EditSupplierModal';
 
 export const SupplierList = ({ suppliers = [], onSort, sortField, sortOrder, addModalOpen = false, onCloseAddModal, onAddSuccess, editModalOpen = false, editSupplier = null, onCloseEditModal, onEditSuccess, onEdit, onDelete, onToggleActive }) => {
-  const [activeDropdown, setActiveDropdown] = useState(null); // Format: 'action-{supplierId}'
+  const [activeDropdown, setActiveDropdown] = useState(null); // Format: 'action-{supplierId}' or 'active-{supplierId}'
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
 
@@ -73,10 +73,10 @@ export const SupplierList = ({ suppliers = [], onSort, sortField, sortOrder, add
     };
   }, [activeDropdown]);
 
-  // Format currency - always show 2 decimal places with rounding
+  // Format currency VND - always show no decimals
   const formatCurrency = (amount) => {
-    if (!amount && amount !== 0) return '$0.00';
-    return `$${Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (!amount && amount !== 0) return '₫0';
+    return `₫${Number(amount).toLocaleString('vi-VN')}`;
   };
 
   // Get debt status color
@@ -89,20 +89,16 @@ export const SupplierList = ({ suppliers = [], onSort, sortField, sortOrder, add
     return 'text-blue-600';
   };
 
-  // Format address as "street, city" when nested object is provided
-  const formatAddress = (supplier) => {
-    const addr = supplier.address;
-    // Support various shapes: full object, separate fields, or string fallback
-    if (addr && typeof addr === 'object') {
-      const street = addr.street?.trim() || '';
-      const city = addr.city?.trim() || '';
-      const combined = [street, city].filter(Boolean).join(', ');
-      return combined || 'N/A';
-    }
-    const streetAlt = supplier.addressStreet?.trim?.() || '';
-    const cityAlt = supplier.addressCity?.trim?.() || (typeof addr === 'string' ? addr : '');
-    const combinedAlt = [streetAlt, cityAlt].filter(Boolean).join(', ');
-    return combinedAlt || 'N/A';
+  // Format payment terms
+  const formatPaymentTerms = (terms) => {
+    const termsMap = {
+      'cod': 'COD',
+      'net15': 'Net 15',
+      'net30': 'Net 30',
+      'net60': 'Net 60',
+      'net90': 'Net 90'
+    };
+    return termsMap[terms] || terms;
   };
 
   return (
@@ -114,7 +110,7 @@ export const SupplierList = ({ suppliers = [], onSort, sortField, sortOrder, add
           <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
             {/* ID Column - Sortable */}
             <div
-              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('supplierCode')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
@@ -123,25 +119,14 @@ export const SupplierList = ({ suppliers = [], onSort, sortField, sortOrder, add
               </p>
             </div>
 
-            {/* Name Column - Sortable - Flex */}
+            {/* Company Name Column - Sortable - Flex */}
             <div
-              className="flex-1 min-w-[180px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
+              className="flex-1 min-w-[200px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('companyName')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                Name
+                Company Name
                 {getSortIcon('companyName')}
-              </p>
-            </div>
-
-            {/* Email Column - Sortable */}
-            <div
-              className="w-[180px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('email')}
-            >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                Email
-                {getSortIcon('email')}
               </p>
             </div>
 
@@ -157,15 +142,26 @@ export const SupplierList = ({ suppliers = [], onSort, sortField, sortOrder, add
             </div>
 
             {/* Address Column */}
-            <div className="w-[240px] px-3 flex items-center flex-shrink-0">
+            <div className="w-[200px] px-3 flex items-center flex-shrink-0">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                 Address
               </p>
             </div>
 
+            {/* Payment Terms Column - Sortable */}
+            <div
+              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('paymentTerms')}
+            >
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+                Terms
+                {getSortIcon('paymentTerms')}
+              </p>
+            </div>
+
             {/* Credit Limit Column - Sortable */}
             <div
-              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              className="w-[130px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('creditLimit')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
@@ -176,7 +172,7 @@ export const SupplierList = ({ suppliers = [], onSort, sortField, sortOrder, add
 
             {/* Current Debt Column - Sortable */}
             <div
-              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              className="w-[130px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('currentDebt')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
@@ -214,23 +210,16 @@ export const SupplierList = ({ suppliers = [], onSort, sortField, sortOrder, add
                     }`}
                 >
                   {/* ID - Display supplierCode */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[140px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
                       {supplier.supplierCode}
                     </p>
                   </div>
 
-                  {/* Name - Flex */}
-                  <div className="flex-1 min-w-[180px] px-3 flex items-center">
+                  {/* Company Name - Flex */}
+                  <div className="flex-1 min-w-[200px] px-3 flex items-center">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
                       {supplier.companyName}
-                    </p>
-                  </div>
-
-                  {/* Email */}
-                  <div className="w-[180px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {supplier.email}
                     </p>
                   </div>
 
@@ -242,21 +231,28 @@ export const SupplierList = ({ suppliers = [], onSort, sortField, sortOrder, add
                   </div>
 
                   {/* Address */}
-                  <div className="w-[240px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[200px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {formatAddress(supplier)}
+                      {supplier.address || 'N/A'}
+                    </p>
+                  </div>
+
+                  {/* Payment Terms */}
+                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
+                      {formatPaymentTerms(supplier.paymentTerms)}
                     </p>
                   </div>
 
                   {/* Credit Limit */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[130px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
                       {formatCurrency(supplier.creditLimit)}
                     </p>
                   </div>
 
                   {/* Current Debt */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[130px] px-3 flex items-center flex-shrink-0">
                     <p className={`text-[13px] font-normal font-['Poppins',sans-serif] leading-[20px] ${getDebtStatusColor(supplier.currentDebt, supplier.creditLimit)}`}>
                       {formatCurrency(supplier.currentDebt)}
                     </p>

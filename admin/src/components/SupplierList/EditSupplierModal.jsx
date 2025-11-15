@@ -1,151 +1,115 @@
-import React, { useEffect, useState } from 'react'
-// import supplierService from '../../services/supplierService'
+import React, { useEffect, useState } from 'react';
+import supplierService from '../../services/supplierService';
 
 export const EditSupplierModal = ({ isOpen, onClose, onSuccess, supplier }) => {
   const [formData, setFormData] = useState({
     companyName: '',
-    email: '',
     phone: '',
-    street: '',
-    city: '',
-    bankName: '',
+    address: '',
     accountNumber: '',
     paymentTerms: 'net30',
     creditLimit: '0',
-    currentDebt: '0',
-    notes: ''
-  })
+    currentDebt: '0'
+  });
 
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Populate form when supplier changes or modal opens
   useEffect(() => {
     if (isOpen && supplier) {
       setFormData({
         companyName: supplier.companyName || '',
-        email: supplier.email || '',
         phone: supplier.phone || '',
-        street: supplier.address?.street || supplier.addressStreet || '',
-        city: supplier.address?.city || supplier.addressCity || '',
-        bankName: supplier.bankAccount?.bankName || '',
-        accountNumber: supplier.bankAccount?.accountNumber || '',
+        address: supplier.address || '',
+        accountNumber: supplier.accountNumber || '',
         paymentTerms: supplier.paymentTerms || 'net30',
         creditLimit: String(supplier.creditLimit || 0),
-        currentDebt: String(supplier.currentDebt || 0),
-        notes: supplier.notes || ''
-      })
-      setError(null)
+        currentDebt: String(supplier.currentDebt || 0)
+      });
+      setError(null);
     }
-  }, [isOpen, supplier])
+  }, [isOpen, supplier]);
 
   const handleChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-  }
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
 
     if (!formData.companyName.trim()) {
-      setError('Name is required')
-      return
+      setError('Company name is required');
+      return;
     }
 
-    if (!formData.email.trim()) {
-      setError('Email is required')
-      return
+    if (formData.phone.trim()) {
+      const phoneRegex = /^[0-9]{10,15}$/;
+      if (!phoneRegex.test(formData.phone.trim().replace(/[\s\-\+\(\)]/g, ''))) {
+        setError('Phone must be 10-15 digits');
+        return;
+      }
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(formData.email.trim())) {
-      setError('Invalid email format')
-      return
-    }
-
-    if (!formData.phone.trim()) {
-      setError('Phone number is required')
-      return
-    }
-
-    const phoneRegex = /^[\d\s\-\+\(\)]+$/
-    if (!phoneRegex.test(formData.phone.trim())) {
-      setError('Invalid phone number format')
-      return
-    }
-
-    const parsedCreditLimit = Number(formData.creditLimit)
-    const parsedCurrentDebt = Number(formData.currentDebt)
+    const parsedCreditLimit = Number(formData.creditLimit);
+    const parsedCurrentDebt = Number(formData.currentDebt);
 
     if (Number.isNaN(parsedCreditLimit) || parsedCreditLimit < 0) {
-      setError('Credit limit must be a non-negative number')
-      return
+      setError('Credit limit must be a non-negative number');
+      return;
     }
 
     if (Number.isNaN(parsedCurrentDebt) || parsedCurrentDebt < 0) {
-      setError('Current debt must be a non-negative number')
-      return
+      setError('Current debt must be a non-negative number');
+      return;
     }
 
     if (parsedCurrentDebt > parsedCreditLimit) {
-      setError('Current debt cannot exceed credit limit')
-      return
+      setError('Current debt cannot exceed credit limit');
+      return;
     }
 
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
 
     try {
       const payload = {
         companyName: formData.companyName.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.trim(),
         paymentTerms: formData.paymentTerms,
         creditLimit: parsedCreditLimit,
         currentDebt: parsedCurrentDebt
+      };
+
+      if (formData.phone.trim()) {
+        payload.phone = formData.phone.trim();
       }
 
-      if (formData.street.trim() || formData.city.trim()) {
-        payload.address = {
-          street: formData.street.trim() || '',
-          city: formData.city.trim() || ''
-        }
+      if (formData.address.trim()) {
+        payload.address = formData.address.trim();
       }
 
-      if (formData.bankName.trim() || formData.accountNumber.trim()) {
-        payload.bankAccount = {
-          bankName: formData.bankName.trim() || '',
-          accountNumber: formData.accountNumber.trim() || ''
-        }
+      if (formData.accountNumber.trim()) {
+        payload.accountNumber = formData.accountNumber.trim();
       }
 
-      if (formData.notes.trim()) {
-        payload.notes = formData.notes.trim()
-      }
-
-      const updated = await supplierService.updateSupplier(supplier.id, payload)
-      if (onSuccess) onSuccess(updated)
-      onClose && onClose()
+      const updated = await supplierService.updateSupplier(supplier.id, payload);
+      if (onSuccess) onSuccess(updated);
+      onClose && onClose();
     } catch (err) {
-      console.error('Error updating supplier:', err)
+      console.error('Error updating supplier:', err);
       setError(
         err.response?.data?.error || err.error || err.message || 'Failed to update supplier. Please try again.'
-      )
+      );
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  if (!isOpen || !supplier) return null
-
-  // Format currency for display
-  const formatCurrency = (amount) => {
-    if (!amount && amount !== 0) return '$0'
-    return `$${Number(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-  }
+  if (!isOpen || !supplier) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h2 className="text-[20px] font-semibold font-['Poppins',sans-serif] text-[#212529]">Edit Supplier</h2>
           <button
@@ -166,17 +130,30 @@ export const EditSupplierModal = ({ isOpen, onClose, onSuccess, supplier }) => {
             </div>
           )}
 
+          {/* Supplier Code - Read-only */}
           <div>
             <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
-              Name <span className="text-red-500">*</span>
+              Supplier Code
+            </label>
+            <input
+              type="text"
+              value={supplier.supplierCode || ''}
+              disabled
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] bg-gray-50 text-gray-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
+              Company Name <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={formData.companyName}
               onChange={(e) => handleChange('companyName', e.target.value)}
-              placeholder="Supplier name"
+              placeholder="Company name"
               required
-              maxLength={255}
+              maxLength={200}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
@@ -184,91 +161,56 @@ export const EditSupplierModal = ({ isOpen, onClose, onSuccess, supplier }) => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
-                Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => handleChange('email', e.target.value)}
-                placeholder="supplier@example.com"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
-                Phone <span className="text-red-500">*</span>
+                Phone
               </label>
               <input
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => handleChange('phone', e.target.value)}
-                placeholder="(123) 456-7890"
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">Street (Optional)</label>
-              <input
-                type="text"
-                value={formData.street}
-                onChange={(e) => handleChange('street', e.target.value)}
-                placeholder="123 Main Street"
-                maxLength={255}
+                placeholder="0123456789"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
             <div>
-              <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">City (Optional)</label>
-              <input
-                type="text"
-                value={formData.city}
-                onChange={(e) => handleChange('city', e.target.value)}
-                placeholder="Ho Chi Minh"
-                maxLength={100}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">Bank Name</label>
-              <input
-                type="text"
-                value={formData.bankName}
-                onChange={(e) => handleChange('bankName', e.target.value)}
-                placeholder="Vietcombank"
-                maxLength={255}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-            <div>
-              <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">Account Number</label>
+              <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
+                Account Number
+              </label>
               <input
                 type="text"
                 value={formData.accountNumber}
                 onChange={(e) => handleChange('accountNumber', e.target.value)}
-                placeholder="0123456789"
+                placeholder="Bank account number"
                 maxLength={50}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
           </div>
 
+          <div>
+            <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
+              Address
+            </label>
+            <input
+              type="text"
+              value={formData.address}
+              onChange={(e) => handleChange('address', e.target.value)}
+              placeholder="Full address"
+              maxLength={500}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">Term</label>
+              <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
+                Payment Terms
+              </label>
               <select
                 value={formData.paymentTerms}
                 onChange={(e) => handleChange('paymentTerms', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
-                <option value="cod">Cash on Delivery (COD)</option>
+                <option value="cod">COD</option>
                 <option value="net15">Net 15</option>
                 <option value="net30">Net 30</option>
                 <option value="net60">Net 60</option>
@@ -276,49 +218,30 @@ export const EditSupplierModal = ({ isOpen, onClose, onSuccess, supplier }) => {
               </select>
             </div>
             <div>
-              <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">Credit Limit</label>
+              <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
+                Credit Limit (₫)
+              </label>
               <input
                 type="number"
                 min="0"
-                step="0.01"
+                step="1000"
                 value={formData.creditLimit}
                 onChange={(e) => handleChange('creditLimit', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
             <div>
-              <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">Current Debt</label>
+              <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
+                Current Debt (₫)
+              </label>
               <input
                 type="number"
                 min="0"
-                step="0.01"
+                step="1000"
                 value={formData.currentDebt}
                 onChange={(e) => handleChange('currentDebt', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
-            </div>
-          </div>
-
-          {/* Notes (Optional) */}
-          <div>
-            <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
-              Notes (Optional)
-            </label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => handleChange('notes', e.target.value)}
-              placeholder="Additional notes about the supplier (optional)"
-              rows={4}
-              maxLength={1000}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
-            />
-            <div className="flex items-center justify-between mt-1">
-              <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif]">
-                Maximum 1000 characters
-              </p>
-              <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif]">
-                {formData.notes.length}/1000
-              </p>
             </div>
           </div>
 
@@ -352,7 +275,5 @@ export const EditSupplierModal = ({ isOpen, onClose, onSuccess, supplier }) => {
         </form>
       </div>
     </div>
-  )
-}
-
-
+  );
+};

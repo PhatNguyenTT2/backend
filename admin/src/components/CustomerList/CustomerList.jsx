@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { AddCustomerModal } from './AddCustomerModal';
+import { EditCustomerModal } from './EditCustomerModal';
 
-export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onToggleActive, onEdit, onDelete }) => {
-  const [activeDropdown, setActiveDropdown] = useState(null); // Format: 'action-{customerId}', 'active-{customerId}'
+export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, addModalOpen = false, onCloseAddModal, onAddSuccess, editModalOpen = false, editCustomer = null, onCloseEditModal, onEditSuccess, onEdit, onDelete, onToggleActive }) => {
+  const [activeDropdown, setActiveDropdown] = useState(null); // Format: 'action-{customerId}' or 'active-{customerId}'
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
 
@@ -10,14 +12,6 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
     if (onSort) {
       onSort(field);
     }
-  };
-
-  // Handle active status change
-  const handleActiveStatusChange = (customer) => {
-    if (onToggleActive) {
-      onToggleActive(customer);
-    }
-    setActiveDropdown(null);
   };
 
   // Get sort icon with color
@@ -51,16 +45,7 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
       setActiveDropdown(null);
     } else {
       const buttonRect = event.currentTarget.getBoundingClientRect();
-
-      // Determine position based on dropdown type
-      let leftPosition;
-      if (dropdownId.startsWith('active-')) {
-        // For Active Status: show dropdown to the right of button (like Order Status)
-        leftPosition = buttonRect.left;
-      } else {
-        // For Actions: show dropdown aligned to the right
-        leftPosition = buttonRect.right - 160; // 160px is dropdown width
-      }
+      const leftPosition = dropdownId.startsWith('active-') ? buttonRect.left : (buttonRect.right - 160);
 
       setDropdownPosition({
         top: buttonRect.bottom + 4,
@@ -68,24 +53,6 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
       });
       setActiveDropdown(dropdownId);
     }
-  };
-
-  // Format address for display
-  const formatAddress = (address) => {
-    if (!address) return 'N/A';
-
-    const parts = [];
-    if (address.street) parts.push(address.street);
-    if (address.city) parts.push(address.city);
-
-    return parts.length > 0 ? parts.join(', ') : 'N/A';
-  };
-
-  // Get active status badge styling
-  const getActiveStatusStyles = (isActive) => {
-    return isActive
-      ? 'bg-[#10b981] text-white' // Green for active
-      : 'bg-[#6b7280] text-white'; // Gray for inactive
   };
 
   // Close dropdown when clicking outside
@@ -105,27 +72,44 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
     };
   }, [activeDropdown]);
 
+  // Format currency VND
+  const formatCurrency = (amount) => {
+    if (!amount && amount !== 0) return '₫0';
+    return `₫${Number(amount).toLocaleString('vi-VN')}`;
+  };
+
   // Format date
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
+    return date.toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: '2-digit',
       year: 'numeric'
     });
   };
 
+  // Format customer type
+  const formatCustomerType = (type) => {
+    const typeMap = {
+      'guest': 'Guest',
+      'retail': 'Retail',
+      'wholesale': 'Wholesale',
+      'vip': 'VIP'
+    };
+    return typeMap[type] || type;
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm">
-      {/* Scrollable Container - overflow-x-auto allows horizontal scroll */}
+      {/* Scrollable Container */}
       <div className="overflow-x-auto rounded-lg">
         <div className="min-w-[1200px]">
           {/* Table Header */}
           <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
-            {/* ID Column - Sortable */}
+            {/* ID Column */}
             <div
-              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('customerCode')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
@@ -134,9 +118,9 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
               </p>
             </div>
 
-            {/* Name Column - Sortable */}
+            {/* Name Column */}
             <div
-              className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              className="flex-1 min-w-[150px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('fullName')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
@@ -146,38 +130,27 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
             </div>
 
             {/* Email Column */}
-            <div className="w-[200px] px-3 flex items-center flex-shrink-0">
+            <div className="w-[180px] px-3 flex items-center flex-shrink-0">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                 Email
               </p>
             </div>
 
             {/* Phone Column */}
-            <div className="w-[110px] px-3 flex items-center flex-shrink-0">
+            <div className="w-[120px] px-3 flex items-center flex-shrink-0">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                 Phone
               </p>
             </div>
 
             {/* Address Column */}
-            <div className="flex-1 min-w-[180px] px-3 flex items-center">
+            <div className="w-[180px] px-3 flex items-center flex-shrink-0">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                 Address
               </p>
             </div>
 
-            {/* DOB Column - Sortable */}
-            <div
-              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('dob')}
-            >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                DOB
-                {getSortIcon('dob')}
-              </p>
-            </div>
-
-            {/* Gender Column - Sortable */}
+            {/* Gender Column */}
             <div
               className="w-[90px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('gender')}
@@ -188,7 +161,7 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
               </p>
             </div>
 
-            {/* Customer Type Column - Sortable */}
+            {/* Type Column */}
             <div
               className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('customerType')}
@@ -199,10 +172,25 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
               </p>
             </div>
 
-            {/* Active Status Column */}
-            <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
+            {/* Total Spent Column */}
+            <div
+              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('totalSpent')}
+            >
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+                Total Spent
+                {getSortIcon('totalSpent')}
+              </p>
+            </div>
+
+            {/* Active Column */}
+            <div
+              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('isActive')}
+            >
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
                 Active
+                {getSortIcon('isActive')}
               </p>
             </div>
 
@@ -216,103 +204,98 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
 
           {/* Table Body */}
           <div className="flex flex-col">
-            {customers.map((customer, index) => {
-              const activeDropdownId = `active-${customer.id}`;
-
-              return (
-                <div
-                  key={customer.id}
-                  className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== customers.length - 1 ? 'border-b border-gray-100' : ''
-                    }`}
-                >
-                  {/* ID - Display customerCode */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
-                      {customer.customerCode}
-                    </p>
-                  </div>
-
-                  {/* Name */}
-                  <div className="w-[140px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {customer.fullName}
-                    </p>
-                  </div>
-
-                  {/* Email */}
-                  <div className="w-[200px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {customer.email || 'N/A'}
-                    </p>
-                  </div>
-
-                  {/* Phone */}
-                  <div className="w-[110px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      {customer.phone || 'N/A'}
-                    </p>
-                  </div>
-
-                  {/* Address */}
-                  <div className="flex-1 min-w-[180px] px-3 flex items-center">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {formatAddress(customer.address)}
-                    </p>
-                  </div>
-
-                  {/* DOB */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      {formatDate(customer.dob)}
-                    </p>
-                  </div>
-
-                  {/* Gender - Plain Text */}
-                  <div className="w-[90px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] capitalize">
-                      {customer.gender || 'N/A'}
-                    </p>
-                  </div>
-
-                  {/* Customer Type - Plain Text */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] capitalize">
-                      {customer.customerType || 'Regular'}
-                    </p>
-                  </div>
-
-                  {/* Active Status Badge with Dropdown */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    <button
-                      onClick={(e) => toggleDropdown(activeDropdownId, e)}
-                      className={`${getActiveStatusStyles(customer.isActive)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
-                    >
-                      <span className="text-[9px] font-bold font-['Poppins',sans-serif] uppercase leading-[10px]">
-                        {customer.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                      <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M1 1L4 4L7 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
-                    <button
-                      onClick={(e) => toggleDropdown(`action-${customer.id}`, e)}
-                      className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-                      title="Actions"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="3" cy="8" r="1.5" fill="#6B7280" />
-                        <circle cx="8" cy="8" r="1.5" fill="#6B7280" />
-                        <circle cx="13" cy="8" r="1.5" fill="#6B7280" />
-                      </svg>
-                    </button>
-                  </div>
+            {customers.map((customer, index) => (
+              <div
+                key={customer.id}
+                className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== customers.length - 1 ? 'border-b border-gray-100' : ''}`}
+              >
+                {/* ID */}
+                <div className="w-[140px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
+                    {customer.customerCode}
+                  </p>
                 </div>
-              );
-            })}
+
+                {/* Name */}
+                <div className="flex-1 min-w-[150px] px-3 flex items-center">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
+                    {customer.fullName}
+                  </p>
+                </div>
+
+                {/* Email */}
+                <div className="w-[180px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
+                    {customer.email || 'N/A'}
+                  </p>
+                </div>
+
+                {/* Phone */}
+                <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
+                    {customer.phone || 'N/A'}
+                  </p>
+                </div>
+
+                {/* Address */}
+                <div className="w-[180px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
+                    {customer.address || 'N/A'}
+                  </p>
+                </div>
+
+                {/* Gender */}
+                <div className="w-[90px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] capitalize">
+                    {customer.gender || 'N/A'}
+                  </p>
+                </div>
+
+                {/* Type */}
+                <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
+                    {formatCustomerType(customer.customerType)}
+                  </p>
+                </div>
+
+                {/* Total Spent */}
+                <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
+                    {formatCurrency(customer.totalSpent)}
+                  </p>
+                </div>
+
+                {/* Active Status */}
+                <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <button
+                    onClick={(e) => toggleDropdown(`active-${customer.id}`, e)}
+                    className={`${customer.isActive !== false ? 'bg-[#10b981]' : 'bg-[#6b7280]'} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
+                  >
+                    <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
+                      {customer.isActive !== false ? 'Active' : 'Inactive'}
+                    </span>
+                    <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 1L4 4L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Actions */}
+                <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
+                  <button
+                    onClick={(e) => toggleDropdown(`action-${customer.id}`, e)}
+                    className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                    title="Actions"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="3" cy="8" r="1.5" fill="#6B7280" />
+                      <circle cx="8" cy="8" r="1.5" fill="#6B7280" />
+                      <circle cx="13" cy="8" r="1.5" fill="#6B7280" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Empty State */}
@@ -326,22 +309,16 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
         </div>
       </div>
 
-      {/* Fixed Position Dropdown Menus - Rendered outside table container */}
+      {/* Fixed Position Dropdown Menus */}
       {activeDropdown && (() => {
-        // Find the customer based on activeDropdown ID
-        const customer = customers.find(c =>
-          activeDropdown === `action-${c.id}` ||
-          activeDropdown === `active-${c.id}`
-        );
-
+        const customer = customers.find(c => activeDropdown === `action-${c.id}` || activeDropdown === `active-${c.id}`);
         if (!customer) return null;
 
-        // Determine dropdown type
-        const isActiveStatus = activeDropdown === `active-${customer.id}`;
-        const isAction = activeDropdown === `action-${customer.id}`;
+        const isActiveDropdown = activeDropdown === `active-${customer.id}`;
+        const isActionDropdown = activeDropdown === `action-${customer.id}`;
 
-        // Render Active Status Dropdown
-        if (isActiveStatus) {
+        // Active Status Dropdown
+        if (isActiveDropdown) {
           const activeStatusOptions = [
             { value: true, label: 'Active', color: 'bg-[#10b981]' },
             { value: false, label: 'Inactive', color: 'bg-[#6b7280]' }
@@ -360,18 +337,19 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
                 <button
                   key={option.label}
                   onClick={() => {
-                    if (customer.isActive !== option.value) {
-                      handleActiveStatusChange(customer);
+                    if (onToggleActive) {
+                      onToggleActive(customer);
                     }
+                    setActiveDropdown(null);
                   }}
                   className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
-                  disabled={customer.isActive === option.value}
+                  disabled={(customer.isActive !== false) === option.value}
                 >
                   <span className={`${option.color} w-2 h-2 rounded-full`}></span>
-                  <span className={`text-[12px] font-['Poppins',sans-serif] ${customer.isActive === option.value ? 'text-emerald-600 font-medium' : 'text-[#212529]'}`}>
+                  <span className={`text-[12px] font-['Poppins',sans-serif] ${(customer.isActive !== false) === option.value ? 'text-emerald-600 font-medium' : 'text-[#212529]'}`}>
                     {option.label}
                   </span>
-                  {customer.isActive === option.value && (
+                  {(customer.isActive !== false) === option.value && (
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-auto">
                       <path d="M10 3L4.5 8.5L2 6" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
@@ -382,10 +360,8 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
           );
         }
 
-        // Render Actions Dropdown
-        if (isAction) {
-          const canDelete = !customer.isActive; // Only inactive customers can be deleted
-
+        // Actions Dropdown
+        if (isActionDropdown) {
           return (
             <div
               ref={dropdownRef}
@@ -397,9 +373,7 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
             >
               <button
                 onClick={() => {
-                  if (onEdit) {
-                    onEdit(customer);
-                  }
+                  onEdit ? onEdit(customer) : console.log('Edit customer:', customer.id);
                   setActiveDropdown(null);
                 }}
                 className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
@@ -414,19 +388,12 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
 
               <button
                 onClick={() => {
-                  if (canDelete) {
-                    if (onDelete) {
-                      onDelete(customer);
-                    }
-                  }
+                  onDelete ? onDelete(customer) : console.log('Delete customer:', customer.id);
                   setActiveDropdown(null);
                 }}
-                disabled={!canDelete}
-                title={!canDelete ? 'Cannot delete active customer. Please deactivate first.' : 'Delete customer'}
-                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${canDelete
-                  ? 'text-gray-700 hover:bg-red-50 hover:text-red-600 cursor-pointer'
-                  : 'text-gray-400 cursor-not-allowed opacity-60'
-                  }`}
+                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${customer.isActive !== false ? 'text-gray-400 cursor-not-allowed opacity-50' : 'text-gray-700 hover:bg-red-50 hover:text-red-600'}`}
+                title={customer.isActive !== false ? 'Customer must be deactivated before deletion' : 'Delete customer'}
+                disabled={customer.isActive !== false}
               >
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M2 4H3.33333H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -440,6 +407,21 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, onT
 
         return null;
       })()}
+
+      {/* Add Customer Modal */}
+      <AddCustomerModal
+        isOpen={addModalOpen}
+        onClose={onCloseAddModal}
+        onSuccess={onAddSuccess}
+      />
+
+      {/* Edit Customer Modal */}
+      <EditCustomerModal
+        isOpen={editModalOpen}
+        onClose={onCloseEditModal}
+        onSuccess={onEditSuccess}
+        customer={editCustomer}
+      />
     </div>
   );
 };

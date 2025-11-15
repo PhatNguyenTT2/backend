@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { CustomerListHeader, CustomerList, AddCustomerModal, EditCustomerModal } from '../components/CustomerList';
-// import customerService from '../services/customerService';
+import { CustomerListHeader, CustomerList } from '../components/CustomerList';
+import customerService from '../services/customerService';
 
 const Customers = () => {
   // Breadcrumb items
@@ -46,20 +46,50 @@ const Customers = () => {
       setLoading(true);
       setError(null);
 
-      console.log('Fetching customers with filters:', filters);
+      // Build query params
+      const params = {
+        page: filters.page,
+        limit: filters.per_page,
+        sort: sortField,
+        order: sortOrder
+      };
 
-      // const response = await customerService.getCustomers(filters);
-      console.log('API Response:', response);
+      // Add search if exists
+      if (searchQuery.trim()) {
+        params.search = searchQuery.trim();
+      }
+
+      const response = await customerService.getAllCustomers(params);
 
       if (response.success) {
-        // const formattedCustomers = customerService.formatCustomersForDisplay(response.data.customers);
-        console.log('Formatted customers:', formattedCustomers);
+        // Map API response to display format
+        const formattedCustomers = (response.data.items || []).map(customer => ({
+          id: customer._id,
+          customerCode: customer.customerCode,
+          fullName: customer.fullName,
+          email: customer.email || '',
+          phone: customer.phone || '',
+          address: customer.address || '',
+          dateOfBirth: customer.dateOfBirth,
+          gender: customer.gender,
+          customerType: customer.customerType,
+          totalSpent: customer.totalSpent || 0,
+          isActive: customer.isActive !== false
+        }));
+
         setCustomers(formattedCustomers);
-        setPagination(response.data.pagination);
+        setPagination({
+          current_page: response.data.pagination.currentPage,
+          per_page: response.data.pagination.limit,
+          total: response.data.pagination.total,
+          total_pages: response.data.pagination.totalPages,
+          has_prev: response.data.pagination.currentPage > 1,
+          has_next: response.data.pagination.currentPage < response.data.pagination.totalPages
+        });
       }
     } catch (err) {
       console.error('Error fetching customers:', err);
-      setError(err.error || err.message || 'Failed to fetch customers. Please try again.');
+      setError(err.response?.data?.error || err.message || 'Failed to fetch customers');
     } finally {
       setLoading(false);
     }
@@ -67,41 +97,13 @@ const Customers = () => {
 
   // Fetch customers on component mount and when filters change
   useEffect(() => {
-    console.log('Customers component mounted or filters changed');
     fetchCustomers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.page, filters.per_page]);
+  }, [filters.page, filters.per_page, sortField, sortOrder, searchQuery]);
 
   // Handle filter changes
   const handleItemsPerPageChange = (newPerPage) => {
     setFilters({ ...filters, per_page: newPerPage, page: 1 });
-  };
-
-  // Handle search
-  const handleSearch = (query) => {
-    const searchLower = query.toLowerCase().trim();
-
-    if (!searchLower) {
-      // If search is empty, reset to original data
-      fetchCustomers();
-      return;
-    }
-
-    // Filter customers locally
-    const allCustomers = [...customers];
-    const filtered = allCustomers.filter(customer => {
-      const customerCode = (customer.customerCode || '').toLowerCase();
-      const fullName = (customer.fullName || '').toLowerCase();
-      const email = (customer.email || '').toLowerCase();
-      const phone = (customer.phone || '').toLowerCase();
-
-      return customerCode.includes(searchLower) ||
-        fullName.includes(searchLower) ||
-        email.includes(searchLower) ||
-        phone.includes(searchLower);
-    });
-
-    setCustomers(filtered);
   };
 
   // Handle column sort
@@ -115,29 +117,6 @@ const Customers = () => {
 
     setSortField(field);
     setSortOrder(newSortOrder);
-
-    // Sort customers locally
-    const sorted = [...customers].sort((a, b) => {
-      let aVal = a[field];
-      let bVal = b[field];
-
-      // Handle different data types
-      if (field === 'dob' || field === 'createdAt') {
-        aVal = aVal ? new Date(aVal).getTime() : 0;
-        bVal = bVal ? new Date(bVal).getTime() : 0;
-      } else {
-        aVal = String(aVal || '').toLowerCase();
-        bVal = String(bVal || '').toLowerCase();
-      }
-
-      if (newSortOrder === 'asc') {
-        return aVal > bVal ? 1 : -1;
-      } else {
-        return aVal < bVal ? 1 : -1;
-      }
-    });
-
-    setCustomers(sorted);
   };
 
   // Handle toggle active status
@@ -145,16 +124,11 @@ const Customers = () => {
     const newStatus = !customer.isActive;
 
     try {
-      // const response = await customerService.toggleCustomerStatus(customer.id, newStatus);
-
-      if (response) {
-        // Refresh customer list
-        await fetchCustomers();
-        console.log(`Customer ${customer.customerCode} status updated to ${newStatus ? 'active' : 'inactive'}`);
-      }
+      await customerService.updateCustomer(customer.id, { isActive: newStatus });
+      await fetchCustomers();
     } catch (err) {
       console.error('Error toggling customer status:', err);
-      alert(err.error || 'Failed to update customer status');
+      alert(err.response?.data?.error || 'Failed to update customer status');
     }
   };
 
@@ -170,14 +144,12 @@ const Customers = () => {
   };
 
   // Handle customer created successfully
-  const handleCustomerSuccess = (data) => {
-    console.log('Customer created successfully:', data);
+  const handleCustomerSuccess = () => {
     fetchCustomers(); // Refresh list
   };
 
   // Handle customer updated successfully
-  const handleCustomerUpdateSuccess = (data) => {
-    console.log('Customer updated successfully:', data);
+  const handleCustomerUpdateSuccess = () => {
     fetchCustomers(); // Refresh list
     setSelectedCustomer(null);
   };
@@ -197,8 +169,7 @@ const Customers = () => {
     if (!confirmed) return;
 
     try {
-      // await customerService.deleteCustomer(customer.id);
-      console.log('Customer deleted successfully');
+      await customerService.deleteCustomer(customer.id);
       fetchCustomers(); // Refresh list
     } catch (error) {
       console.error('Error deleting customer:', error);
@@ -215,10 +186,9 @@ const Customers = () => {
         {/* Customer List Header */}
         <CustomerListHeader
           itemsPerPage={filters.per_page}
-          onItemsPerPageChange={handleItemsPerPageChange}
+          setItemsPerPage={handleItemsPerPageChange}
           searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onSearch={handleSearch}
+          setSearchQuery={setSearchQuery}
           onAddCustomer={handleAddCustomer}
         />
 
@@ -254,6 +224,16 @@ const Customers = () => {
               onToggleActive={handleToggleActive}
               onEdit={handleEditCustomer}
               onDelete={handleDeleteCustomer}
+              addModalOpen={addCustomerModal}
+              onCloseAddModal={() => setAddCustomerModal(false)}
+              onAddSuccess={handleCustomerSuccess}
+              editModalOpen={editCustomerModal}
+              editCustomer={selectedCustomer}
+              onCloseEditModal={() => {
+                setEditCustomerModal(false);
+                setSelectedCustomer(null);
+              }}
+              onEditSuccess={handleCustomerUpdateSuccess}
             />
 
             {/* Pagination */}
@@ -380,24 +360,6 @@ const Customers = () => {
             )}
           </>
         )}
-
-        {/* Add Customer Modal */}
-        <AddCustomerModal
-          isOpen={addCustomerModal}
-          onClose={() => setAddCustomerModal(false)}
-          onSuccess={handleCustomerSuccess}
-        />
-
-        {/* Edit Customer Modal */}
-        <EditCustomerModal
-          isOpen={editCustomerModal}
-          onClose={() => {
-            setEditCustomerModal(false);
-            setSelectedCustomer(null);
-          }}
-          onSuccess={handleCustomerUpdateSuccess}
-          customer={selectedCustomer}
-        />
       </div>
     </Layout>
   );

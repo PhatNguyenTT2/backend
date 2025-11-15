@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { SupplierListHeader, SupplierList } from '../components/SupplierList';
-// import supplierService from '../services/supplierService';
+import supplierService from '../services/supplierService';
 
 const Suppliers = () => {
   // Breadcrumb items
@@ -48,27 +48,36 @@ const Suppliers = () => {
       setLoading(true);
       setError(null);
 
-      console.log('Fetching suppliers with filters:', filters);
+      const params = {
+        page: filters.page,
+        limit: filters.limit,
+        sortBy: sortField,
+        sortOrder: sortOrder
+      };
 
-      // const response = await supplierService.getSuppliers(filters);
-      console.log('API Response:', response);
+      // Add search to params if exists
+      if (searchQuery.trim()) {
+        params.search = searchQuery.trim();
+      }
+
+      const response = await supplierService.getAllSuppliers(params);
 
       if (response.success) {
-        const formattedSuppliers = supplierService.formatSuppliersForDisplay(response.data.suppliers);
-        console.log('Formatted suppliers:', formattedSuppliers);
-        setSuppliers(formattedSuppliers);
+        setSuppliers(response.data.suppliers || []);
 
-        // Map pagination to match expected format
-        setPagination({
-          page: response.data.pagination.current_page,
-          limit: response.data.pagination.per_page,
-          total: response.data.pagination.total,
-          pages: response.data.pagination.total_pages
-        });
+        // Map pagination
+        if (response.data.pagination) {
+          setPagination({
+            page: response.data.pagination.currentPage || 1,
+            limit: response.data.pagination.limit || 20,
+            total: response.data.pagination.total || 0,
+            pages: response.data.pagination.totalPages || 1
+          });
+        }
       }
     } catch (err) {
       console.error('Error fetching suppliers:', err);
-      setError(err.error || err.message || 'Failed to fetch suppliers. Please try again.');
+      setError(err.response?.data?.error || err.message || 'Failed to fetch suppliers. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -76,10 +85,9 @@ const Suppliers = () => {
 
   // Fetch suppliers on component mount and when filters change
   useEffect(() => {
-    console.log('Suppliers component mounted or filters changed');
     fetchSuppliers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.page, filters.limit]);
+  }, [filters.page, filters.limit, searchQuery, sortField, sortOrder]);
 
   // Handle filter changes
   const handleItemsPerPageChange = (newLimit) => {
@@ -88,29 +96,8 @@ const Suppliers = () => {
 
   // Handle search
   const handleSearch = (query) => {
-    const searchLower = query.toLowerCase().trim();
-
-    if (!searchLower) {
-      // If search is empty, reset to original data
-      fetchSuppliers();
-      return;
-    }
-
-    // Filter suppliers locally
-    const allSuppliers = [...suppliers];
-    const filtered = allSuppliers.filter(supplier => {
-      const supplierCode = (supplier.supplierCode || '').toLowerCase();
-      const companyName = (supplier.companyName || '').toLowerCase();
-      const email = (supplier.email || '').toLowerCase();
-      const phone = (supplier.phone || '').toLowerCase();
-
-      return supplierCode.includes(searchLower) ||
-        companyName.includes(searchLower) ||
-        email.includes(searchLower) ||
-        phone.includes(searchLower);
-    });
-
-    setSuppliers(filtered);
+    setSearchQuery(query);
+    setFilters({ ...filters, page: 1 }); // Reset to first page when searching
   };
 
   // Handle column sort
@@ -124,42 +111,18 @@ const Suppliers = () => {
 
     setSortField(field);
     setSortOrder(newSortOrder);
-
-    // Sort suppliers locally
-    const sorted = [...suppliers].sort((a, b) => {
-      let aVal = a[field];
-      let bVal = b[field];
-
-      // Handle different data types
-      if (field === 'creditLimit' || field === 'currentDebt' || field === 'totalPurchaseAmount') {
-        aVal = Number(aVal || 0);
-        bVal = Number(bVal || 0);
-      } else if (field === 'createdAt') {
-        aVal = aVal ? new Date(aVal).getTime() : 0;
-        bVal = bVal ? new Date(bVal).getTime() : 0;
-      } else {
-        aVal = String(aVal || '').toLowerCase();
-        bVal = String(bVal || '').toLowerCase();
-      }
-
-      if (newSortOrder === 'asc') {
-        return aVal > bVal ? 1 : -1;
-      } else {
-        return aVal < bVal ? 1 : -1;
-      }
-    });
-
-    setSuppliers(sorted);
+    setFilters({ ...filters, page: 1 }); // Reset to first page when sorting
   };
 
   // Toggle active handler
   const handleToggleActive = async (supplier) => {
     try {
-      // await supplierService.updateSupplier(supplier.id, { isActive: supplier.isActive === false ? true : false });
+      const newStatus = supplier.isActive !== false ? false : true;
+      await supplierService.updateSupplier(supplier.id, { isActive: newStatus });
       await fetchSuppliers();
     } catch (e) {
       console.error('Failed to toggle supplier active:', e);
-      alert(e.error || e.message || 'Failed to update supplier status');
+      alert(e.response?.data?.error || e.message || 'Failed to update supplier status');
     }
   };
 
@@ -176,12 +139,11 @@ const Suppliers = () => {
     }
 
     try {
-      // await supplierService.deleteSupplier(supplier.id, true); // permanent delete
+      await supplierService.deleteSupplier(supplier.id);
       await fetchSuppliers();
-      // Optional: alert('Supplier deleted successfully!');
     } catch (e) {
       console.error('Failed to delete supplier:', e);
-      alert(e.error || e.message || 'Failed to delete supplier');
+      alert(e.response?.data?.error || e.message || 'Failed to delete supplier');
     }
   };
 
