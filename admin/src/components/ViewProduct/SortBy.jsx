@@ -1,75 +1,50 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ArrowUpDown, ChevronDown } from 'lucide-react';
+import React from 'react';
 
+/**
+ * SortBy Component
+ * Dropdown để sắp xếp danh sách sản phẩm
+ */
 export const SortBy = ({ value = 'newest', onChange }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isOpen]);
-
-  // Map display names to API values
   const sortOptions = [
-    { label: 'Newest First', value: 'newest' },
-    { label: 'Price: Low to High', value: 'price_asc' },
-    { label: 'Price: High to Low', value: 'price_desc' },
-    { label: 'Name: A to Z', value: 'name_asc' },
-    { label: 'Name: Z to A', value: 'name_desc' },
-    { label: 'Highest Rated', value: 'rating' }
+    { value: 'newest', label: 'Newest First' },
+    { value: 'oldest', label: 'Oldest First' },
+    { value: 'name', label: 'Name (A-Z)' },
+    { value: 'price-low', label: 'Price: Low to High' },
+    { value: 'price-high', label: 'Price: High to Low' }
   ];
 
-  const currentOption = sortOptions.find(opt => opt.value === value) || sortOptions[0];
-
-  const handleSelect = (option) => {
-    console.log('Sort selected:', option.label, '→', option.value);
+  const handleChange = (e) => {
     if (onChange) {
-      onChange(option.value);
+      onChange(e.target.value);
     }
-    setIsOpen(false);
   };
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="bg-white border border-gray-200 rounded-lg px-4 py-2 flex items-center gap-2 hover:border-emerald-300 transition-colors"
-      >
-        <ArrowUpDown className="w-3.5 h-3.5 text-gray-500" />
-        <span className="text-sm font-medium text-gray-500">Sort by:</span>
-        <span className="text-sm font-medium text-gray-600 min-w-[130px] text-left">{currentOption.label}</span>
-        <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute top-full mt-2 left-0 bg-white border border-gray-200 rounded-lg shadow-xl z-50 w-full">
-          {sortOptions.map((option, index) => (
-            <button
-              key={option.value}
-              onClick={() => handleSelect(option)}
-              className={`w-full px-4 py-2.5 text-sm text-left transition-colors ${index !== sortOptions.length - 1 ? 'border-b border-gray-100' : ''
-                } ${index === 0 ? 'rounded-t-lg' : ''
-                } ${index === sortOptions.length - 1 ? 'rounded-b-lg' : ''
-                } ${value === option.value
-                  ? 'text-emerald-600 font-semibold bg-emerald-50'
-                  : 'text-gray-700 hover:bg-gray-50'
-                }`}
-            >
+    <div className="flex items-center gap-2">
+      <label htmlFor="sort-by" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+        Sort by:
+      </label>
+      <div className="relative">
+        <select
+          id="sort-by"
+          value={value}
+          onChange={handleChange}
+          className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 cursor-pointer hover:border-gray-400 transition-colors"
+        >
+          {sortOptions.map(option => (
+            <option key={option.value} value={option.value}>
               {option.label}
-            </button>
+            </option>
           ))}
+        </select>
+
+        {/* Dropdown arrow icon */}
+        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+          <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </div>
-      )}
+      </div>
     </div>
   );
 };

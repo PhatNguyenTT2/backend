@@ -1,302 +1,416 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
-export const ProductList = ({
-  products,
-  onSort,
-  sortField,
-  sortOrder,
-  onEdit,
-  onDelete,
-  onToggleActive
-}) => {
-  const [expandedRows, setExpandedRows] = useState(new Set());
+// Helper function to format VND currency
+const formatVND = (amount) => {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND'
+  }).format(amount);
+};
 
-  const handleSort = (field) => {
-    const newOrder = sortField === field && sortOrder === 'asc' ? 'desc' : 'asc';
-    onSort(field, newOrder);
-  };
+export const ProductList = ({ products = [], onSort, sortField, sortOrder, onEdit, onDelete, onToggleActive }) => {
+  const [activeDropdown, setActiveDropdown] = useState(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const dropdownRef = useRef(null);
+  const buttonRefs = useRef({});
 
-  const toggleRowExpansion = (productId) => {
-    setExpandedRows(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(productId)) {
-        newSet.delete(productId);
-      } else {
-        newSet.add(productId);
-      }
-      return newSet;
-    });
-  };
-
-  const SortIcon = ({ field }) => {
+  const getSortIcon = (field) => {
     if (sortField !== field) {
       return (
-        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 3V9M6 3L4 5M6 3L8 5" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     }
-    return sortOrder === 'asc' ? (
-      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-      </svg>
-    ) : (
-      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-      </svg>
-    );
+
+    if (sortOrder === 'asc') {
+      return (
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 9V3M6 3L4 5M6 3L8 5" stroke="#10B981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    } else {
+      return (
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 3V9M6 9L4 7M6 9L8 7" stroke="#10B981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    }
   };
 
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
-    }).format(price);
+  const handleSortClick = (field) => {
+    if (onSort) {
+      const newOrder = sortField === field && sortOrder === 'asc' ? 'desc' : 'asc';
+      onSort(field, newOrder);
+    }
   };
 
-  if (!products || products.length === 0) {
-    return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-        <p className="text-gray-500 text-sm font-['Poppins',sans-serif]">No products found</p>
-      </div>
-    );
-  }
+  const truncateText = (text, maxLength = 50) => {
+    if (!text) return '-';
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
+
+  // Toggle dropdown
+  const toggleDropdown = (productId, event) => {
+    if (activeDropdown === productId) {
+      setActiveDropdown(null);
+    } else {
+      const buttonRect = event.currentTarget.getBoundingClientRect();
+
+      // Determine position based on dropdown type
+      let leftPosition;
+      if (productId.startsWith('active-')) {
+        // For Active Status: show dropdown to the right of button
+        leftPosition = buttonRect.left;
+      } else {
+        // For Actions: show dropdown aligned to the right
+        leftPosition = buttonRect.right - 160; // 160px is dropdown width
+      }
+
+      setDropdownPosition({
+        top: buttonRect.bottom + 4,
+        left: leftPosition
+      });
+      setActiveDropdown(productId);
+    }
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setActiveDropdown(null);
+      }
+    };
+
+    if (activeDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [activeDropdown]);
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left">
-                <button
-                  onClick={() => handleSort('productCode')}
-                  className="flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider hover:text-emerald-600 font-['Poppins',sans-serif]"
-                >
-                  Product Code
-                  <SortIcon field="productCode" />
-                </button>
-              </th>
-              <th className="px-6 py-3 text-left">
-                <button
-                  onClick={() => handleSort('name')}
-                  className="flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider hover:text-emerald-600 font-['Poppins',sans-serif]"
-                >
-                  Product Name
-                  <SortIcon field="name" />
-                </button>
-              </th>
-              <th className="px-6 py-3 text-left">
-                <button
-                  onClick={() => handleSort('categoryName')}
-                  className="flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider hover:text-emerald-600 font-['Poppins',sans-serif]"
-                >
-                  Category
-                  <SortIcon field="categoryName" />
-                </button>
-              </th>
-              <th className="px-6 py-3 text-left">
-                <button
-                  onClick={() => handleSort('unitPrice')}
-                  className="flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider hover:text-emerald-600 font-['Poppins',sans-serif]"
-                >
-                  Unit Price
-                  <SortIcon field="unitPrice" />
-                </button>
-              </th>
-              <th className="px-6 py-3 text-left">
-                <button
-                  onClick={() => handleSort('vendor')}
-                  className="flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider hover:text-emerald-600 font-['Poppins',sans-serif]"
-                >
-                  Vendor
-                  <SortIcon field="vendor" />
-                </button>
-              </th>
-              <th className="px-6 py-3 text-left">
-                <button
-                  onClick={() => handleSort('stock')}
-                  className="flex items-center gap-2 text-xs font-semibold text-gray-700 uppercase tracking-wider hover:text-emerald-600 font-['Poppins',sans-serif]"
-                >
-                  Stock
-                  <SortIcon field="stock" />
-                </button>
-              </th>
-              <th className="px-6 py-3 text-left">
-                <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider font-['Poppins',sans-serif]">
-                  Status
-                </span>
-              </th>
-              <th className="px-6 py-3 text-center">
-                <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider font-['Poppins',sans-serif]">
-                  Actions
-                </span>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {products.map((product) => (
-              <React.Fragment key={product.id}>
-                <tr className="hover:bg-gray-50 transition-colors">
-                  {/* Product Code */}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => toggleRowExpansion(product.id)}
-                        className="text-gray-400 hover:text-gray-600"
-                      >
-                        <svg
-                          className={`w-4 h-4 transition-transform ${expandedRows.has(product.id) ? 'rotate-90' : ''}`}
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                      <span className="text-sm font-medium text-gray-900 font-['Poppins',sans-serif]">
-                        {product.productCode}
-                      </span>
+    <div className="bg-white rounded-lg shadow-sm">
+      {/* Scrollable Container */}
+      <div className="overflow-x-auto rounded-lg">
+        <div className="min-w-[1200px]">
+          {/* Table Header */}
+          <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
+            {/* Product Code Column - Sortable */}
+            <div
+              className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('productCode')}
+            >
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
+                ID
+                {getSortIcon('productCode')}
+              </p>
+            </div>
+
+            {/* Image Column */}
+            <div className="w-[80px] px-3 flex items-center flex-shrink-0">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
+                Image
+              </p>
+            </div>
+
+            {/* Name Column - Sortable */}
+            <div
+              className="flex-1 min-w-[180px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('name')}
+            >
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
+                Name
+                {getSortIcon('name')}
+              </p>
+            </div>
+
+            {/* Category Column - Sortable */}
+            <div
+              className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('category')}
+            >
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
+                Category
+                {getSortIcon('category')}
+              </p>
+            </div>
+
+            {/* Unit Price Column - Sortable */}
+            <div
+              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('unitPrice')}
+            >
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
+                Unit Price
+                {getSortIcon('unitPrice')}
+              </p>
+            </div>
+
+            {/* Vendor Column */}
+            <div className="w-[130px] px-3 flex items-center flex-shrink-0">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
+                Vendor
+              </p>
+            </div>
+
+            {/* Stock Column */}
+            <div className="w-[80px] px-3 flex items-center flex-shrink-0">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
+                Stock
+              </p>
+            </div>
+
+            {/* Active Status Column - Sortable */}
+            <div
+              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('isActive')}
+            >
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
+                Active
+                {getSortIcon('isActive')}
+              </p>
+            </div>
+
+            {/* Actions Column */}
+            <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
+                Actions
+              </p>
+            </div>
+          </div>
+
+          {/* Table Body */}
+          <div className="flex flex-col">
+            {products.map((product, index) => (
+              <div
+                key={product.id}
+                className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== products.length - 1 ? 'border-b border-gray-100' : ''
+                  }`}
+              >
+                {/* Product Code */}
+                <div className="w-[140px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[12px] font-medium font-['Poppins',sans-serif] text-gray-600 leading-[20px] truncate">
+                    {product.productCode || '-'}
+                  </p>
+                </div>
+
+                {/* Image */}
+                <div className="w-[80px] px-3 flex items-center flex-shrink-0">
+                  {product.image ? (
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      className="w-10 h-10 object-cover rounded border border-gray-200"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"%3E%3Crect width="48" height="48" fill="%23f3f4f6"/%3E%3Ctext x="24" y="24" text-anchor="middle" dy=".3em" fill="%236b7280" font-family="sans-serif" font-size="12"%3ENo Image%3C/text%3E%3C/svg%3E';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-10 h-10 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                      <span className="text-[9px] text-gray-400">No Image</span>
                     </div>
-                  </td>
+                  )}
+                </div>
 
-                  {/* Product Name */}
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      {product.image ? (
-                        <img
-                          src={product.image}
-                          alt={product.name}
-                          className="w-10 h-10 rounded-md object-cover"
-                          onError={(e) => {
-                            e.target.src = 'https://via.placeholder.com/40?text=No+Image';
-                          }}
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-md bg-gray-200 flex items-center justify-center">
-                          <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                      )}
-                      <div className="text-sm font-medium text-gray-900 font-['Poppins',sans-serif] max-w-xs truncate">
-                        {product.name}
-                      </div>
-                    </div>
-                  </td>
+                {/* Name */}
+                <div className="flex-1 min-w-[180px] px-3 flex items-center">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate" title={product.name}>
+                    {truncateText(product.name, 40)}
+                  </p>
+                </div>
 
-                  {/* Category */}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-700 font-['Poppins',sans-serif]">
-                      {product.categoryName || product.category?.name || '-'}
-                    </span>
-                  </td>
+                {/* Category */}
+                <div className="w-[140px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
+                    {product.category?.name || product.categoryName || '-'}
+                  </p>
+                </div>
 
-                  {/* Unit Price */}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-gray-900 font-['Poppins',sans-serif]">
-                      {formatPrice(product.unitPrice)}
-                    </span>
-                  </td>
+                {/* Unit Price */}
+                <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
+                    {formatVND(product.unitPrice || 0)}
+                  </p>
+                </div>
 
-                  {/* Vendor */}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-700 font-['Poppins',sans-serif]">
-                      {product.vendor || '-'}
-                    </span>
-                  </td>
+                {/* Vendor */}
+                <div className="w-[130px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
+                    {product.vendor || '-'}
+                  </p>
+                </div>
 
-                  {/* Stock */}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`text-sm font-medium font-['Poppins',sans-serif] ${(product.stock || 0) === 0 ? 'text-red-600' :
-                        (product.stock || 0) < 10 ? 'text-yellow-600' :
-                          'text-green-600'
-                      }`}>
-                      {product.stock || 0}
-                    </span>
-                  </td>
+                {/* Stock */}
+                <div className="w-[80px] px-3 flex items-center flex-shrink-0">
+                  <p className={`text-[13px] font-medium font-['Poppins',sans-serif] leading-[20px] ${(product.stock || product.inventory?.quantityAvailable || 0) > 0
+                      ? 'text-emerald-600'
+                      : 'text-red-600'
+                    }`}>
+                    {product.stock || product.inventory?.quantityAvailable || 0}
+                  </p>
+                </div>
 
-                  {/* Status */}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <button
-                      onClick={() => onToggleActive(product)}
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium font-['Poppins',sans-serif] transition-colors ${product.isActive !== false
-                          ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                          : 'bg-red-100 text-red-800 hover:bg-red-200'
-                        }`}
-                    >
+                {/* Active Status - Dropdown */}
+                <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <button
+                    onClick={(e) => toggleDropdown(`active-${product.id}`, e)}
+                    className={`${product.isActive !== false ? 'bg-[#10b981]' : 'bg-[#6b7280]'
+                      } px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
+                  >
+                    <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
                       {product.isActive !== false ? 'Active' : 'Inactive'}
-                    </button>
-                  </td>
+                    </span>
+                    <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 1L4 4L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
 
-                  {/* Actions */}
-                  <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <button
-                        onClick={() => onEdit(product)}
-                        className="text-blue-600 hover:text-blue-800 transition-colors p-1"
-                        title="Edit"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => onDelete(product)}
-                        className="text-red-600 hover:text-red-800 transition-colors p-1"
-                        title="Delete"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-
-                {/* Expanded Row - Product Details */}
-                {expandedRows.has(product.id) && (
-                  <tr className="bg-gray-50">
-                    <td colSpan="8" className="px-6 py-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm font-['Poppins',sans-serif]">
-                        <div>
-                          <span className="font-semibold text-gray-700">Created:</span>
-                          <span className="ml-2 text-gray-600">
-                            {new Date(product.createdAt).toLocaleDateString('vi-VN')}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="font-semibold text-gray-700">Updated:</span>
-                          <span className="ml-2 text-gray-600">
-                            {new Date(product.updatedAt).toLocaleDateString('vi-VN')}
-                          </span>
-                        </div>
-                        {product.image && (
-                          <div className="md:col-span-2">
-                            <span className="font-semibold text-gray-700">Image:</span>
-                            <div className="mt-2">
-                              <img
-                                src={product.image}
-                                alt={product.name}
-                                className="w-32 h-32 rounded-md object-cover border border-gray-200"
-                                onError={(e) => {
-                                  e.target.src = 'https://via.placeholder.com/128?text=No+Image';
-                                }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
+                {/* Actions */}
+                <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
+                  <button
+                    onClick={(e) => toggleDropdown(`action-${product.id}`, e)}
+                    className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                    title="Actions"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="3" cy="8" r="1.5" fill="#6B7280" />
+                      <circle cx="8" cy="8" r="1.5" fill="#6B7280" />
+                      <circle cx="13" cy="8" r="1.5" fill="#6B7280" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
+          </div>
+
+          {/* Empty State */}
+          {products.length === 0 && (
+            <div className="py-16 text-center">
+              <p className="text-gray-500 text-[13px] font-['Poppins',sans-serif]">
+                No products found
+              </p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Fixed Position Dropdown Menu */}
+      {activeDropdown && (() => {
+        const product = products.find(p =>
+          `action-${p.id}` === activeDropdown || `active-${p.id}` === activeDropdown
+        );
+        if (!product) return null;
+
+        const isActiveDropdown = activeDropdown === `active-${product.id}`;
+        const isActionDropdown = activeDropdown === `action-${product.id}`;
+
+        // Render Active Status Dropdown
+        if (isActiveDropdown) {
+          const activeStatusOptions = [
+            { value: true, label: 'Active', color: 'bg-[#10b981]' },
+            { value: false, label: 'Inactive', color: 'bg-[#6b7280]' }
+          ];
+
+          return (
+            <div
+              ref={dropdownRef}
+              className="fixed min-w-[120px] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
+              style={{
+                top: `${dropdownPosition.top}px`,
+                left: `${dropdownPosition.left}px`
+              }}
+            >
+              {activeStatusOptions.map((option) => (
+                <button
+                  key={option.label}
+                  onClick={() => {
+                    if (onToggleActive) {
+                      onToggleActive(product, option.value);
+                    }
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  disabled={(product.isActive !== false) === option.value}
+                >
+                  <span className={`${option.color} w-2 h-2 rounded-full`}></span>
+                  <span className={`text-[12px] font-['Poppins',sans-serif] ${(product.isActive !== false) === option.value
+                      ? 'text-emerald-600 font-medium'
+                      : 'text-[#212529]'
+                    }`}>
+                    {option.label}
+                  </span>
+                  {(product.isActive !== false) === option.value && (
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-auto">
+                      <path d="M10 3L4.5 8.5L2 6" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          );
+        }
+
+        // Render Actions Dropdown
+        if (isActionDropdown) {
+          return (
+            <div
+              ref={dropdownRef}
+              className="fixed w-40 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
+              style={{
+                top: `${dropdownPosition.top}px`,
+                left: `${dropdownPosition.left}px`
+              }}
+            >
+              <button
+                onClick={() => {
+                  onEdit && onEdit(product);
+                  setActiveDropdown(null);
+                }}
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M11.333 2.00004C11.5081 1.82494 11.716 1.68605 11.9447 1.59129C12.1735 1.49653 12.4187 1.44775 12.6663 1.44775C12.914 1.44775 13.1592 1.49653 13.3879 1.59129C13.6167 1.68605 13.8246 1.82494 13.9997 2.00004C14.1748 2.17513 14.3137 2.383 14.4084 2.61178C14.5032 2.84055 14.552 3.08575 14.552 3.33337C14.552 3.58099 14.5032 3.82619 14.4084 4.05497C14.3137 4.28374 14.1748 4.49161 13.9997 4.66671L5.33301 13.3334L1.33301 14.6667L2.66634 10.6667L11.333 2.00004Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Edit
+              </button>
+
+              <div className="border-t border-gray-200 my-1"></div>
+
+              <button
+                onClick={() => {
+                  onDelete && onDelete(product);
+                  setActiveDropdown(null);
+                }}
+                disabled={product.isActive !== false}
+                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${product.isActive !== false
+                    ? 'text-gray-400 cursor-not-allowed opacity-50'
+                    : 'text-gray-700 hover:bg-red-50 hover:text-red-600'
+                  }`}
+                title={
+                  product.isActive !== false
+                    ? 'Product must be deactivated before deletion'
+                    : 'Delete product'
+                }
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M2 4H3.33333H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M5.33301 4.00004V2.66671C5.33301 2.31309 5.47348 1.97395 5.72353 1.7239C5.97358 1.47385 6.31272 1.33337 6.66634 1.33337H9.33301C9.68663 1.33337 10.0258 1.47385 10.2758 1.7239C10.5259 1.97395 10.6663 2.31309 10.6663 2.66671V4.00004M12.6663 4.00004V13.3334C12.6663 13.687 12.5259 14.0261 12.2758 14.2762C12.0258 14.5262 11.6866 14.6667 11.333 14.6667H4.66634C4.31272 14.6667 3.97358 14.5262 3.72353 14.2762C3.47348 14.0261 3.33301 13.687 3.33301 13.3334V4.00004H12.6663Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Delete
+              </button>
+            </div>
+          );
+        }
+
+        return null;
+      })()}
     </div>
   );
 };
-
-export default ProductList;

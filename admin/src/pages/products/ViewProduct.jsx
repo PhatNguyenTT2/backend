@@ -2,8 +2,12 @@ import React, { useState } from 'react';
 import { Layout } from '../../components/Layout';
 import { Breadcrumb } from '../../components/Breadcrumb';
 import { FilterProduct } from '../../components/FilterProduct';
-import { ProductList } from '../../components/ViewProduct';
+import { ProductGrid, ProductListHeader, SortBy } from '../../components/ViewProduct';
 
+/**
+ * ViewProduct Page
+ * Hiển thị danh sách sản phẩm dạng grid với filter và sort
+ */
 const ViewProduct = () => {
   // Breadcrumb items
   const breadcrumbItems = [
@@ -11,22 +15,38 @@ const ViewProduct = () => {
     { label: 'Product List', href: '/products/view' },
   ];
 
-  // Filter state - shared between FilterProduct and ProductList
+  // Filter state - shared between FilterProduct and ProductGrid
   const [filters, setFilters] = useState({
     categories: [],
     minPrice: null,
     maxPrice: null,
-    sortBy: 'newest'
+    search: '',
+    isActive: true
   });
+
+  // Sort state
+  const [sortBy, setSortBy] = useState('newest');
+
+  // Pagination state for ProductListHeader
+  const [paginationInfo, setPaginationInfo] = useState({
+    totalItems: 0,
+    currentCount: 0,
+    isLoading: true
+  });
+
+  // Handle pagination changes from ProductGrid
+  const handlePaginationChange = (info) => {
+    setPaginationInfo(prev => ({ ...prev, ...info }));
+  };
 
   // Handle filter changes from FilterProduct
   const handleFilterChange = (newFilters) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
   };
 
-  // Handle sort change from ProductList
-  const handleSortChange = (sortBy) => {
-    setFilters(prev => ({ ...prev, sortBy }));
+  // Handle sort change from SortBy dropdown
+  const handleSortChange = (newSortBy) => {
+    setSortBy(newSortBy);
   };
 
   return (
@@ -37,10 +57,21 @@ const ViewProduct = () => {
           {/* Breadcrumb */}
           <Breadcrumb items={breadcrumbItems} />
 
-          {/* Product List with Grid */}
-          <ProductList
+          {/* Header with Sort */}
+          <div className="flex items-center justify-between">
+            <ProductListHeader
+              totalItems={paginationInfo.totalItems}
+              currentCount={paginationInfo.currentCount}
+              isLoading={paginationInfo.isLoading}
+            />
+            <SortBy value={sortBy} onChange={handleSortChange} />
+          </div>
+
+          {/* Product Grid */}
+          <ProductGrid
             filters={filters}
-            onSortChange={handleSortChange}
+            sortBy={sortBy}
+            onPaginationChange={handlePaginationChange}
           />
         </div>
 
