@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export const CustomerListHeader = ({
+export const ProductBatchListHeader = ({
   itemsPerPage = 20,
   onItemsPerPageChange,
   searchQuery = '',
   onSearchChange,
   onSearch,
-  onAddCustomer,
-  onExport
+  statusFilter = '',
+  onStatusFilterChange,
+  onAddBatch
 }) => {
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const dropdownRef = useRef(null);
@@ -35,7 +36,7 @@ export const CustomerListHeader = ({
         {/* Title */}
         <div className="flex items-center">
           <h2 className="text-[13px] font-normal font-['Poppins',sans-serif] text-black leading-[20px] whitespace-nowrap">
-            All Customers
+            Product Batches
           </h2>
         </div>
 
@@ -60,12 +61,31 @@ export const CustomerListHeader = ({
             </div>
           </div>
 
+          {/* Status Filter */}
+          <div className="relative w-[120px]">
+            <select
+              value={statusFilter}
+              onChange={(e) => onStatusFilterChange && onStatusFilterChange(e.target.value)}
+              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            >
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="expired">Expired</option>
+              <option value="disposed">Disposed</option>
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
+
           {/* Search Input */}
           <div className="flex-1 max-w-[300px]">
             <div className="flex h-[36px] gap-1">
               <input
                 type="text"
-                placeholder="Search by Name..."
+                placeholder="Search by Batch Code..."
                 value={searchQuery}
                 onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
                 onKeyPress={(e) => {
@@ -130,7 +150,7 @@ export const CustomerListHeader = ({
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
               <button
                 onClick={() => {
-                  onAddCustomer && onAddCustomer();
+                  onAddBatch && onAddBatch();
                   setShowActionsDropdown(false);
                 }}
                 className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors flex items-center gap-2"
@@ -138,14 +158,14 @@ export const CustomerListHeader = ({
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                Add Customer
+                Add Batch
               </button>
 
               <div className="border-t border-gray-200 my-1"></div>
 
               <button
                 onClick={() => {
-                  onExport && onExport();
+                  console.log('Export CSV');
                   setShowActionsDropdown(false);
                 }}
                 className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"

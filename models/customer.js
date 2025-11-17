@@ -8,11 +8,11 @@ const mongoose = require('mongoose');
 const customerSchema = new mongoose.Schema({
   customerCode: {
     type: String,
-    required: [true, 'Customer code is required'],
     unique: true,
     uppercase: true,
     trim: true,
     match: [/^CUST\d{10}$/, 'Customer code must follow format CUST2025000001']
+    // Auto-generated in pre-save hook - NOT required because it's auto-generated
   },
 
   fullName: {

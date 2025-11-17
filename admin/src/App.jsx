@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { Dashboard, ViewProduct, Products, LoginSignup, Orders, Categories, Employees, Customers, Suppliers, Inventories, SalesReports, PurchaseReports, Roles, POSManagement } from "./pages";
+import { Dashboard, ViewProduct, Products, ProductBatches, LoginSignup, Orders, Categories, Employees, Customers, Suppliers, Inventories, DetailInventories, SalesReports, PurchaseReports, Roles, POSManagement } from "./pages";
 import { POSLogin, POSMain } from "./pages/pos";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import Payments from "./pages/Payments";
@@ -41,6 +41,14 @@ function App() {
           element={
             <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_PRODUCTS}>
               <Products />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/products/:productId/batches"
+          element={
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_PRODUCTS}>
+              <ProductBatches />
             </ProtectedRoute>
           }
         />
@@ -104,6 +112,14 @@ function App() {
           element={
             <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
               <Inventories />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/inventory/detail/:productId"
+          element={
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
+              <DetailInventories />
             </ProtectedRoute>
           }
         />

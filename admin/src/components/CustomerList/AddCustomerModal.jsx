@@ -113,14 +113,14 @@ export const AddCustomerModal = ({ isOpen, onClose, onSuccess }) => {
       // Prepare data for API
       const customerData = {
         fullName: formData.fullName.trim(),
-        phone: formData.phone.trim(),
-        gender: formData.gender,
-        customerType: formData.customerType
+        phone: formData.phone.trim().replace(/[\s\-()]/g, ''), // Remove spaces, dashes, parentheses
+        gender: formData.gender.toLowerCase(), // Ensure lowercase for enum validation
+        customerType: formData.customerType.toLowerCase() // Ensure lowercase for enum validation
       };
 
       // Add optional fields if provided
       if (formData.email.trim()) {
-        customerData.email = formData.email.trim();
+        customerData.email = formData.email.trim().toLowerCase();
       }
       if (formData.address.trim()) {
         customerData.address = formData.address.trim();
@@ -128,6 +128,7 @@ export const AddCustomerModal = ({ isOpen, onClose, onSuccess }) => {
       if (formData.dateOfBirth) {
         customerData.dateOfBirth = formData.dateOfBirth;
       }
+
 
       await customerService.createCustomer(customerData);
 
@@ -141,10 +142,12 @@ export const AddCustomerModal = ({ isOpen, onClose, onSuccess }) => {
 
       // Handle specific error cases
       if (error.response?.data?.error) {
-        const errorMessage = error.response.data.error;
+        const errorData = error.response.data.error;
+        const errorMessage = typeof errorData === 'string' ? errorData : errorData.message;
+        const errorCode = typeof errorData === 'object' ? errorData.code : null;
 
         // Check for duplicate email
-        if (errorMessage.includes('email') && errorMessage.includes('duplicate')) {
+        if (errorCode === 'DUPLICATE_EMAIL' || (errorMessage && errorMessage.toLowerCase().includes('email'))) {
           setErrors(prev => ({
             ...prev,
             email: 'This email is already registered'
@@ -152,7 +155,7 @@ export const AddCustomerModal = ({ isOpen, onClose, onSuccess }) => {
         } else {
           setErrors(prev => ({
             ...prev,
-            submit: errorMessage
+            submit: errorMessage || 'Failed to create customer'
           }));
         }
       } else {

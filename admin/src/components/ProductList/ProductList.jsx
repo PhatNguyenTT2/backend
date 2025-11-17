@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 // Helper function to format VND currency
 const formatVND = (amount) => {
@@ -9,6 +10,7 @@ const formatVND = (amount) => {
 };
 
 export const ProductList = ({ products = [], onSort, sortField, sortOrder, onEdit, onDelete, onToggleActive }) => {
+  const navigate = useNavigate();
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
@@ -249,8 +251,8 @@ export const ProductList = ({ products = [], onSort, sortField, sortOrder, onEdi
                 {/* Stock */}
                 <div className="w-[80px] px-3 flex items-center flex-shrink-0">
                   <p className={`text-[13px] font-medium font-['Poppins',sans-serif] leading-[20px] ${(product.stock || product.inventory?.quantityAvailable || 0) > 0
-                      ? 'text-emerald-600'
-                      : 'text-red-600'
+                    ? 'text-emerald-600'
+                    : 'text-red-600'
                     }`}>
                     {product.stock || product.inventory?.quantityAvailable || 0}
                   </p>
@@ -341,8 +343,8 @@ export const ProductList = ({ products = [], onSort, sortField, sortOrder, onEdi
                 >
                   <span className={`${option.color} w-2 h-2 rounded-full`}></span>
                   <span className={`text-[12px] font-['Poppins',sans-serif] ${(product.isActive !== false) === option.value
-                      ? 'text-emerald-600 font-medium'
-                      : 'text-[#212529]'
+                    ? 'text-emerald-600 font-medium'
+                    : 'text-[#212529]'
                     }`}>
                     {option.label}
                   </span>
@@ -370,6 +372,19 @@ export const ProductList = ({ products = [], onSort, sortField, sortOrder, onEdi
             >
               <button
                 onClick={() => {
+                  navigate(`/products/${product.id}/batches`);
+                  setActiveDropdown(null);
+                }}
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors flex items-center gap-2"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M2 6.66667H14M2 6.66667V12.6667C2 13.0203 2.14048 13.3594 2.39052 13.6095C2.64057 13.8595 2.97971 14 3.33333 14H12.6667C13.0203 14 13.3594 13.8595 13.6095 13.6095C13.8595 13.3594 14 13.0203 14 12.6667V6.66667M2 6.66667V4.66667C2 4.31304 2.14048 3.97391 2.39052 3.72386C2.64057 3.47381 2.97971 3.33333 3.33333 3.33333H5.33333M14 6.66667V4.66667C14 4.31304 13.8595 3.97391 13.6095 3.72386C13.3594 3.47381 13.0203 3.33333 12.6667 3.33333H10.6667M5.33333 3.33333V2M5.33333 3.33333H10.6667M10.6667 3.33333V2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                View Batches
+              </button>
+
+              <button
+                onClick={() => {
                   onEdit && onEdit(product);
                   setActiveDropdown(null);
                 }}
@@ -390,8 +405,8 @@ export const ProductList = ({ products = [], onSort, sortField, sortOrder, onEdi
                 }}
                 disabled={product.isActive !== false}
                 className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${product.isActive !== false
-                    ? 'text-gray-400 cursor-not-allowed opacity-50'
-                    : 'text-gray-700 hover:bg-red-50 hover:text-red-600'
+                  ? 'text-gray-400 cursor-not-allowed opacity-50'
+                  : 'text-gray-700 hover:bg-red-50 hover:text-red-600'
                   }`}
                 title={
                   product.isActive !== false

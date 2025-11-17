@@ -63,8 +63,8 @@ const Customers = () => {
 
       if (response.success) {
         // Map API response to display format
-        const formattedCustomers = (response.data.items || []).map(customer => ({
-          id: customer._id,
+        const formattedCustomers = (response.data.customers || []).map(customer => ({
+          id: customer._id || customer.id,
           customerCode: customer.customerCode,
           fullName: customer.fullName,
           email: customer.email || '',

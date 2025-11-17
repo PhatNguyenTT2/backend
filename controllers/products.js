@@ -243,6 +243,18 @@ productsRouter.post('/', userExtractor, async (request, response) => {
 
     const savedProduct = await product.save();
 
+    // Create inventory for the new product
+    const inventory = new Inventory({
+      product: savedProduct._id,
+      quantityOnHand: 0,
+      quantityReserved: 0,
+      quantityOnShelf: 0,
+      reorderPoint: 10,
+      warehouseLocation: null
+    });
+
+    await inventory.save();
+
     // Populate category before returning
     await savedProduct.populate('category', 'categoryCode name image');
 

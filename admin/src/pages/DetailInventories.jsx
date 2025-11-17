@@ -1,31 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { InventoryList, InventoryListHeader } from '../components/InventoryList';
-import inventoryService from '../services/inventoryService';
+import { DetailInventoryList, DetailInventoryListHeader } from '../components/DetailInventoryList';
+import {
+  StockInBatchModal,
+  StockOutBatchModal,
+  AdjustStockBatchModal,
+  TransferStockBatchModal,
+  MovementHistoryBatchModal
+} from '../components/DetailInventoryList/BatchMovementModals';
+import detailInventoryService from '../services/detailInventoryService';
+import productService from '../services/productService';
 
-export const Inventories = () => {
+export const DetailInventories = () => {
+  const { productId } = useParams();
   const navigate = useNavigate();
 
-  // Breadcrumb items
-  const breadcrumbItems = [
-    { label: 'Dashboard', href: '/dashboard' },
-    { label: 'Inventories', href: '/inventories' },
-  ];
-
-  const [inventory, setInventory] = useState([]);
-  const [filteredInventory, setFilteredInventory] = useState([]);
-  const [paginatedInventory, setPaginatedInventory] = useState([]);
+  const [product, setProduct] = useState(null);
+  const [detailInventory, setDetailInventory] = useState([]);
+  const [filteredDetailInventory, setFilteredDetailInventory] = useState([]);
+  const [paginatedDetailInventory, setPaginatedDetailInventory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
   // Filters and sorting
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState('productCode');
+  const [sortField, setSortField] = useState('batchCode');
   const [sortOrder, setSortOrder] = useState('asc');
-  const [filterView, setFilterView] = useState('all'); // all, low-stock, out-of-stock, needs-reorder
+  const [filterView, setFilterView] = useState('all'); // all, out-of-stock, has-warehouse, has-shelf, expiring-soon
 
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -34,46 +38,73 @@ export const Inventories = () => {
     itemsPerPage: 10,
   });
 
-  // Fetch inventory on component mount
+  // Modals state
+  const [stockInModal, setStockInModal] = useState({ isOpen: false, item: null });
+  const [stockOutModal, setStockOutModal] = useState({ isOpen: false, item: null });
+  const [adjustModal, setAdjustModal] = useState({ isOpen: false, item: null });
+  const [transferModal, setTransferModal] = useState({ isOpen: false, item: null });
+  const [historyModal, setHistoryModal] = useState({ isOpen: false, item: null });
+
+  // Breadcrumb items
+  const breadcrumbItems = [
+    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Inventories', href: '/inventory/management' },
+    { label: product?.name || 'Detail Inventories', href: `/inventory/detail/${productId}` },
+  ];
+
+  // Fetch product and detail inventory on component mount
   useEffect(() => {
-    fetchInventory();
-  }, []);
+    if (productId) {
+      fetchProduct();
+      fetchDetailInventory();
+    }
+  }, [productId]);
 
   // Apply filters and sorting when data or filters change
   useEffect(() => {
-    let result = [...inventory];
+    let result = [...detailInventory];
 
     // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
       result = result.filter(item =>
-        item.product?.name?.toLowerCase().includes(query) ||
-        item.product?.productCode?.toLowerCase().includes(query)
+        item.batchId?.batchCode?.toLowerCase().includes(query) ||
+        item.batchId?.productId?.name?.toLowerCase().includes(query) ||
+        item.location?.toLowerCase().includes(query)
       );
     }
 
     // Apply view filter
-    if (filterView === 'low-stock') {
-      result = result.filter(item =>
-        item.quantityAvailable > 0 && item.quantityAvailable <= item.reorderPoint
-      );
-    } else if (filterView === 'out-of-stock') {
+    if (filterView === 'out-of-stock') {
       result = result.filter(item => item.quantityAvailable === 0);
-    } else if (filterView === 'needs-reorder') {
-      result = result.filter(item => item.needsReorder === true);
+    } else if (filterView === 'has-warehouse') {
+      result = result.filter(item => item.quantityOnHand > 0);
+    } else if (filterView === 'has-shelf') {
+      result = result.filter(item => item.quantityOnShelf > 0);
+    } else if (filterView === 'expiring-soon') {
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      result = result.filter(item =>
+        item.batchId?.expiryDate &&
+        new Date(item.batchId.expiryDate) <= thirtyDaysFromNow &&
+        new Date(item.batchId.expiryDate) > new Date()
+      );
     }
 
     // Apply sorting
     result.sort((a, b) => {
       let aVal, bVal;
 
-      // Handle product-related fields
-      if (sortField === 'productCode') {
-        aVal = a.product?.productCode || '';
-        bVal = b.product?.productCode || '';
+      // Handle nested fields
+      if (sortField === 'batchCode') {
+        aVal = a.batchId?.batchCode || '';
+        bVal = b.batchId?.batchCode || '';
       } else if (sortField === 'productName') {
-        aVal = a.product?.name || '';
-        bVal = b.product?.name || '';
+        aVal = a.batchId?.productId?.name || '';
+        bVal = b.batchId?.productId?.name || '';
+      } else if (sortField === 'expiryDate') {
+        aVal = a.batchId?.expiryDate ? new Date(a.batchId.expiryDate).getTime() : 0;
+        bVal = b.batchId?.expiryDate ? new Date(b.batchId.expiryDate).getTime() : 0;
       } else {
         aVal = a[sortField];
         bVal = b[sortField];
@@ -84,10 +115,10 @@ export const Inventories = () => {
       if (bVal == null) bVal = '';
 
       // Handle different data types
-      if (['quantityOnHand', 'quantityOnShelf', 'quantityReserved', 'quantityAvailable', 'reorderPoint'].includes(sortField)) {
+      if (['quantityOnHand', 'quantityOnShelf', 'quantityReserved', 'quantityAvailable'].includes(sortField)) {
         aVal = Number(aVal) || 0;
         bVal = Number(bVal) || 0;
-      } else if (sortField === 'productName' || sortField === 'productCode') {
+      } else if (sortField === 'batchCode' || sortField === 'productName') {
         aVal = String(aVal).toLowerCase();
         bVal = String(bVal).toLowerCase();
       }
@@ -97,47 +128,55 @@ export const Inventories = () => {
       return 0;
     });
 
-    setFilteredInventory(result);
+    setFilteredDetailInventory(result);
 
     // Update pagination
     const totalPages = Math.ceil(result.length / itemsPerPage);
     setPagination(prev => ({
       ...prev,
-      currentPage: 1, // Reset to first page on filter change
+      currentPage: 1,
       totalPages,
       itemsPerPage,
     }));
-  }, [inventory, searchQuery, sortField, sortOrder, itemsPerPage, filterView]);
+  }, [detailInventory, searchQuery, sortField, sortOrder, itemsPerPage, filterView]);
 
-  // Paginate filtered inventory
+  // Paginate filtered detail inventory
   useEffect(() => {
     const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
     const endIndex = startIndex + pagination.itemsPerPage;
-    setPaginatedInventory(filteredInventory.slice(startIndex, endIndex));
-  }, [filteredInventory, pagination.currentPage, pagination.itemsPerPage]);
+    setPaginatedDetailInventory(filteredDetailInventory.slice(startIndex, endIndex));
+  }, [filteredDetailInventory, pagination.currentPage, pagination.itemsPerPage]);
 
-  const fetchInventory = async () => {
+  const fetchProduct = async () => {
+    try {
+      const response = await productService.getProductById(productId);
+      if (response.success && response.data && response.data.product) {
+        setProduct(response.data.product);
+      }
+    } catch (err) {
+      console.error('Error fetching product:', err);
+    }
+  };
+
+  const fetchDetailInventory = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // Fetch all inventory with product details populated
-      const response = await inventoryService.getAllInventories();
+      const response = await detailInventoryService.getDetailInventoriesByProduct(productId);
 
-      // Handle response structure
-      if (response.success && response.data && response.data.inventories) {
-        setInventory(response.data.inventories);
+      if (response.success && response.data && response.data.detailInventories) {
+        setDetailInventory(response.data.detailInventories);
       } else if (Array.isArray(response)) {
-        // Fallback if response is directly an array
-        setInventory(response);
+        setDetailInventory(response);
       } else {
         console.error('Unexpected response structure:', response);
-        setInventory([]);
+        setDetailInventory([]);
       }
     } catch (err) {
-      console.error('Error fetching inventory:', err);
-      setError(err.message || 'Failed to load inventory');
-      setInventory([]);
+      console.error('Error fetching detail inventory:', err);
+      setError(err.message || 'Failed to load detail inventory');
+      setDetailInventory([]);
     } finally {
       setIsLoading(false);
     }
@@ -145,10 +184,8 @@ export const Inventories = () => {
 
   const handleColumnSort = (field) => {
     if (sortField === field) {
-      // Toggle sort order if clicking the same field
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
-      // Set new field and default to ascending
       setSortField(field);
       setSortOrder('asc');
     }
@@ -171,26 +208,31 @@ export const Inventories = () => {
       ...prev,
       currentPage: newPage
     }));
-    // Scroll to top smoothly
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleViewDetail = (productId) => {
-    if (productId) {
-      navigate(`/inventory/detail/${productId}`);
-    }
+  const handleStockIn = (item) => {
+    setStockInModal({ isOpen: true, item });
   };
 
-  const handleEdit = (item) => {
-    // TODO: Implement edit inventory settings modal
-    console.log('Edit inventory:', item);
-    alert('Edit inventory settings modal - To be implemented');
+  const handleStockOut = (item) => {
+    setStockOutModal({ isOpen: true, item });
   };
 
-  const handleUpdateLocation = (item) => {
-    // TODO: Implement update location modal
-    console.log('Update location:', item);
-    alert('Update location modal - To be implemented');
+  const handleAdjust = (item) => {
+    setAdjustModal({ isOpen: true, item });
+  };
+
+  const handleTransfer = (item) => {
+    setTransferModal({ isOpen: true, item });
+  };
+
+  const handleViewHistory = (item) => {
+    setHistoryModal({ isOpen: true, item });
+  };
+
+  const handleMovementSuccess = () => {
+    fetchDetailInventory();
   };
 
   return (
@@ -199,14 +241,41 @@ export const Inventories = () => {
         {/* Breadcrumb */}
         <Breadcrumb items={breadcrumbItems} />
 
-        {/* Inventory List Header */}
-        <InventoryListHeader
+        {/* Product Info Card */}
+        {product && (
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="flex items-center gap-4">
+              {product.image && (
+                <img
+                  src={product.image}
+                  alt={product.name}
+                  className="w-16 h-16 object-cover rounded-lg"
+                />
+              )}
+              <div>
+                <h3 className="text-[16px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
+                  {product.name}
+                </h3>
+                <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-gray-600">
+                  Product Code: {product.productCode}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Detail Inventory List Header */}
+        <DetailInventoryListHeader
           itemsPerPage={itemsPerPage}
           onItemsPerPageChange={handleItemsPerPageChange}
           searchQuery={searchQuery}
           onSearchChange={handleSearchChange}
           filterView={filterView}
           onFilterViewChange={handleFilterViewChange}
+          onStockIn={() => setStockInModal({ isOpen: true, item: null })}
+          onStockOut={() => setStockOutModal({ isOpen: true, item: null })}
+          onAdjust={() => setAdjustModal({ isOpen: true, item: null })}
+          onTransfer={() => setTransferModal({ isOpen: true, item: null })}
         />
 
         {/* Loading State */}
@@ -219,10 +288,10 @@ export const Inventories = () => {
         {/* Error State */}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            <p className="font-medium">Error loading inventory</p>
+            <p className="font-medium">Error loading detail inventory</p>
             <p className="text-sm mt-1">{error}</p>
             <button
-              onClick={fetchInventory}
+              onClick={fetchDetailInventory}
               className="mt-2 text-sm underline hover:no-underline"
             >
               Try again
@@ -230,24 +299,21 @@ export const Inventories = () => {
           </div>
         )}
 
-        {/* Inventory List Table */}
+        {/* Detail Inventory List Table */}
         {!isLoading && !error && (
           <>
-            <InventoryList
-              inventory={paginatedInventory}
+            <DetailInventoryList
+              detailInventory={paginatedDetailInventory}
               onSort={handleColumnSort}
               sortField={sortField}
               sortOrder={sortOrder}
-              onViewDetail={handleViewDetail}
-              onEdit={handleEdit}
-              onUpdateLocation={handleUpdateLocation}
+              onViewHistory={handleViewHistory}
             />
 
             {/* Pagination */}
             {pagination.totalPages > 1 && (
               <div className="flex items-center justify-center mt-6">
                 <div className="flex items-center gap-2">
-                  {/* Previous button */}
                   <button
                     onClick={() => handlePageChange(pagination.currentPage - 1)}
                     disabled={pagination.currentPage === 1}
@@ -259,23 +325,18 @@ export const Inventories = () => {
                     ‹ Previous
                   </button>
 
-                  {/* Page numbers */}
                   {(() => {
                     const maxPagesToShow = 5;
                     const { totalPages, currentPage } = pagination;
-
-                    // Calculate start and end page numbers to display
                     let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
                     let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
 
-                    // Adjust start if we're near the end
                     if (endPage - startPage < maxPagesToShow - 1) {
                       startPage = Math.max(1, endPage - maxPagesToShow + 1);
                     }
 
                     const pages = [];
 
-                    // First page + ellipsis
                     if (startPage > 1) {
                       pages.push(
                         <button
@@ -288,14 +349,11 @@ export const Inventories = () => {
                       );
                       if (startPage > 2) {
                         pages.push(
-                          <span key="ellipsis-start" className="px-2 text-gray-400">
-                            ...
-                          </span>
+                          <span key="ellipsis-start" className="px-2 text-gray-400">...</span>
                         );
                       }
                     }
 
-                    // Page numbers
                     for (let page = startPage; page <= endPage; page++) {
                       pages.push(
                         <button
@@ -311,13 +369,10 @@ export const Inventories = () => {
                       );
                     }
 
-                    // Ellipsis + last page
                     if (endPage < totalPages) {
                       if (endPage < totalPages - 1) {
                         pages.push(
-                          <span key="ellipsis-end" className="px-2 text-gray-400">
-                            ...
-                          </span>
+                          <span key="ellipsis-end" className="px-2 text-gray-400">...</span>
                         );
                       }
                       pages.push(
@@ -334,7 +389,6 @@ export const Inventories = () => {
                     return pages;
                   })()}
 
-                  {/* Next button */}
                   <button
                     onClick={() => handlePageChange(pagination.currentPage + 1)}
                     disabled={pagination.currentPage === pagination.totalPages}
@@ -350,18 +404,18 @@ export const Inventories = () => {
             )}
 
             {/* Results Summary */}
-            {paginatedInventory.length > 0 && (
+            {paginatedDetailInventory.length > 0 && (
               <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
-                Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to {Math.min(pagination.currentPage * pagination.itemsPerPage, filteredInventory.length)} of {filteredInventory.length} items
+                Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to {Math.min(pagination.currentPage * pagination.itemsPerPage, filteredDetailInventory.length)} of {filteredDetailInventory.length} batches
               </div>
             )}
           </>
         )}
 
         {/* Empty State */}
-        {!isLoading && !error && filteredInventory.length === 0 && (
+        {!isLoading && !error && filteredDetailInventory.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
-            <p className="text-gray-500 text-sm">No inventory items found</p>
+            <p className="text-gray-500 text-sm">No batch inventory items found</p>
             {(searchQuery || filterView !== 'all') && (
               <button
                 onClick={() => {
@@ -376,8 +430,43 @@ export const Inventories = () => {
           </div>
         )}
       </div>
+
+      {/* Modals */}
+      <StockInBatchModal
+        isOpen={stockInModal.isOpen}
+        onClose={() => setStockInModal({ isOpen: false, item: null })}
+        onSuccess={handleMovementSuccess}
+        detailInventory={stockInModal.item}
+      />
+
+      <StockOutBatchModal
+        isOpen={stockOutModal.isOpen}
+        onClose={() => setStockOutModal({ isOpen: false, item: null })}
+        onSuccess={handleMovementSuccess}
+        detailInventory={stockOutModal.item}
+      />
+
+      <AdjustStockBatchModal
+        isOpen={adjustModal.isOpen}
+        onClose={() => setAdjustModal({ isOpen: false, item: null })}
+        onSuccess={handleMovementSuccess}
+        detailInventory={adjustModal.item}
+      />
+
+      <TransferStockBatchModal
+        isOpen={transferModal.isOpen}
+        onClose={() => setTransferModal({ isOpen: false, item: null })}
+        onSuccess={handleMovementSuccess}
+        detailInventory={transferModal.item}
+      />
+
+      <MovementHistoryBatchModal
+        isOpen={historyModal.isOpen}
+        onClose={() => setHistoryModal({ isOpen: false, item: null })}
+        detailInventory={historyModal.item}
+      />
     </Layout>
   );
 };
 
-export default Inventories;
+export default DetailInventories;
