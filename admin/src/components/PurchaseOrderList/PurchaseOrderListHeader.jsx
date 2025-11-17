@@ -12,7 +12,8 @@ const PurchaseOrderListHeader = ({
   onPaymentStatusFilterChange,
   supplierFilter = 'all',
   onSupplierFilterChange,
-  suppliers = []
+  suppliers = [],
+  onAddClick
 }) => {
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const dropdownRef = useRef(null);
@@ -163,8 +164,21 @@ const PurchaseOrderListHeader = ({
           </div>
         </div>
 
+        {/* Add Purchase Order Button */}
+        {onAddClick && (
+          <button
+            onClick={onAddClick}
+            className="h-[36px] px-4 bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-lg text-white text-[12px] font-['Poppins',sans-serif] font-semibold leading-[20px] flex items-center justify-center gap-2 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 whitespace-nowrap shadow-md hover:shadow-lg ml-2"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M7 3V11M3 7H11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>Add Purchase Order</span>
+          </button>
+        )}
+
         {/* Actions Button with Dropdown */}
-        <div className="relative ml-auto" ref={dropdownRef}>
+        <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setShowActionsDropdown(!showActionsDropdown)}
             className="h-[36px] px-4 bg-emerald-600 hover:bg-emerald-700 border border-emerald-600 rounded-lg text-white text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap"

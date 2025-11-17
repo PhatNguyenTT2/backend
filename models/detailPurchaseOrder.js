@@ -22,7 +22,7 @@ const detailPurchaseOrderSchema = new mongoose.Schema({
   batch: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ProductBatch',
-    required: [true, 'Batch is required']
+    default: null  // ✅ NULL khi tạo từ PO, được gán khi receive goods
   },
 
   quantity: {
@@ -31,10 +31,10 @@ const detailPurchaseOrderSchema = new mongoose.Schema({
     min: [1, 'Quantity must be at least 1']
   },
 
-  unitPrice: {
+  costPrice: {
     type: mongoose.Schema.Types.Decimal128,
-    required: [true, 'Unit price is required'],
-    min: [0, 'Unit price cannot be negative'],
+    required: [true, 'Cost price is required'],
+    min: [0, 'Cost price cannot be negative'],
     get: function (value) {
       if (value) {
         return parseFloat(value.toString());
@@ -53,6 +53,12 @@ const detailPurchaseOrderSchema = new mongoose.Schema({
       }
       return 0;
     }
+  },
+
+  notes: {
+    type: String,
+    trim: true,
+    maxlength: [500, 'Notes must be at most 500 characters']
   }
 
 }, {
@@ -65,21 +71,21 @@ const detailPurchaseOrderSchema = new mongoose.Schema({
 detailPurchaseOrderSchema.index({ purchaseOrder: 1 });
 detailPurchaseOrderSchema.index({ product: 1 });
 detailPurchaseOrderSchema.index({ batch: 1 });
-detailPurchaseOrderSchema.index({ purchaseOrder: 1, product: 1 });
+detailPurchaseOrderSchema.index({ purchaseOrder: 1, product: 1 }, { unique: true });
 
 // ============ VIRTUALS ============
-// Virtual: Calculate total from quantity and unitPrice
-detailPurchaseOrderSchema.virtual('calculatedTotal').get(function () {
-  const qty = this.quantity || 0;
-  const price = this.unitPrice || 0;
-  return parseFloat((qty * price).toFixed(2));
+// Virtual: Check if received (has batch)
+detailPurchaseOrderSchema.virtual('isReceived').get(function () {
+  return this.batch !== null && this.batch !== undefined;
 });
 
 // ============ MIDDLEWARE ============
 // Pre-save: Calculate total before saving
 detailPurchaseOrderSchema.pre('save', function (next) {
-  // Auto-calculate total from quantity * unitPrice
-  this.total = this.quantity * parseFloat(this.unitPrice.toString());
+  // Auto-calculate total = quantity × costPrice
+  const qty = this.quantity || 0;
+  const price = this.costPrice ? parseFloat(this.costPrice.toString()) : 0;
+  this.total = qty * price;
   next();
 });
 
@@ -107,28 +113,45 @@ detailPurchaseOrderSchema.post('findOneAndDelete', async function (doc) {
     try {
       await updatePurchaseOrderTotal(doc.purchaseOrder);
     } catch (error) {
-      console.error('Error updating PurchaseOrder totalPrice:', error);
+      console.error('Error updating PurchaseOrder totalPrice after deletion:', error);
     }
   }
+});
+
+// Post-deleteMany: Update affected PurchaseOrders
+detailPurchaseOrderSchema.post('deleteMany', async function (result) {
+  // Note: deleteMany doesn't provide deleted docs, so we can't update here
+  // Controller should handle updatePurchaseOrderTotal manually after deleteMany
 });
 
 // Helper function to update PurchaseOrder totalPrice
 async function updatePurchaseOrderTotal(purchaseOrderId) {
   const PurchaseOrder = mongoose.model('PurchaseOrder');
-  const DetailPurchaseOrder = mongoose.model('DetailPurchaseOrder');
 
   try {
-    // Calculate subtotal from all details
-    const details = await DetailPurchaseOrder.find({
-      purchaseOrder: purchaseOrderId
-    }).lean();
+    // Use aggregation for better performance
+    const result = await mongoose.model('DetailPurchaseOrder').aggregate([
+      { $match: { purchaseOrder: purchaseOrderId } },
+      {
+        $group: {
+          _id: null,
+          subtotal: {
+            $sum: {
+              $convert: {
+                input: '$total',
+                to: 'double',
+                onError: 0,
+                onNull: 0
+              }
+            }
+          }
+        }
+      }
+    ]);
 
-    const subtotal = details.reduce((sum, detail) => {
-      const total = detail.total ? parseFloat(detail.total.toString()) : 0;
-      return sum + total;
-    }, 0);
+    const subtotal = result.length > 0 ? result[0].subtotal : 0;
 
-    // Get purchase order to apply shipping and discount
+    // Get PurchaseOrder to apply shipping and discount
     const po = await PurchaseOrder.findById(purchaseOrderId);
 
     if (po) {
@@ -141,9 +164,11 @@ async function updatePurchaseOrderTotal(purchaseOrderId) {
       // Calculate total: subtotal - discount + shipping
       const totalPrice = subtotal - discountAmount + shippingFee;
 
-      // Update PurchaseOrder
-      po.totalPrice = totalPrice;
-      await po.save();
+      // Update PurchaseOrder (skip middleware to avoid infinite loop)
+      await PurchaseOrder.updateOne(
+        { _id: purchaseOrderId },
+        { $set: { totalPrice: totalPrice.toFixed(2) } }
+      );
     }
   } catch (error) {
     console.error('Error in updatePurchaseOrderTotal:', error);
@@ -159,8 +184,8 @@ detailPurchaseOrderSchema.set('toJSON', {
     delete returnedObject.__v;
 
     // Convert Decimal128 to number
-    if (returnedObject.unitPrice && typeof returnedObject.unitPrice === 'object') {
-      returnedObject.unitPrice = parseFloat(returnedObject.unitPrice.toString());
+    if (returnedObject.costPrice && typeof returnedObject.costPrice === 'object') {
+      returnedObject.costPrice = parseFloat(returnedObject.costPrice.toString());
     }
     if (returnedObject.total && typeof returnedObject.total === 'object') {
       returnedObject.total = parseFloat(returnedObject.total.toString());

@@ -52,7 +52,7 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
         const formattedItems = purchaseOrder.items.map(item => ({
           product: item.product?.id || item.product?._id || item.product,
           quantity: item.quantity || 1,
-          unitPrice: item.unitPrice || 0
+          costPrice: item.costPrice || item.unitPrice || 0
         }));
         setItems(formattedItems);
 
@@ -183,22 +183,21 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
     return searchTerm ? filtered : filtered.slice(0, 20);
   };
 
-  // Calculate totals
+  // Calculate totals (VND)
   const calculateTotal = () => {
     let subtotal = 0;
     items.forEach(item => {
       const qty = parseFloat(item.quantity) || 0;
-      const price = parseFloat(item.unitPrice) || 0;
+      const price = parseFloat(item.costPrice) || 0;
       if (qty > 0 && price >= 0) {
         subtotal += qty * price;
       }
     });
 
     const shippingFee = parseFloat(formData.shippingFee) || 0;
-    const tax = subtotal * 0.1;
-    const total = subtotal + shippingFee + tax;
+    const total = subtotal + shippingFee;
 
-    return { subtotal, shippingFee, tax, total };
+    return { subtotal, shippingFee, total };
   };
 
   // Handle submit
@@ -231,9 +230,9 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
         return;
       }
 
-      const price = parseFloat(item.unitPrice);
-      if (item.unitPrice === undefined || item.unitPrice === null || isNaN(price) || price < 0) {
-        setError(`Item ${i + 1}: Please enter a valid unit price`);
+      const price = parseFloat(item.costPrice);
+      if (item.costPrice === undefined || item.costPrice === null || isNaN(price) || price < 0) {
+        setError(`Item ${i + 1}: Please enter a valid cost price`);
         return;
       }
     }
@@ -246,13 +245,12 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
       let subtotal = 0;
       items.forEach(item => {
         const qty = parseFloat(item.quantity) || 0;
-        const price = parseFloat(item.unitPrice) || 0;
+        const price = parseFloat(item.costPrice) || 0;
         subtotal += qty * price;
       });
 
-      subtotal = Math.round(subtotal * 100) / 100;
-      const tax = Math.round(subtotal * 0.1 * 100) / 100;
-      const shippingFee = Math.round((parseFloat(formData.shippingFee) || 0) * 100) / 100;
+      subtotal = Math.round(subtotal);
+      const shippingFee = Math.round(parseFloat(formData.shippingFee) || 0);
 
       const updateData = {
         orderDate: formData.orderDate,
@@ -260,11 +258,9 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
         items: items.map(item => ({
           product: getProductId(item.product),
           quantity: parseInt(item.quantity),
-          unitPrice: Math.round(parseFloat(item.unitPrice) * 100) / 100
+          costPrice: Math.round(parseFloat(item.costPrice))
         })),
         shippingFee: shippingFee,
-        tax: tax,
-        discount: 0,
         notes: formData.notes || undefined
       };
 
@@ -469,22 +465,22 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
                     />
                   </div>
 
-                  <div className="w-32">
+                  <div className="w-36">
                     <input
                       type="number"
-                      value={item.unitPrice}
-                      onChange={(e) => updateItem(index, 'unitPrice', e.target.value)}
+                      value={item.costPrice}
+                      onChange={(e) => updateItem(index, 'costPrice', e.target.value)}
                       min="0"
-                      step="0.01"
+                      step="1000"
                       required
-                      placeholder="Unit Price"
+                      placeholder="Cost Price (₫)"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
 
-                  <div className="w-32 text-right">
+                  <div className="w-36 text-right">
                     <div className="text-[13px] font-semibold font-['Poppins',sans-serif] text-gray-900">
-                      ${((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(2)}
+                      ₫{((parseFloat(item.quantity) || 0) * (parseFloat(item.costPrice) || 0)).toLocaleString('vi-VN')}
                     </div>
                   </div>
 
@@ -506,34 +502,39 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
           {items.length > 0 && (
             <div className="bg-gray-50 rounded-lg p-4">
               <h4 className="text-[14px] font-semibold font-['Poppins',sans-serif] text-[#212529] mb-3">
-                Purchase Order Summary
+                Purchase Order Summary (Estimated)
               </h4>
               <div className="space-y-2">
                 <div className="flex justify-between text-[13px] font-['Poppins',sans-serif]">
-                  <span className="text-gray-600">Subtotal:</span>
-                  <span className="font-medium">${totals.subtotal.toFixed(2)}</span>
+                  <span className="text-gray-600">Subtotal (Products):</span>
+                  <span className="font-medium">₫{totals.subtotal.toLocaleString('vi-VN')}</span>
                 </div>
                 <div className="flex justify-between text-[13px] font-['Poppins',sans-serif] items-center">
-                  <span className="text-gray-600">Shipping Fee:</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-600">Shipping Fee:</span>
+                    <span className="text-[10px] text-gray-400" title="Usually free (FOB) or negotiated with supplier">
+                      ⓘ
+                    </span>
+                  </div>
                   <input
                     type="number"
                     value={formData.shippingFee}
                     onChange={(e) => setFormData({ ...formData, shippingFee: e.target.value })}
                     min="0"
-                    step="0.01"
-                    className="w-24 px-2 py-1 border border-gray-300 rounded text-right text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    step="10000"
+                    placeholder="0 (if free)"
+                    className="w-32 px-2 py-1 border border-gray-300 rounded text-right text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
-                <div className="flex justify-between text-[13px] font-['Poppins',sans-serif]">
-                  <span className="text-gray-600">Tax (10%):</span>
-                  <span className="font-medium">${totals.tax.toFixed(2)}</span>
-                </div>
                 <div className="flex justify-between border-t-2 pt-2 mt-2">
-                  <span className="font-semibold text-[14px] font-['Poppins',sans-serif]">Total:</span>
+                  <span className="font-semibold text-[14px] font-['Poppins',sans-serif]">Estimated Total:</span>
                   <span className="font-semibold text-emerald-600 text-[16px] font-['Poppins',sans-serif]">
-                    ${totals.total.toFixed(2)}
+                    ₫{totals.total.toLocaleString('vi-VN')}
                   </span>
                 </div>
+                <p className="text-[10px] text-gray-500 italic mt-2">
+                  * Actual cost & selling prices will be entered when receiving goods
+                </p>
               </div>
             </div>
           )}

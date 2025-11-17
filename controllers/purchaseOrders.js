@@ -3,6 +3,11 @@ const PurchaseOrder = require('../models/purchaseOrder');
 const Supplier = require('../models/supplier');
 const Employee = require('../models/employee');
 const DetailPurchaseOrder = require('../models/detailPurchaseOrder');
+const ProductBatch = require('../models/productBatch');
+const Product = require('../models/product');
+const Inventory = require('../models/inventory');
+const DetailInventory = require('../models/detailInventory');
+const InventoryMovementBatch = require('../models/inventoryMovementBatch');
 const { userExtractor } = require('../utils/auth');
 
 /**
@@ -114,7 +119,7 @@ purchaseOrdersRouter.get('/', async (request, response) => {
     // Build query
     let query = PurchaseOrder.find(filter)
       .populate('supplier', 'supplierCode companyName phone address paymentTerms')
-      .populate('createdBy', 'employeeCode firstName lastName email')
+      .populate('createdBy', 'fullName phone')
       .skip(skip)
       .limit(parseInt(limit))
       .sort({ orderDate: -1 });
@@ -125,7 +130,7 @@ purchaseOrdersRouter.get('/', async (request, response) => {
         path: 'details',
         populate: {
           path: 'product',
-          select: 'productCode name image unitPrice'
+          select: 'productCode name image'
         }
       });
     }
@@ -177,7 +182,7 @@ purchaseOrdersRouter.get('/:id', async (request, response) => {
         path: 'details',
         populate: {
           path: 'product',
-          select: 'productCode name image category unitPrice',
+          select: 'productCode name image category',
           populate: {
             path: 'category',
             select: 'categoryCode name'
@@ -241,7 +246,8 @@ purchaseOrdersRouter.post('/', userExtractor, async (request, response) => {
       totalPrice,
       status,
       paymentStatus,
-      notes
+      notes,
+      items // Array of {product, quantity, costPrice}
     } = request.body;
 
     // Validation
@@ -253,6 +259,39 @@ purchaseOrdersRouter.post('/', userExtractor, async (request, response) => {
           code: 'MISSING_SUPPLIER'
         }
       });
+    }
+
+    // Validate items array
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Purchase order must have at least one item',
+          code: 'MISSING_ITEMS'
+        }
+      });
+    }
+
+    // Validate each item
+    for (const item of items) {
+      if (!item.product || !item.quantity || !item.costPrice) {
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'Each item must have product, quantity, and costPrice',
+            code: 'INVALID_ITEM'
+          }
+        });
+      }
+      if (item.quantity <= 0 || item.costPrice < 0) {
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'Quantity must be positive and costPrice cannot be negative',
+            code: 'INVALID_ITEM_VALUES'
+          }
+        });
+      }
     }
 
     // Validate supplier exists
@@ -310,9 +349,30 @@ purchaseOrdersRouter.post('/', userExtractor, async (request, response) => {
 
     const savedPurchaseOrder = await purchaseOrder.save();
 
+    // Create DetailPurchaseOrder records for each item
+    const detailPromises = items.map(item => {
+      const detail = new DetailPurchaseOrder({
+        purchaseOrder: savedPurchaseOrder._id,
+        product: item.product,
+        quantity: item.quantity,
+        costPrice: item.costPrice,
+        batch: null // Will be set when receiving goods
+      });
+      return detail.save();
+    });
+
+    await Promise.all(detailPromises);
+
     // Populate before returning
     await savedPurchaseOrder.populate('supplier', 'supplierCode companyName phone address');
-    await savedPurchaseOrder.populate('createdBy', 'employeeCode firstName lastName');
+    await savedPurchaseOrder.populate('createdBy', 'fullName phone');
+    await savedPurchaseOrder.populate({
+      path: 'details',
+      populate: {
+        path: 'product',
+        select: 'productCode name'
+      }
+    });
 
     response.status(201).json({
       success: true,
@@ -378,7 +438,8 @@ purchaseOrdersRouter.put('/:id', userExtractor, async (request, response) => {
       totalPrice,
       status,
       paymentStatus,
-      notes
+      notes,
+      items // Array of {product, quantity, costPrice}
     } = request.body;
 
     // Find purchase order
@@ -492,9 +553,36 @@ purchaseOrdersRouter.put('/:id', userExtractor, async (request, response) => {
 
     const updatedPurchaseOrder = await purchaseOrder.save();
 
+    // Update items if provided (only for pending/approved orders)
+    if (items && Array.isArray(items)) {
+      // Delete existing detail items
+      await DetailPurchaseOrder.deleteMany({ purchaseOrder: purchaseOrder._id });
+
+      // Create new detail items
+      const detailPromises = items.map(item => {
+        const detail = new DetailPurchaseOrder({
+          purchaseOrder: purchaseOrder._id,
+          product: item.product,
+          quantity: item.quantity,
+          costPrice: item.costPrice,
+          batch: null
+        });
+        return detail.save();
+      });
+
+      await Promise.all(detailPromises);
+    }
+
     // Populate before returning
     await updatedPurchaseOrder.populate('supplier', 'supplierCode companyName phone address');
-    await updatedPurchaseOrder.populate('createdBy', 'employeeCode firstName lastName');
+    await updatedPurchaseOrder.populate('createdBy', 'fullName phone');
+    await updatedPurchaseOrder.populate({
+      path: 'details',
+      populate: {
+        path: 'product',
+        select: 'productCode name'
+      }
+    });
 
     response.json({
       success: true,
@@ -567,18 +655,9 @@ purchaseOrdersRouter.delete('/:id', userExtractor, async (request, response) => 
       purchaseOrder: purchaseOrder._id
     });
 
+    // Delete all detail purchase orders first
     if (detailsCount > 0) {
-      return response.status(400).json({
-        success: false,
-        error: {
-          message: 'Cannot delete purchase order with order details',
-          code: 'ORDER_HAS_DETAILS',
-          details: {
-            detailsCount,
-            message: 'Please remove all order details before deleting, or cancel the order instead'
-          }
-        }
-      });
+      await DetailPurchaseOrder.deleteMany({ purchaseOrder: purchaseOrder._id });
     }
 
     // Delete the purchase order
@@ -589,7 +668,8 @@ purchaseOrdersRouter.delete('/:id', userExtractor, async (request, response) => 
       message: 'Purchase order deleted successfully',
       data: {
         id: purchaseOrder._id,
-        poNumber: purchaseOrder.poNumber
+        poNumber: purchaseOrder.poNumber,
+        deletedDetails: detailsCount
       }
     });
   } catch (error) {
@@ -601,6 +681,331 @@ purchaseOrdersRouter.delete('/:id', userExtractor, async (request, response) => 
         details: error.message
       }
     });
+  }
+});
+
+/**
+ * POST /api/purchase-orders/:id/receive
+ * Receive purchase order goods
+ * Requires authentication
+ * 
+ * Workflow:
+ * 1. Validate PO can be received (status must be 'approved')
+ * 2. For each item in request body:
+ *    - Create ProductBatch with batch info (mfgDate, expiryDate, batchCode, unitPrice)
+ *    - Update DetailPurchaseOrder.batch = created batch ID
+ *    - Create/Update DetailInventory for the product
+ *    - Create InventoryMovementBatch to track stock in
+ * 3. Update PurchaseOrder status to 'received'
+ * 
+ * Request body:
+ * {
+ *   items: [
+ *     {
+ *       detailPurchaseOrderId: ObjectId,
+ *       actualQuantity: Number (optional, defaults to ordered quantity),
+ *       actualCostPrice: Number (optional, defaults to ordered costPrice),
+ *       unitPrice: Number (selling price, required),
+ *       batchCode: String (required),
+ *       mfgDate: Date (optional),
+ *       expiryDate: Date (optional)
+ *     }
+ *   ]
+ * }
+ */
+purchaseOrdersRouter.post('/:id/receive', userExtractor, async (request, response) => {
+  const session = await PurchaseOrder.startSession();
+  session.startTransaction();
+
+  try {
+    const { items } = request.body;
+    const purchaseOrderId = request.params.id;
+
+    // Validate request
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      await session.abortTransaction();
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Items array is required',
+          code: 'MISSING_ITEMS'
+        }
+      });
+    }
+
+    // Find and validate purchase order
+    const purchaseOrder = await PurchaseOrder.findById(purchaseOrderId).session(session);
+
+    if (!purchaseOrder) {
+      await session.abortTransaction();
+      return response.status(404).json({
+        success: false,
+        error: {
+          message: 'Purchase order not found',
+          code: 'PURCHASE_ORDER_NOT_FOUND'
+        }
+      });
+    }
+
+    // Check if PO can be received
+    if (!purchaseOrder.canReceive()) {
+      await session.abortTransaction();
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: `Cannot receive purchase order with status: ${purchaseOrder.status}`,
+          code: 'INVALID_STATUS',
+          details: {
+            currentStatus: purchaseOrder.status,
+            requiredStatus: 'approved'
+          }
+        }
+      });
+    }
+
+    // Get default inventory (assuming inventory code 'INV001')
+    let inventory = await Inventory.findOne({ inventoryCode: 'INV001' }).session(session);
+
+    if (!inventory) {
+      // Create default inventory if not exists
+      inventory = new Inventory({
+        inventoryCode: 'INV001',
+        name: 'Main Warehouse',
+        location: 'Default Location',
+        isActive: true
+      });
+      await inventory.save({ session });
+    }
+
+    const receivedItems = [];
+
+    // Process each item
+    for (const item of items) {
+      const {
+        detailPurchaseOrderId,
+        actualQuantity,
+        actualCostPrice,
+        unitPrice,
+        batchCode,
+        mfgDate,
+        expiryDate
+      } = item;
+
+      // Validate required fields
+      if (!detailPurchaseOrderId) {
+        await session.abortTransaction();
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'detailPurchaseOrderId is required for each item',
+            code: 'MISSING_DETAIL_ID'
+          }
+        });
+      }
+
+      if (!unitPrice || unitPrice <= 0) {
+        await session.abortTransaction();
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'unitPrice (selling price) is required and must be positive',
+            code: 'INVALID_UNIT_PRICE'
+          }
+        });
+      }
+
+      if (!batchCode) {
+        await session.abortTransaction();
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'batchCode is required for each item',
+            code: 'MISSING_BATCH_CODE'
+          }
+        });
+      }
+
+      // Find DetailPurchaseOrder
+      const detailPO = await DetailPurchaseOrder.findById(detailPurchaseOrderId)
+        .session(session)
+        .populate('product');
+
+      if (!detailPO) {
+        await session.abortTransaction();
+        return response.status(404).json({
+          success: false,
+          error: {
+            message: `DetailPurchaseOrder not found: ${detailPurchaseOrderId}`,
+            code: 'DETAIL_NOT_FOUND'
+          }
+        });
+      }
+
+      // Check if already received
+      if (detailPO.batch) {
+        await session.abortTransaction();
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: `Item already received: ${detailPO.product.name}`,
+            code: 'ALREADY_RECEIVED',
+            details: {
+              productName: detailPO.product.name,
+              existingBatchId: detailPO.batch
+            }
+          }
+        });
+      }
+
+      // Use actual values or defaults from DetailPurchaseOrder
+      const finalQuantity = actualQuantity || detailPO.quantity;
+      const finalCostPrice = actualCostPrice || parseFloat(detailPO.costPrice.toString());
+
+      // Validate dates
+      if (mfgDate && expiryDate && new Date(expiryDate) <= new Date(mfgDate)) {
+        await session.abortTransaction();
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'Expiry date must be after manufacturing date',
+            code: 'INVALID_DATES'
+          }
+        });
+      }
+
+      // Create ProductBatch
+      const productBatch = new ProductBatch({
+        product: detailPO.product._id,
+        costPrice: finalCostPrice,
+        unitPrice: unitPrice,
+        batchCode: batchCode.toUpperCase(),
+        mfgDate: mfgDate || null,
+        expiryDate: expiryDate || null,
+        quantity: finalQuantity,
+        promotionApplied: 'none',
+        discountPercentage: 0
+      });
+
+      await productBatch.save({ session });
+
+      // Update DetailPurchaseOrder with batch reference
+      detailPO.batch = productBatch._id;
+
+      // Update quantity and costPrice if actual values provided
+      if (actualQuantity) detailPO.quantity = actualQuantity;
+      if (actualCostPrice) detailPO.costPrice = actualCostPrice;
+
+      await detailPO.save({ session });
+
+      // Find or create DetailInventory
+      let detailInventory = await DetailInventory.findOne({
+        inventory: inventory._id,
+        product: detailPO.product._id
+      }).session(session);
+
+      if (!detailInventory) {
+        detailInventory = new DetailInventory({
+          inventory: inventory._id,
+          product: detailPO.product._id,
+          quantity: 0
+        });
+        await detailInventory.save({ session });
+      }
+
+      // Update DetailInventory quantity
+      detailInventory.quantity += finalQuantity;
+      await detailInventory.save({ session });
+
+      // Create InventoryMovementBatch to track stock in
+      const movement = new InventoryMovementBatch({
+        batchId: productBatch._id,
+        inventoryDetail: detailInventory._id,
+        movementType: 'in',
+        quantity: finalQuantity,
+        reason: `Received from PO ${purchaseOrder.poNumber}`,
+        reference: purchaseOrder._id,
+        performedBy: request.user.id
+      });
+
+      await movement.save({ session });
+
+      receivedItems.push({
+        product: detailPO.product.name,
+        batchCode: productBatch.batchCode,
+        quantity: finalQuantity,
+        costPrice: finalCostPrice,
+        unitPrice: unitPrice
+      });
+    }
+
+    // Update PurchaseOrder status to received
+    purchaseOrder.status = 'received';
+    purchaseOrder.receivedDate = new Date();
+    await purchaseOrder.save({ session });
+
+    await session.commitTransaction();
+
+    // Populate for response
+    await purchaseOrder.populate('supplier', 'supplierCode companyName');
+    await purchaseOrder.populate('createdBy', 'fullName phone');
+    await purchaseOrder.populate({
+      path: 'details',
+      populate: [
+        { path: 'product', select: 'productCode name' },
+        { path: 'batch', select: 'batchCode mfgDate expiryDate unitPrice' }
+      ]
+    });
+
+    response.json({
+      success: true,
+      data: {
+        purchaseOrder,
+        receivedItems,
+        summary: {
+          totalItems: receivedItems.length,
+          receivedDate: purchaseOrder.receivedDate
+        }
+      },
+      message: 'Purchase order received successfully'
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('Receive purchase order error:', error);
+
+    // Handle duplicate batch code
+    if (error.code === 11000 && error.message.includes('batchCode')) {
+      return response.status(409).json({
+        success: false,
+        error: {
+          message: 'Batch code already exists',
+          code: 'DUPLICATE_BATCH_CODE',
+          details: error.message
+        }
+      });
+    }
+
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Validation error',
+          code: 'VALIDATION_ERROR',
+          details: error.message
+        }
+      });
+    }
+
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to receive purchase order',
+        details: error.message
+      }
+    });
+  } finally {
+    session.endSession();
   }
 });
 

@@ -40,6 +40,11 @@ const purchaseOrderSchema = new mongoose.Schema({
     }
   },
 
+  receivedDate: {
+    type: Date,
+    default: null
+  },
+
   shippingFee: {
     type: mongoose.Schema.Types.Decimal128,
     default: 0,
@@ -132,9 +137,8 @@ purchaseOrderSchema.virtual('details', {
 purchaseOrderSchema.virtual('subtotal').get(function () {
   if (this.details && Array.isArray(this.details)) {
     return this.details.reduce((sum, detail) => {
-      const price = detail.unitPrice || 0;
-      const quantity = detail.quantity || 0;
-      return sum + (price * quantity);
+      const total = detail.total || 0;
+      return sum + total;
     }, 0);
   }
   return 0;
@@ -163,6 +167,17 @@ purchaseOrderSchema.virtual('daysUntilDelivery').get(function () {
   const diffTime = expected - today;
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays;
+});
+
+// Virtual: Count of items (when details populated)
+purchaseOrderSchema.virtual('itemCount').get(function () {
+  return this.details ? this.details.length : 0;
+});
+
+// Virtual: Check if fully received
+purchaseOrderSchema.virtual('isFullyReceived').get(function () {
+  if (!this.details || this.details.length === 0) return false;
+  return this.details.every(detail => detail.isReceived);
 });
 
 // ============ MIDDLEWARE ============
@@ -196,14 +211,56 @@ purchaseOrderSchema.pre('save', async function (next) {
         }
       }
 
-      // Generate new PO number with 6-digit padding
+      // Generate new PO number: PO + YEAR + 6-digit sequence
       this.poNumber = `PO${currentYear}${String(sequenceNumber).padStart(6, '0')}`;
     } catch (error) {
       return next(error);
     }
   }
+
+  // Set receivedDate when status changes to received
+  if (this.isModified('status') && this.status === 'received' && !this.receivedDate) {
+    this.receivedDate = new Date();
+  }
+
   next();
 });
+
+// ============ METHODS ============
+/**
+ * Check if PO can be approved
+ */
+purchaseOrderSchema.methods.canApprove = function () {
+  return this.status === 'pending';
+};
+
+/**
+ * Check if PO can be received
+ */
+purchaseOrderSchema.methods.canReceive = function () {
+  return this.status === 'approved';
+};
+
+/**
+ * Check if PO can be cancelled
+ */
+purchaseOrderSchema.methods.canCancel = function () {
+  return ['pending', 'approved'].includes(this.status);
+};
+
+/**
+ * Check if PO can be edited
+ */
+purchaseOrderSchema.methods.canEdit = function () {
+  return ['pending', 'approved'].includes(this.status);
+};
+
+/**
+ * Check if PO can be deleted
+ */
+purchaseOrderSchema.methods.canDelete = function () {
+  return this.status === 'pending';
+};
 
 // ============ JSON TRANSFORMATION ============
 purchaseOrderSchema.set('toJSON', {

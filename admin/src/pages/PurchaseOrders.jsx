@@ -4,6 +4,7 @@ import { Breadcrumb } from '../components/Breadcrumb';
 import {
   PurchaseOrderList,
   PurchaseOrderListHeader,
+  AddPurchaseOrderModal,
   EditPurchaseOrderModal,
   ReceivePurchaseOrderModal,
   InvoicePurchaseModal
@@ -26,6 +27,7 @@ export const PurchaseOrders = () => {
   const [error, setError] = useState(null);
 
   // Modal states
+  const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -315,6 +317,7 @@ export const PurchaseOrders = () => {
           supplierFilter={supplierFilter}
           onSupplierFilterChange={handleSupplierFilterChange}
           suppliers={suppliers}
+          onAddClick={() => setShowAddModal(true)}
         />
 
         {/* Loading State */}
@@ -482,6 +485,16 @@ export const PurchaseOrders = () => {
           </div>
         )}
       </div>
+
+      {/* Add Purchase Order Modal */}
+      <AddPurchaseOrderModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={() => {
+          setShowAddModal(false);
+          fetchPurchaseOrders(); // Refresh list
+        }}
+      />
 
       {/* Edit Purchase Order Modal */}
       <EditPurchaseOrderModal

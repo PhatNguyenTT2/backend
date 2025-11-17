@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
+import { AddPurchaseOrderModal } from './AddPurchaseOrderModal';
 import { EditPurchaseOrderModal } from './EditPurchaseOrderModal';
 import { InvoicePurchaseModal } from './InvoicePurchaseModal';
+import { ReceivePurchaseOrderModal } from './ReceivePurchaseOrderModal';
 
 const PurchaseOrderList = ({
   purchaseOrders = [],
@@ -15,8 +17,11 @@ const PurchaseOrderList = ({
 
   const [viewItemsModal, setViewItemsModal] = useState(null);
   const [invoiceModal, setInvoiceModal] = useState(null);
+  const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingPO, setEditingPO] = useState(null);
+  const [receiveModalOpen, setReceiveModalOpen] = useState(false);
+  const [receivingPO, setReceivingPO] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   // Handle sort click
@@ -99,10 +104,10 @@ const PurchaseOrderList = ({
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  // Format currency
+  // Format currency (VND)
   const formatCurrency = (amount) => {
-    if (amount === null || amount === undefined) return '$0.00';
-    return `$${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    if (amount === null || amount === undefined) return '₫0';
+    return `₫${amount.toLocaleString('vi-VN')}`;
   };
 
   // PO status badge styles
@@ -172,8 +177,8 @@ const PurchaseOrderList = ({
     if (newStatus === 'approved' || newStatus === 'received') {
       const action = newStatus === 'approved' ? 'approve' : 'mark as received';
       const confirmed = window.confirm(
-        `Are you sure you want to ${action} Purchase Order ${po.poNumber}?${newStatus === 'approved' ? '\n\nThis will update inventory stock levels.' :
-          newStatus === 'received' ? '\n\nThis will mark all items as received and update stock.' : ''
+        `Are you sure you want to ${action} Purchase Order ${po.poNumber}?${newStatus === 'approved' ? '\n\n✅ This will confirm the order.\nNext step: Use "Receive Goods" to create batches and stock in.' :
+          newStatus === 'received' ? '\n\nThis will mark all items as received.' : ''
         }`
       );
 
@@ -183,10 +188,10 @@ const PurchaseOrderList = ({
       }
     }
 
-    // Confirm cancellation of approved PO (inventory will be reversed)
+    // Confirm cancellation of approved PO
     if (newStatus === 'cancelled' && oldStatus === 'approved') {
       const confirmed = window.confirm(
-        `Are you sure you want to cancel Purchase Order ${po.poNumber}?\n\n⚠️ Warning: This PO was already APPROVED.\nInventory stock that was added will be REVERSED (removed).\n\nThis action cannot be undone.`
+        `Are you sure you want to cancel Purchase Order ${po.poNumber}?\n\n⚠️ Warning: This PO was already APPROVED.\n\nThis action cannot be undone.`
       );
 
       if (!confirmed) {
@@ -201,76 +206,26 @@ const PurchaseOrderList = ({
     try {
       // Import services dynamically
       const purchaseOrderService = (await import('../../services/purchaseOrderService')).default;
-      const inventoryService = (await import('../../services/inventoryService')).default;
+
+      // ✅ WORKFLOW CHUẨN:
+      // - Approve: CHỈ xác nhận đơn hàng, KHÔNG stock in
+      // - Receive Goods: Tạo batch + stock in (qua ReceivePurchaseOrderModal)
+      // - Cancelled: Chỉ hủy status, không cần reverse vì chưa stock in
 
       // Update PO status using the correct endpoint
       const result = await purchaseOrderService.updatePurchaseOrderStatus(po.id, newStatus);
       console.log('Status update result:', result);
 
-      // If status changed to approved or received, update inventory (stock in)
-      if ((newStatus === 'approved' || newStatus === 'received') &&
-        (oldStatus !== 'approved' && oldStatus !== 'received')) {
+      // Simple status update notification
+      let message = `Purchase Order status updated to ${newStatus}`;
 
-        console.log(`Status changed to ${newStatus}, stocking in inventory...`);
-
-        // Stock in all items
-        if (po.items && po.items.length > 0) {
-          for (const item of po.items) {
-            const productId = item.product?.id || item.product?._id || item.product;
-            const quantity = item.quantity || 0;
-
-            if (productId && quantity > 0) {
-              try {
-                await inventoryService.stockIn({
-                  product: productId,
-                  quantity: quantity,
-                  referenceType: 'purchase_order',
-                  referenceId: po.poNumber,
-                  reason: `Purchase Order ${newStatus === 'approved' ? 'Approved' : 'Received'}: ${po.poNumber}`,
-                  notes: `Auto stock-in when PO status changed to ${newStatus}`
-                });
-                console.log(`Stocked in ${quantity} units of product ${productId}`);
-              } catch (stockError) {
-                console.error(`Error stocking in product ${productId}:`, stockError);
-              }
-            }
-          }
-        }
+      if (newStatus === 'approved') {
+        message += '\n\nNext step: Use "Receive Goods" action to create batches and stock in.';
+      } else if (newStatus === 'cancelled') {
+        message += '\n\nPurchase Order has been cancelled.';
       }
 
-      // If status changed from approved to cancelled, reverse inventory (adjustment decrease)
-      if (newStatus === 'cancelled' && oldStatus === 'approved') {
-        console.log('Status changed from approved to cancelled, reversing inventory (adjustment decrease)...');
-
-        // Reverse all items using adjustment (decrease)
-        if (po.items && po.items.length > 0) {
-          for (const item of po.items) {
-            const productId = item.product?.id || item.product?._id || item.product;
-            const quantity = item.quantity || 0;
-
-            if (productId && quantity > 0) {
-              try {
-                // Use adjustStock with 'decrease' to reverse the stock-in from approval
-                await inventoryService.adjustStock(productId, {
-                  type: 'adjustment',
-                  quantity: quantity,
-                  adjustmentType: 'decrease',
-                  referenceType: 'stock_adjustment',
-                  referenceId: po.poNumber,
-                  notes: `Reverse stock-in due to PO cancellation: ${po.poNumber} (was previously approved)`
-                });
-                console.log(`Adjusted stock down ${quantity} units of product ${productId} (reversed)`);
-              } catch (adjustError) {
-                console.error(`Error adjusting stock for product ${productId}:`, adjustError);
-                console.error('Full error details:', JSON.stringify(adjustError, null, 2));
-              }
-            }
-          }
-          alert(`Purchase Order cancelled. Inventory has been reversed to previous state.`);
-        }
-      } else {
-        alert(`Purchase Order status updated to ${newStatus}`);
-      }
+      alert(message);
 
       if (onRefresh) {
         onRefresh();
@@ -321,19 +276,12 @@ const PurchaseOrderList = ({
 
             {/* Total Column - Sortable */}
             <div
-              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('total')}
+              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('totalPrice')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
                 TOTAL
-                {getSortIcon('total')}
-              </p>
-            </div>
-
-            {/* Paid Amount Column */}
-            <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                PAID
+                {getSortIcon('totalPrice')}
               </p>
             </div>
 
@@ -401,10 +349,10 @@ const PurchaseOrderList = ({
                   <div className="flex-1 min-w-[120px] px-3 flex items-center">
                     <div>
                       <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                        {po.supplierName}
+                        {po.supplier?.companyName || 'N/A'}
                       </p>
-                      {po.supplierCode && (
-                        <p className="text-[11px] text-[#6c757d]">{po.supplierCode}</p>
+                      {po.supplier?.supplierCode && (
+                        <p className="text-[11px] text-[#6c757d]">{po.supplier.supplierCode}</p>
                       )}
                     </div>
                   </div>
@@ -420,22 +368,15 @@ const PurchaseOrderList = ({
                         <path d="M2 4H14M2 8H14M2 12H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                       </svg>
                       <span className="text-[13px] font-normal font-['Poppins',sans-serif]">
-                        {po.itemCount || 0}
+                        {po.details?.length || 0}
                       </span>
                     </button>
                   </div>
 
                   {/* Total */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      {formatCurrency(po.total)}
-                    </p>
-                  </div>
-
-                  {/* Paid Amount */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      {formatCurrency(po.paidAmount)}
+                      {formatCurrency(po.totalPrice || 0)}
                     </p>
                   </div>
 
@@ -480,7 +421,7 @@ const PurchaseOrderList = ({
                   {/* Created By */}
                   <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[12px] font-['Poppins',sans-serif] text-[#6c757d] leading-[18px] truncate">
-                      {po.createdBy || 'N/A'}
+                      {po.createdBy?.fullName || 'N/A'}
                     </p>
                   </div>
 
@@ -572,7 +513,7 @@ const PurchaseOrderList = ({
           return (
             <div
               ref={dropdownRef}
-              className="fixed w-[160px] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
+              className="fixed w-[180px] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
               style={{
                 top: `${dropdownPosition.top}px`,
                 left: `${dropdownPosition.left}px`
@@ -591,6 +532,26 @@ const PurchaseOrderList = ({
                 </svg>
                 <span className="text-[12px] font-['Poppins',sans-serif]">View Invoice</span>
               </button>
+
+              {/* Receive Goods - Only for approved POs */}
+              {po.status === 'approved' && (
+                <button
+                  onClick={() => {
+                    setReceivingPO(po);
+                    setReceiveModalOpen(true);
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center gap-2 text-gray-700"
+                  title="Receive goods and create batches"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="2" y="5" width="12" height="9" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M5 5V3C5 2.5 5.5 2 6 2H10C10.5 2 11 2.5 11 3V5" stroke="currentColor" strokeWidth="1.5" />
+                    <path d="M8 8V11M6.5 9.5L8 11L9.5 9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="text-[12px] font-['Poppins',sans-serif]">Receive Goods</span>
+                </button>
+              )}
 
               <button
                 onClick={() => {
@@ -654,7 +615,7 @@ const PurchaseOrderList = ({
                   Items in PO {viewItemsModal.poNumber}
                 </h3>
                 <p className="text-[12px] text-[#6c757d] mt-1">
-                  Supplier: {viewItemsModal.supplierName}
+                  Supplier: {viewItemsModal.supplier?.companyName || 'N/A'}
                 </p>
               </div>
               <button
@@ -676,13 +637,13 @@ const PurchaseOrderList = ({
                       Product
                     </th>
                     <th className="px-6 py-3 text-left text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                      SKU
+                      Product Code
                     </th>
                     <th className="px-6 py-3 text-right text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
                       Quantity
                     </th>
                     <th className="px-6 py-3 text-right text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                      Unit Price
+                      Cost Price
                     </th>
                     <th className="px-6 py-3 text-right text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
                       Total
@@ -690,17 +651,17 @@ const PurchaseOrderList = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {viewItemsModal.items && viewItemsModal.items.length > 0 ? (
-                    viewItemsModal.items.map((item, idx) => (
+                  {viewItemsModal.details && viewItemsModal.details.length > 0 ? (
+                    viewItemsModal.details.map((item, idx) => (
                       <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="px-6 py-4">
                           <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529]">
-                            {item.product?.name || item.productName || 'N/A'}
+                            {item.product?.name || 'N/A'}
                           </p>
                         </td>
                         <td className="px-6 py-4">
                           <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#6c757d]">
-                            {item.product?.sku || item.sku || 'N/A'}
+                            {item.product?.productCode || 'N/A'}
                           </p>
                         </td>
                         <td className="px-6 py-4 text-right">
@@ -710,12 +671,12 @@ const PurchaseOrderList = ({
                         </td>
                         <td className="px-6 py-4 text-right">
                           <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529]">
-                            {formatCurrency(item.unitPrice || 0)}
+                            {formatCurrency(item.costPrice || 0)}
                           </p>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-                            {formatCurrency((item.quantity || 0) * (item.unitPrice || 0))}
+                            {formatCurrency(item.total || 0)}
                           </p>
                         </td>
                       </tr>
@@ -737,10 +698,10 @@ const PurchaseOrderList = ({
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
               <div className="flex justify-between items-center">
                 <div className="text-[13px] text-[#6c757d] font-['Poppins',sans-serif]">
-                  Total Items: {viewItemsModal.itemCount || 0}
+                  Total Items: {viewItemsModal.details?.length || 0}
                 </div>
                 <div className="text-[16px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-                  Total Amount: {formatCurrency(viewItemsModal.total || 0)}
+                  Total Amount: {formatCurrency(viewItemsModal.totalPrice || 0)}
                 </div>
               </div>
             </div>
@@ -759,6 +720,19 @@ const PurchaseOrderList = ({
         />
       )}
 
+      {/* Add Purchase Order Modal */}
+      <AddPurchaseOrderModal
+        isOpen={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        onSuccess={(newPO) => {
+          console.log('Purchase order created:', newPO);
+          setAddModalOpen(false);
+          if (onRefresh) {
+            onRefresh();
+          }
+        }}
+      />
+
       {/* Edit Purchase Order Modal */}
       <EditPurchaseOrderModal
         isOpen={editModalOpen}
@@ -775,6 +749,24 @@ const PurchaseOrderList = ({
           }
         }}
         purchaseOrder={editingPO}
+      />
+
+      {/* Receive Purchase Order Modal */}
+      <ReceivePurchaseOrderModal
+        isOpen={receiveModalOpen}
+        onClose={() => {
+          setReceiveModalOpen(false);
+          setReceivingPO(null);
+        }}
+        onSuccess={() => {
+          console.log('Goods received successfully');
+          setReceiveModalOpen(false);
+          setReceivingPO(null);
+          if (onRefresh) {
+            onRefresh();
+          }
+        }}
+        purchaseOrder={receivingPO}
       />
     </div>
   );
