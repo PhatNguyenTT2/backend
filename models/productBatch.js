@@ -84,17 +84,24 @@ const productBatchSchema = new mongoose.Schema({
 });
 
 // ============ MIDDLEWARE ============
-// Auto-generate batch code before saving
+/**
+ * Pre-save hook: Auto-generate batchCode
+ * Format: BATCH[YEAR][SEQUENCE]
+ * Example: BATCH2025000001
+ */
 productBatchSchema.pre('save', async function (next) {
-  if (!this.batchCode) {
+  if (this.isNew && !this.batchCode) {
     try {
+      const ProductBatch = mongoose.model('ProductBatch');
       const currentYear = new Date().getFullYear();
 
       // Find the last batch code for the current year
-      const lastBatch = await this.constructor
-        .findOne({ batchCode: new RegExp(`^BATCH${currentYear}`) })
+      const lastBatch = await ProductBatch
+        .findOne(
+          { batchCode: new RegExp(`^BATCH${currentYear}`) },
+          { batchCode: 1 }
+        )
         .sort({ batchCode: -1 })
-        .select('batchCode')
         .lean();
 
       let sequenceNumber = 1;
@@ -103,7 +110,7 @@ productBatchSchema.pre('save', async function (next) {
         // Extract the sequence number from the last batch code
         const match = lastBatch.batchCode.match(/\d{6}$/);
         if (match) {
-          sequenceNumber = parseInt(match[0]) + 1;
+          sequenceNumber = parseInt(match[0], 10) + 1;
         }
       }
 

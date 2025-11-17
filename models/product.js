@@ -94,17 +94,24 @@ productSchema.virtual('stock').get(function () {
 });
 
 // ============ MIDDLEWARE ============
-// Auto-generate product code before saving
+/**
+ * Pre-save hook: Auto-generate productCode
+ * Format: PROD[YEAR][SEQUENCE]
+ * Example: PROD2025000001
+ */
 productSchema.pre('save', async function (next) {
-  if (!this.productCode) {
+  if (this.isNew && !this.productCode) {
     try {
+      const Product = mongoose.model('Product');
       const currentYear = new Date().getFullYear();
 
       // Find the last product code for the current year
-      const lastProduct = await this.constructor
-        .findOne({ productCode: new RegExp(`^PROD${currentYear}`) })
+      const lastProduct = await Product
+        .findOne(
+          { productCode: new RegExp(`^PROD${currentYear}`) },
+          { productCode: 1 }
+        )
         .sort({ productCode: -1 })
-        .select('productCode')
         .lean();
 
       let sequenceNumber = 1;
@@ -113,7 +120,7 @@ productSchema.pre('save', async function (next) {
         // Extract the sequence number from the last product code
         const match = lastProduct.productCode.match(/\d{6}$/);
         if (match) {
-          sequenceNumber = parseInt(match[0]) + 1;
+          sequenceNumber = parseInt(match[0], 10) + 1;
         }
       }
 

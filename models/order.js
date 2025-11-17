@@ -157,20 +157,27 @@ orderSchema.virtual('canBeCancelled').get(function () {
 });
 
 // ============ MIDDLEWARE ============
-// Auto-generate order number before saving
+/**
+ * Pre-save hook: Auto-generate orderNumber
+ * Format: ORD[YYMM][SEQUENCE]
+ * Example: ORD2501000001
+ */
 orderSchema.pre('save', async function (next) {
-  if (!this.orderNumber) {
+  if (this.isNew && !this.orderNumber) {
     try {
+      const Order = mongoose.model('Order');
       const now = new Date();
       const year = now.getFullYear().toString().slice(-2); // YY
       const month = String(now.getMonth() + 1).padStart(2, '0'); // MM
       const yearMonth = year + month; // YYMM
 
       // Find the last order number for the current month
-      const lastOrder = await this.constructor
-        .findOne({ orderNumber: new RegExp(`^ORD${yearMonth}`) })
+      const lastOrder = await Order
+        .findOne(
+          { orderNumber: new RegExp(`^ORD${yearMonth}`) },
+          { orderNumber: 1 }
+        )
         .sort({ orderNumber: -1 })
-        .select('orderNumber')
         .lean();
 
       let sequenceNumber = 1;
@@ -179,7 +186,7 @@ orderSchema.pre('save', async function (next) {
         // Extract the sequence number from the last order number
         const match = lastOrder.orderNumber.match(/\d{6}$/);
         if (match) {
-          sequenceNumber = parseInt(match[0]) + 1;
+          sequenceNumber = parseInt(match[0], 10) + 1;
         }
       }
 

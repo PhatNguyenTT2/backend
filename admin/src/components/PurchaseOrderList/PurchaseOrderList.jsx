@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { EditPurchaseOrderModal } from './EditPurchaseOrderModal';
 import { InvoicePurchaseModal } from './InvoicePurchaseModal';
-// import purchaseOrderService from '../../services/purchaseOrderService';
-// import inventoryService from '../../services/inventoryService';
 
 const PurchaseOrderList = ({
   purchaseOrders = [],
@@ -144,6 +142,8 @@ const PurchaseOrderList = ({
     if (!confirmed) return;
 
     try {
+      // Import service dynamically to avoid circular dependencies
+      const purchaseOrderService = (await import('../../services/purchaseOrderService')).default;
       await purchaseOrderService.deletePurchaseOrder(po.id);
       alert('Purchase order deleted successfully');
       if (onRefresh) {
@@ -199,6 +199,10 @@ const PurchaseOrderList = ({
     setActiveDropdown(null);
 
     try {
+      // Import services dynamically
+      const purchaseOrderService = (await import('../../services/purchaseOrderService')).default;
+      const inventoryService = (await import('../../services/inventoryService')).default;
+
       // Update PO status using the correct endpoint
       const result = await purchaseOrderService.updatePurchaseOrderStatus(po.id, newStatus);
       console.log('Status update result:', result);
@@ -235,11 +239,10 @@ const PurchaseOrderList = ({
       }
 
       // If status changed from approved to cancelled, reverse inventory (adjustment decrease)
-      // This is similar to refund logic - restore inventory to previous state
       if (newStatus === 'cancelled' && oldStatus === 'approved') {
         console.log('Status changed from approved to cancelled, reversing inventory (adjustment decrease)...');
 
-        // Reverse all items using adjustment (decrease) - same as refund logic
+        // Reverse all items using adjustment (decrease)
         if (po.items && po.items.length > 0) {
           for (const item of po.items) {
             const productId = item.product?.id || item.product?._id || item.product;
@@ -252,7 +255,7 @@ const PurchaseOrderList = ({
                   type: 'adjustment',
                   quantity: quantity,
                   adjustmentType: 'decrease',
-                  referenceType: 'stock_adjustment', // Valid enum value
+                  referenceType: 'stock_adjustment',
                   referenceId: po.poNumber,
                   notes: `Reverse stock-in due to PO cancellation: ${po.poNumber} (was previously approved)`
                 });
@@ -260,7 +263,6 @@ const PurchaseOrderList = ({
               } catch (adjustError) {
                 console.error(`Error adjusting stock for product ${productId}:`, adjustError);
                 console.error('Full error details:', JSON.stringify(adjustError, null, 2));
-                // Continue with other items even if one fails
               }
             }
           }

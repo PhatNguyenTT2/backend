@@ -166,17 +166,24 @@ purchaseOrderSchema.virtual('daysUntilDelivery').get(function () {
 });
 
 // ============ MIDDLEWARE ============
-// Auto-generate PO number before saving
+/**
+ * Pre-save hook: Auto-generate poNumber
+ * Format: PO[YEAR][SEQUENCE]
+ * Example: PO2025000001
+ */
 purchaseOrderSchema.pre('save', async function (next) {
-  if (!this.poNumber) {
+  if (this.isNew && !this.poNumber) {
     try {
+      const PurchaseOrder = mongoose.model('PurchaseOrder');
       const currentYear = new Date().getFullYear();
 
       // Find the last PO number for the current year
-      const lastPO = await this.constructor
-        .findOne({ poNumber: new RegExp(`^PO${currentYear}`) })
+      const lastPO = await PurchaseOrder
+        .findOne(
+          { poNumber: new RegExp(`^PO${currentYear}`) },
+          { poNumber: 1 }
+        )
         .sort({ poNumber: -1 })
-        .select('poNumber')
         .lean();
 
       let sequenceNumber = 1;
@@ -185,7 +192,7 @@ purchaseOrderSchema.pre('save', async function (next) {
         // Extract the sequence number from the last PO number
         const match = lastPO.poNumber.match(/\d{6}$/);
         if (match) {
-          sequenceNumber = parseInt(match[0]) + 1;
+          sequenceNumber = parseInt(match[0], 10) + 1;
         }
       }
 

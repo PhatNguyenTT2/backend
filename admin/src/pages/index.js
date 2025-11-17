@@ -9,6 +9,7 @@ export { default as Employees } from "./Employees";
 export { default as Roles } from "./Roles";
 export { default as Customers } from "./Customers";
 export { default as Suppliers } from "./Suppliers";
+export { default as PurchaseOrders } from "./PurchaseOrders";
 export { default as Inventories } from "./Inventories";
 export { default as DetailInventories } from "./DetailInventories";
 export { default as POSManagement } from "./POSManagement";

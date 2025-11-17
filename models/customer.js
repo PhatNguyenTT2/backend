@@ -127,17 +127,24 @@ customerSchema.virtual('qualifiesForUpgrade').get(function () {
 });
 
 // ============ MIDDLEWARE ============
-// Auto-generate customer code before saving
+/**
+ * Pre-save hook: Auto-generate customerCode
+ * Format: CUST[YEAR][SEQUENCE]
+ * Example: CUST2025000001
+ */
 customerSchema.pre('save', async function (next) {
-  if (!this.customerCode) {
+  if (this.isNew && !this.customerCode) {
     try {
+      const Customer = mongoose.model('Customer');
       const currentYear = new Date().getFullYear();
 
       // Find the last customer code for the current year
-      const lastCustomer = await this.constructor
-        .findOne({ customerCode: new RegExp(`^CUST${currentYear}`) })
+      const lastCustomer = await Customer
+        .findOne(
+          { customerCode: new RegExp(`^CUST${currentYear}`) },
+          { customerCode: 1 }
+        )
         .sort({ customerCode: -1 })
-        .select('customerCode')
         .lean();
 
       let sequenceNumber = 1;
@@ -146,7 +153,7 @@ customerSchema.pre('save', async function (next) {
         // Extract the sequence number from the last customer code
         const match = lastCustomer.customerCode.match(/\d{6}$/);
         if (match) {
-          sequenceNumber = parseInt(match[0]) + 1;
+          sequenceNumber = parseInt(match[0], 10) + 1;
         }
       }
 

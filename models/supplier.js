@@ -134,17 +134,24 @@ supplierSchema.virtual('paymentDays').get(function () {
 });
 
 // ============ MIDDLEWARE ============
-// Auto-generate supplier code before saving
+/**
+ * Pre-save hook: Auto-generate supplierCode
+ * Format: SUP[YEAR][SEQUENCE]
+ * Example: SUP2025000001
+ */
 supplierSchema.pre('save', async function (next) {
-  if (!this.supplierCode) {
+  if (this.isNew && !this.supplierCode) {
     try {
+      const Supplier = mongoose.model('Supplier');
       const currentYear = new Date().getFullYear();
 
       // Find the last supplier code for the current year
-      const lastSupplier = await this.constructor
-        .findOne({ supplierCode: new RegExp(`^SUP${currentYear}`) })
+      const lastSupplier = await Supplier
+        .findOne(
+          { supplierCode: new RegExp(`^SUP${currentYear}`) },
+          { supplierCode: 1 }
+        )
         .sort({ supplierCode: -1 })
-        .select('supplierCode')
         .lean();
 
       let sequenceNumber = 1;
@@ -153,7 +160,7 @@ supplierSchema.pre('save', async function (next) {
         // Extract the sequence number from the last supplier code
         const match = lastSupplier.supplierCode.match(/\d{6}$/);
         if (match) {
-          sequenceNumber = parseInt(match[0]) + 1;
+          sequenceNumber = parseInt(match[0], 10) + 1;
         }
       }
 

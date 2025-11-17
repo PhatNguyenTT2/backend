@@ -5,7 +5,14 @@ const PurchaseOrderListHeader = ({
   onItemsPerPageChange,
   searchQuery = '',
   onSearchChange,
-  onSearch
+  onSearch,
+  statusFilter = 'all',
+  onStatusFilterChange,
+  paymentStatusFilter = 'all',
+  onPaymentStatusFilterChange,
+  supplierFilter = 'all',
+  onSupplierFilterChange,
+  suppliers = []
 }) => {
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const dropdownRef = useRef(null);
@@ -94,9 +101,69 @@ const PurchaseOrderListHeader = ({
               </div>
             </div>
           </div>
+
+          {/* Status Filter */}
+          <div className="relative w-[120px]">
+            <select
+              value={statusFilter}
+              onChange={(e) => onStatusFilterChange && onStatusFilterChange(e.target.value)}
+              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="received">Received</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Payment Status Filter */}
+          <div className="relative w-[140px]">
+            <select
+              value={paymentStatusFilter}
+              onChange={(e) => onPaymentStatusFilterChange && onPaymentStatusFilterChange(e.target.value)}
+              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            >
+              <option value="all">All Payment</option>
+              <option value="unpaid">Unpaid</option>
+              <option value="partial">Partial</option>
+              <option value="paid">Paid</option>
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Supplier Filter */}
+          <div className="relative w-[160px]">
+            <select
+              value={supplierFilter}
+              onChange={(e) => onSupplierFilterChange && onSupplierFilterChange(e.target.value)}
+              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            >
+              <option value="all">All Suppliers</option>
+              {suppliers.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.companyName}
+                </option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
         </div>
 
-        {/* Actions Button with Dropdown (New PO removed) */}
+        {/* Actions Button with Dropdown */}
         <div className="relative ml-auto" ref={dropdownRef}>
           <button
             onClick={() => setShowActionsDropdown(!showActionsDropdown)}

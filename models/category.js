@@ -52,24 +52,25 @@ categorySchema.virtual('productCount', {
   count: true
 });
 
-// Pre-save hook: Auto-generate category code
+/**
+ * Pre-save hook: Auto-generate categoryCode
+ * Format: CAT[YEAR][SEQUENCE]
+ * Example: CAT2025000001
+ */
 categorySchema.pre('save', async function (next) {
-  console.log('=== PRE-SAVE HOOK CALLED ===');
-  console.log('categoryCode:', this.categoryCode);
-  console.log('isNew:', this.isNew);
-
-  if (!this.categoryCode) {
+  if (this.isNew && !this.categoryCode) {
     try {
-      const currentYear = new Date().getFullYear();
       const Category = mongoose.model('Category');
+      const currentYear = new Date().getFullYear();
 
       // Find the last category code for the current year
       const lastCategory = await Category
-        .findOne({ categoryCode: new RegExp(`^CAT${currentYear}`) })
+        .findOne(
+          { categoryCode: new RegExp(`^CAT${currentYear}`) },
+          { categoryCode: 1 }
+        )
         .sort({ categoryCode: -1 })
-        .select('categoryCode')
         .lean();
-
 
       let sequenceNumber = 1;
 
@@ -77,7 +78,7 @@ categorySchema.pre('save', async function (next) {
         // Extract the sequence number from the last category code
         const match = lastCategory.categoryCode.match(/\d{6}$/);
         if (match) {
-          sequenceNumber = parseInt(match[0]) + 1;
+          sequenceNumber = parseInt(match[0], 10) + 1;
         }
       }
 

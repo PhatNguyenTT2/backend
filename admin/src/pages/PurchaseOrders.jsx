@@ -1,103 +1,85 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { PurchaseOrderList, PurchaseOrderListHeader } from '../components/PurchaseOrderList';
-// import purchaseOrderService from '../services/purchaseOrderService';
+import {
+  PurchaseOrderList,
+  PurchaseOrderListHeader,
+  EditPurchaseOrderModal,
+  ReceivePurchaseOrderModal,
+  InvoicePurchaseModal
+} from '../components/PurchaseOrderList';
+import purchaseOrderService from '../services/purchaseOrderService';
+import supplierService from '../services/supplierService';
 
-const PurchaseOrders = () => {
+export const PurchaseOrders = () => {
   // Breadcrumb items
   const breadcrumbItems = [
     { label: 'Dashboard', href: '/dashboard' },
-    { label: 'Inventory', href: null },
-    { label: 'Purchase Orders', href: null },
+    { label: 'Purchase Orders', href: '/purchase-orders' },
   ];
 
-  // State management
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [filteredPurchaseOrders, setFilteredPurchaseOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [paginatedPurchaseOrders, setPaginatedPurchaseOrders] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [pagination, setPagination] = useState({
-    current_page: 1,
-    per_page: 20,
-    total: 0,
-    total_pages: 0
-  });
 
-  // Filters - Backend uses 'limit' not 'per_page'
-  const [filters, setFilters] = useState({
-    page: 1,
-    limit: 20,
-    sort: '-orderDate' // Backend format: '-field' for desc, 'field' for asc
-  });
+  // Modal states
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showReceiveModal, setShowReceiveModal] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [selectedPurchaseOrder, setSelectedPurchaseOrder] = useState(null);
 
-  // Search state
+  // Filters and sorting
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Sort state
   const [sortField, setSortField] = useState('orderDate');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
+  const [supplierFilter, setSupplierFilter] = useState('all');
 
-  // Fetch purchase orders from API
-  const fetchPurchaseOrders = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    itemsPerPage: 10,
+  });
 
-      console.log('[PurchaseOrders] Fetching with filters:', filters);
-      // const response = await purchaseOrderService.getPurchaseOrders(filters);
-      console.log('[PurchaseOrders] API Response:', response);
-
-      // Backend returns { purchaseOrders, pagination } directly
-      if (response && response.purchaseOrders) {
-        console.log('[PurchaseOrders] Raw purchase orders:', response.purchaseOrders);
-        // const formattedPOs = purchaseOrderService.formatPurchaseOrdersForDisplay(response.purchaseOrders);
-        console.log('[PurchaseOrders] Formatted purchase orders:', formattedPOs);
-        setPurchaseOrders(formattedPOs);
-
-        if (response.pagination) {
-          setPagination({
-            current_page: response.pagination.page || 1,
-            per_page: response.pagination.limit || 20,
-            total: response.pagination.total || 0,
-            total_pages: response.pagination.pages || 0
-          });
-        }
-      } else {
-        console.warn('[PurchaseOrders] Unexpected response format:', response);
-        setPurchaseOrders([]);
-      }
-    } catch (err) {
-      console.error('[PurchaseOrders] Error fetching purchase orders:', err);
-      setError(err.error || err.message || 'Failed to fetch purchase orders. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch purchase orders on component mount and when filters change
+  // Fetch data on component mount
   useEffect(() => {
     fetchPurchaseOrders();
-  }, [filters]);
+    fetchSuppliers();
+  }, []);
 
-  // Apply search and sorting when data or filters change (Auto-filter like Categories)
+  // Apply filters, search and sorting when data or filters change
   useEffect(() => {
     let result = [...purchaseOrders];
 
-    // Apply search filter - search by PO Number, Supplier Name, or Supplier Code
+    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      result = result.filter(po => {
-        const poNumber = (po.poNumber || '').toLowerCase();
-        const supplierName = (po.supplierName || '').toLowerCase();
-        const supplierCode = (po.supplierCode || '').toLowerCase();
-        const poId = (po.id || '').toString().toLowerCase();
+      result = result.filter(po =>
+        po.poNumber?.toLowerCase().includes(query) ||
+        po.supplier?.companyName?.toLowerCase().includes(query) ||
+        po.notes?.toLowerCase().includes(query)
+      );
+    }
 
-        return poNumber.includes(query) ||
-          supplierName.includes(query) ||
-          supplierCode.includes(query) ||
-          poId.includes(query);
-      });
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      result = result.filter(po => po.status === statusFilter);
+    }
+
+    // Apply payment status filter
+    if (paymentStatusFilter !== 'all') {
+      result = result.filter(po => po.paymentStatus === paymentStatusFilter);
+    }
+
+    // Apply supplier filter
+    if (supplierFilter !== 'all') {
+      result = result.filter(po => po.supplier?.id === supplierFilter);
     }
 
     // Apply sorting
@@ -105,136 +87,434 @@ const PurchaseOrders = () => {
       let aVal = a[sortField];
       let bVal = b[sortField];
 
+      // Handle nested fields
+      if (sortField === 'supplier.companyName') {
+        aVal = a.supplier?.companyName;
+        bVal = b.supplier?.companyName;
+      }
+
       // Handle null/undefined values
       if (aVal == null) aVal = '';
       if (bVal == null) bVal = '';
 
       // Handle different data types
-      if (sortField === 'totalAmount' || sortField === 'quantity') {
-        aVal = parseFloat(aVal) || 0;
-        bVal = parseFloat(bVal) || 0;
-      } else if (sortField === 'orderDate' || sortField === 'expectedDelivery' || sortField === 'createdAt') {
-        aVal = new Date(aVal).getTime();
-        bVal = new Date(bVal).getTime();
+      if (sortField === 'totalPrice' || sortField === 'shippingFee') {
+        aVal = Number(aVal) || 0;
+        bVal = Number(bVal) || 0;
+      } else if (sortField === 'orderDate' || sortField === 'expectedDeliveryDate') {
+        aVal = new Date(aVal).getTime() || 0;
+        bVal = new Date(bVal).getTime() || 0;
       } else {
         aVal = String(aVal).toLowerCase();
         bVal = String(bVal).toLowerCase();
       }
 
-      if (sortOrder === 'asc') {
-        return aVal > bVal ? 1 : -1;
-      } else {
-        return aVal < bVal ? 1 : -1;
-      }
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
     });
 
     setFilteredPurchaseOrders(result);
-  }, [purchaseOrders, searchQuery, sortField, sortOrder]);
 
-  // Handle items per page change
-  const handleItemsPerPageChange = (newLimit) => {
-    console.log('[PurchaseOrders] Changing limit to:', newLimit);
-    setFilters(prev => ({
+    // Update pagination
+    const totalPages = Math.ceil(result.length / itemsPerPage);
+    setPagination(prev => ({
       ...prev,
-      limit: newLimit,
-      page: 1
+      currentPage: 1, // Reset to first page on filter change
+      totalPages,
+      itemsPerPage,
     }));
+  }, [purchaseOrders, searchQuery, sortField, sortOrder, itemsPerPage, statusFilter, paymentStatusFilter, supplierFilter]);
+
+  // Paginate filtered purchase orders
+  useEffect(() => {
+    const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
+    const endIndex = startIndex + pagination.itemsPerPage;
+    setPaginatedPurchaseOrders(filteredPurchaseOrders.slice(startIndex, endIndex));
+  }, [filteredPurchaseOrders, pagination.currentPage, pagination.itemsPerPage]);
+
+  const fetchPurchaseOrders = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const response = await purchaseOrderService.getAllPurchaseOrders({
+        withDetails: true
+      });
+
+      if (response.success && response.data && response.data.purchaseOrders) {
+        setPurchaseOrders(response.data.purchaseOrders);
+      } else if (Array.isArray(response)) {
+        setPurchaseOrders(response);
+      } else {
+        console.error('Unexpected response structure:', response);
+        setPurchaseOrders([]);
+      }
+    } catch (err) {
+      console.error('Error fetching purchase orders:', err);
+      setError(err.message || 'Failed to load purchase orders');
+      setPurchaseOrders([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Handle search change - auto-filter (no need to click search button)
-  const handleSearchChange = (query) => {
-    setSearchQuery(query);
+  const fetchSuppliers = async () => {
+    try {
+      const response = await supplierService.getActiveSuppliers();
+      if (response.success && response.data && response.data.suppliers) {
+        setSuppliers(response.data.suppliers);
+      } else if (Array.isArray(response)) {
+        setSuppliers(response);
+      } else {
+        setSuppliers([]);
+      }
+    } catch (err) {
+      console.error('Error fetching suppliers:', err);
+      setSuppliers([]);
+    }
   };
 
-  // Handle search button click (optional - mainly for UX consistency)
+  const handleColumnSort = (field, order) => {
+    setSortField(field);
+    setSortOrder(order);
+  };
+
   const handleSearch = (query) => {
     setSearchQuery(query);
   };
 
-  // Handle sort
-  const handleSort = (field) => {
-    const newSortOrder = sortField === field && sortOrder === 'asc' ? 'desc' : 'asc';
-    setSortField(field);
-    setSortOrder(newSortOrder);
+  const handleSearchChange = (query) => {
+    setSearchQuery(query);
   };
 
-  // Handle add purchase order
-  const handleAddPurchaseOrder = () => {
-    console.log('Add new purchase order');
-    // TODO: Open create modal
+  const handleItemsPerPageChange = (value) => {
+    setItemsPerPage(value);
   };
 
-  if (loading && purchaseOrders.length === 0) {
-    return (
-      <Layout>
-        <Breadcrumb items={breadcrumbItems} />
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
-        </div>
-      </Layout>
-    );
-  }
+  const handleStatusFilterChange = (status) => {
+    setStatusFilter(status);
+  };
 
-  if (error) {
-    return (
-      <Layout>
-        <Breadcrumb items={breadcrumbItems} />
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-600">{error}</p>
-          <button
-            onClick={fetchPurchaseOrders}
-            className="mt-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
-      </Layout>
-    );
-  }
+  const handlePaymentStatusFilterChange = (paymentStatus) => {
+    setPaymentStatusFilter(paymentStatus);
+  };
+
+  const handleSupplierFilterChange = (supplierId) => {
+    setSupplierFilter(supplierId);
+  };
+
+  const handlePageChange = (newPage) => {
+    setPagination(prev => ({
+      ...prev,
+      currentPage: newPage
+    }));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleEdit = (purchaseOrder) => {
+    setSelectedPurchaseOrder(purchaseOrder);
+    setShowEditModal(true);
+  };
+
+  const handleReceive = (purchaseOrder) => {
+    setSelectedPurchaseOrder(purchaseOrder);
+    setShowReceiveModal(true);
+  };
+
+  const handleViewInvoice = (purchaseOrder) => {
+    setSelectedPurchaseOrder(purchaseOrder);
+    setShowInvoiceModal(true);
+  };
+
+  const handleEditSuccess = (response) => {
+    console.log('Purchase order updated:', response);
+    fetchPurchaseOrders();
+    setSelectedPurchaseOrder(null);
+  };
+
+  const handleReceiveSuccess = (response) => {
+    console.log('Purchase order received:', response);
+    fetchPurchaseOrders();
+    setSelectedPurchaseOrder(null);
+  };
+
+  const handleApprove = async (purchaseOrder) => {
+    if (!window.confirm(`Are you sure you want to approve purchase order "${purchaseOrder.poNumber}"?`)) {
+      return;
+    }
+
+    try {
+      await purchaseOrderService.approvePurchaseOrder(purchaseOrder.id);
+      alert('Purchase order approved successfully!');
+      fetchPurchaseOrders();
+    } catch (err) {
+      console.error('Error approving purchase order:', err);
+      alert(err.response?.data?.error?.message || err.message || 'Failed to approve purchase order');
+    }
+  };
+
+  const handleCancel = async (purchaseOrder) => {
+    if (!window.confirm(`Are you sure you want to cancel purchase order "${purchaseOrder.poNumber}"?`)) {
+      return;
+    }
+
+    try {
+      await purchaseOrderService.cancelPurchaseOrder(purchaseOrder.id);
+      alert('Purchase order cancelled successfully!');
+      fetchPurchaseOrders();
+    } catch (err) {
+      console.error('Error cancelling purchase order:', err);
+      alert(err.response?.data?.error?.message || err.message || 'Failed to cancel purchase order');
+    }
+  };
+
+  const handleDelete = async (purchaseOrder) => {
+    // Validation checks
+    if (purchaseOrder.status !== 'pending') {
+      alert('Can only delete pending purchase orders.');
+      return;
+    }
+
+    if (purchaseOrder.details && purchaseOrder.details.length > 0) {
+      alert('Cannot delete purchase order with line items. Please remove all items first.');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete purchase order "${purchaseOrder.poNumber}"?`)) {
+      return;
+    }
+
+    try {
+      await purchaseOrderService.deletePurchaseOrder(purchaseOrder.id);
+      alert('Purchase order deleted successfully!');
+      fetchPurchaseOrders();
+    } catch (err) {
+      console.error('Error deleting purchase order:', err);
+      alert(err.response?.data?.error?.message || err.message || 'Failed to delete purchase order');
+    }
+  };
 
   return (
     <Layout>
-      <Breadcrumb items={breadcrumbItems} />
+      <div className="space-y-6">
+        {/* Breadcrumb */}
+        <Breadcrumb items={breadcrumbItems} />
 
-      <div className="space-y-4">
+        {/* Purchase Order List Header */}
         <PurchaseOrderListHeader
-          itemsPerPage={filters.limit}
+          itemsPerPage={itemsPerPage}
           onItemsPerPageChange={handleItemsPerPageChange}
           searchQuery={searchQuery}
           onSearchChange={handleSearchChange}
           onSearch={handleSearch}
-          onAddPurchaseOrder={handleAddPurchaseOrder}
+          statusFilter={statusFilter}
+          onStatusFilterChange={handleStatusFilterChange}
+          paymentStatusFilter={paymentStatusFilter}
+          onPaymentStatusFilterChange={handlePaymentStatusFilterChange}
+          supplierFilter={supplierFilter}
+          onSupplierFilterChange={handleSupplierFilterChange}
+          suppliers={suppliers}
         />
 
-        <PurchaseOrderList
-          purchaseOrders={filteredPurchaseOrders}
-          onSort={handleSort}
-          sortField={sortField}
-          sortOrder={sortOrder}
-          onRefresh={fetchPurchaseOrders}
-        />
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+          </div>
+        )}
 
-        {/* Empty State - No Results from Search */}
-        {!loading && !error && filteredPurchaseOrders.length === 0 && purchaseOrders.length > 0 && (
-          <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
-            <p className="text-gray-500 text-sm">No purchase orders found matching "{searchQuery}"</p>
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            <p className="font-medium">Error loading purchase orders</p>
+            <p className="text-sm mt-1">{error}</p>
             <button
-              onClick={() => setSearchQuery('')}
-              className="mt-2 text-sm text-emerald-600 hover:underline"
+              onClick={fetchPurchaseOrders}
+              className="mt-2 text-sm underline hover:no-underline"
             >
-              Clear search
+              Try again
             </button>
           </div>
         )}
 
-        {/* Results Summary */}
-        {filteredPurchaseOrders.length > 0 && (
-          <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
-            Showing {filteredPurchaseOrders.length} of {purchaseOrders.length} purchase orders
-            {searchQuery && ` (filtered)`}
+        {/* Purchase Order List Table */}
+        {!isLoading && !error && (
+          <>
+            <PurchaseOrderList
+              purchaseOrders={paginatedPurchaseOrders}
+              onSort={handleColumnSort}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onApprove={handleApprove}
+              onReceive={handleReceive}
+              onCancel={handleCancel}
+              onViewInvoice={handleViewInvoice}
+            />
+
+            {/* Pagination */}
+            {pagination.totalPages > 1 && (
+              <div className="flex items-center justify-center mt-6">
+                <div className="flex items-center gap-2">
+                  {/* Previous button */}
+                  <button
+                    onClick={() => handlePageChange(pagination.currentPage - 1)}
+                    disabled={pagination.currentPage === 1}
+                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      }`}
+                  >
+                    ‹ Previous
+                  </button>
+
+                  {/* Page numbers */}
+                  {(() => {
+                    const maxPagesToShow = 5;
+                    const { totalPages, currentPage } = pagination;
+
+                    let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+                    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+                    if (endPage - startPage < maxPagesToShow - 1) {
+                      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+                    }
+
+                    const pages = [];
+
+                    // First page + ellipsis
+                    if (startPage > 1) {
+                      pages.push(
+                        <button
+                          key={1}
+                          onClick={() => handlePageChange(1)}
+                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                        >
+                          1
+                        </button>
+                      );
+                      if (startPage > 2) {
+                        pages.push(
+                          <span key="ellipsis-start" className="px-2 text-gray-400">
+                            ...
+                          </span>
+                        );
+                      }
+                    }
+
+                    // Page numbers
+                    for (let page = startPage; page <= endPage; page++) {
+                      pages.push(
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${currentPage === page
+                            ? 'bg-[#3bb77e] text-white'
+                            : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                            }`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    }
+
+                    // Ellipsis + last page
+                    if (endPage < totalPages) {
+                      if (endPage < totalPages - 1) {
+                        pages.push(
+                          <span key="ellipsis-end" className="px-2 text-gray-400">
+                            ...
+                          </span>
+                        );
+                      }
+                      pages.push(
+                        <button
+                          key={totalPages}
+                          onClick={() => handlePageChange(totalPages)}
+                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                        >
+                          {totalPages}
+                        </button>
+                      );
+                    }
+
+                    return pages;
+                  })()}
+
+                  {/* Next button */}
+                  <button
+                    onClick={() => handlePageChange(pagination.currentPage + 1)}
+                    disabled={pagination.currentPage === pagination.totalPages}
+                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      }`}
+                  >
+                    Next ›
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Results Summary */}
+            {paginatedPurchaseOrders.length > 0 && (
+              <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
+                Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to {Math.min(pagination.currentPage * pagination.itemsPerPage, filteredPurchaseOrders.length)} of {filteredPurchaseOrders.length} purchase orders
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && filteredPurchaseOrders.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
+            <p className="text-gray-500 text-sm">No purchase orders found</p>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="mt-2 text-sm text-emerald-600 hover:underline"
+              >
+                Clear search
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {/* Edit Purchase Order Modal */}
+      <EditPurchaseOrderModal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedPurchaseOrder(null);
+        }}
+        onSuccess={handleEditSuccess}
+        purchaseOrder={selectedPurchaseOrder}
+        suppliers={suppliers}
+      />
+
+      {/* Receive Purchase Order Modal */}
+      <ReceivePurchaseOrderModal
+        isOpen={showReceiveModal}
+        onClose={() => {
+          setShowReceiveModal(false);
+          setSelectedPurchaseOrder(null);
+        }}
+        onSuccess={handleReceiveSuccess}
+        purchaseOrder={selectedPurchaseOrder}
+      />
+
+      {/* Invoice Modal */}
+      <InvoicePurchaseModal
+        isOpen={showInvoiceModal}
+        onClose={() => {
+          setShowInvoiceModal(false);
+          setSelectedPurchaseOrder(null);
+        }}
+        purchaseOrder={selectedPurchaseOrder}
+      />
     </Layout>
   );
 };
