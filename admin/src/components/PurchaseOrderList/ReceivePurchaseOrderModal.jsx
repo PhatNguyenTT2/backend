@@ -56,12 +56,29 @@ export const ReceivePurchaseOrderModal = ({
 
       const { poDetail, quantityReceived, mfgDate, expiryDate, warehouseLocation, notes } = batchData;
 
+      // Get product ID (handle both populated and non-populated cases)
+      const productId = typeof poDetail.product === 'object'
+        ? (poDetail.product._id || poDetail.product.id)
+        : poDetail.product;
+
+      // Get selling price (from populated product or fallback)
+      const sellingPrice = poDetail.product?.unitPrice || poDetail.costPrice;
+
+      console.log('Creating batch with data:', {
+        productId,
+        quantityReceived,
+        costPrice: poDetail.costPrice,
+        unitPrice: sellingPrice,
+        mfgDate,
+        expiryDate
+      });
+
       // Step 1: Create new product batch
       const batchResponse = await productBatchService.createBatch({
-        product: poDetail.product._id || poDetail.product,
+        product: productId,
         quantity: quantityReceived,
-        costPrice: poDetail.unitPrice, // Use PO unit price as cost
-        unitPrice: poDetail.unitPrice,
+        costPrice: poDetail.costPrice, // Giá nhập từ PO (cost from supplier)
+        unitPrice: sellingPrice, // Giá bán của sản phẩm (selling price), fallback to cost
         mfgDate: mfgDate,
         expiryDate: expiryDate,
         status: 'active',
@@ -72,10 +89,10 @@ export const ReceivePurchaseOrderModal = ({
 
       const newBatch = batchResponse.data;
 
-      // Step 2: Create DetailInventory for this batch
+      // Step 2: Create DetailInventory for this batch (initial state with 0 quantity)
       const detailInventoryResponse = await detailInventoryService.createDetailInventory({
         batchId: newBatch._id || newBatch.id,
-        quantityOnHand: quantityReceived,
+        quantityOnHand: 0,  // Start with 0, will be updated by movement
         quantityOnShelf: 0,
         quantityReserved: 0,
         location: warehouseLocation
@@ -83,7 +100,7 @@ export const ReceivePurchaseOrderModal = ({
 
       const detailInventory = detailInventoryResponse.data;
 
-      // Step 3: Create Stock In Movement
+      // Step 3: Create Stock In Movement (this will auto-update DetailInventory quantity)
       await inventoryMovementBatchService.createMovement({
         batchId: newBatch._id || newBatch.id,
         inventoryDetail: detailInventory._id || detailInventory.id,
@@ -120,8 +137,16 @@ export const ReceivePurchaseOrderModal = ({
 
     } catch (error) {
       console.error('Error receiving item:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      });
+
       setApiError(
         error.response?.data?.error?.message ||
+        error.response?.data?.message ||
         error.message ||
         'Failed to receive item'
       );
@@ -270,9 +295,9 @@ export const ReceivePurchaseOrderModal = ({
                         <div className="flex items-center gap-4 mt-1 text-[12px] font-['Poppins',sans-serif] text-gray-600">
                           <span>Quantity: {detail.quantity}</span>
                           <span>•</span>
-                          <span>Unit Price: {detail.unitPrice?.toLocaleString('vi-VN')} đ</span>
+                          <span>Cost Price: {detail.costPrice?.toLocaleString('vi-VN')} đ</span>
                           <span>•</span>
-                          <span>Total: {(detail.quantity * detail.unitPrice)?.toLocaleString('vi-VN')} đ</span>
+                          <span>Total Cost: {(detail.quantity * detail.costPrice)?.toLocaleString('vi-VN')} đ</span>
                         </div>
                       </div>
 

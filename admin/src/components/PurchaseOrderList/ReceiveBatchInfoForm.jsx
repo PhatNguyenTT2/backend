@@ -117,8 +117,8 @@ export const ReceiveBatchInfoForm = ({
   if (!poDetail) return null;
 
   const orderedQty = poDetail.quantity || 0;
-  const unitPrice = poDetail.unitPrice || 0;
-  const totalValue = orderedQty * unitPrice;
+  const costPrice = poDetail.costPrice || 0;
+  const totalCost = orderedQty * costPrice;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -142,15 +142,15 @@ export const ReceiveBatchInfoForm = ({
                 <span className="ml-2 font-semibold text-emerald-700">{orderedQty} units</span>
               </div>
               <div>
-                <span className="text-gray-600">Unit Price:</span>
+                <span className="text-gray-600">Cost Price:</span>
                 <span className="ml-2 font-semibold text-emerald-700">
-                  {unitPrice.toLocaleString('vi-VN')} đ
+                  {costPrice.toLocaleString('vi-VN')} đ
                 </span>
               </div>
               <div>
-                <span className="text-gray-600">Total Value:</span>
+                <span className="text-gray-600">Total Cost:</span>
                 <span className="ml-2 font-semibold text-emerald-700">
-                  {totalValue.toLocaleString('vi-VN')} đ
+                  {totalCost.toLocaleString('vi-VN')} đ
                 </span>
               </div>
             </div>

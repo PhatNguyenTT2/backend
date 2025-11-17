@@ -106,9 +106,9 @@ inventoryMovementBatchesRouter.get('/', async (request, response) => {
     let query = InventoryMovementBatch.find(filter)
       .populate({
         path: 'batchId',
-        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status productId',
+        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status product',
         populate: {
-          path: 'productId',
+          path: 'product',
           select: 'productCode name image category',
           populate: {
             path: 'category',
@@ -137,7 +137,7 @@ inventoryMovementBatchesRouter.get('/', async (request, response) => {
     // Filter by productId (after population)
     if (productId) {
       movements = movements.filter(
-        mov => mov.batchId?.productId?._id.toString() === productId
+        mov => mov.batchId?.product?._id.toString() === productId
       );
     }
 
@@ -177,10 +177,10 @@ inventoryMovementBatchesRouter.get('/:id', async (request, response) => {
     const movement = await InventoryMovementBatch.findById(request.params.id)
       .populate({
         path: 'batchId',
-        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status promotionApplied discountPercentage notes productId',
+        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status promotionApplied discountPercentage notes product',
         populate: {
-          path: 'productId',
-          select: 'productCode name image description category unitPrice',
+          path: 'product',
+          select: 'productCode barcode name category unit',
           populate: {
             path: 'category',
             select: 'name categoryCode'
@@ -434,9 +434,9 @@ inventoryMovementBatchesRouter.post('/', userExtractor, async (request, response
     await savedMovement.populate([
       {
         path: 'batchId',
-        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status productId',
+        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status product',
         populate: {
-          path: 'productId',
+          path: 'product',
           select: 'productCode name image category',
           populate: {
             path: 'category',
@@ -528,9 +528,9 @@ inventoryMovementBatchesRouter.put('/:id', userExtractor, async (request, respon
     await updatedMovement.populate([
       {
         path: 'batchId',
-        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status productId',
+        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status product',
         populate: {
-          path: 'productId',
+          path: 'product',
           select: 'productCode name image category',
           populate: {
             path: 'category',
@@ -595,9 +595,9 @@ inventoryMovementBatchesRouter.delete('/:id', userExtractor, async (request, res
     const movement = await InventoryMovementBatch.findById(request.params.id)
       .populate({
         path: 'batchId',
-        select: 'batchCode productId',
+        select: 'batchCode product',
         populate: {
-          path: 'productId',
+          path: 'product',
           select: 'productCode name'
         }
       })
@@ -733,9 +733,9 @@ inventoryMovementBatchesRouter.delete('/:id', userExtractor, async (request, res
           batchCode: movement.batchId?.batchCode
         },
         product: {
-          id: movement.batchId?.productId?._id,
-          productCode: movement.batchId?.productId?.productCode,
-          name: movement.batchId?.productId?.name
+          id: movement.batchId?.product?._id,
+          productCode: movement.batchId?.product?.productCode,
+          name: movement.batchId?.product?.name
         }
       }
     });

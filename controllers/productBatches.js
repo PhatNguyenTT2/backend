@@ -206,8 +206,20 @@ productBatchesRouter.post('/', userExtractor, async (request, response) => {
       notes
     } = request.body;
 
+    console.log('📦 Creating product batch with data:', {
+      product,
+      costPrice,
+      unitPrice,
+      quantity,
+      mfgDate,
+      expiryDate,
+      status,
+      promotionApplied
+    });
+
     // Validation
     if (!product || !costPrice || !unitPrice || quantity === undefined) {
+      console.error('❌ Missing required fields:', { product, costPrice, unitPrice, quantity });
       return response.status(400).json({
         success: false,
         error: {

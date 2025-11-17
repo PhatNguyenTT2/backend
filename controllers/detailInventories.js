@@ -73,9 +73,9 @@ detailInventoriesRouter.get('/', async (request, response) => {
     let query = DetailInventory.find(filter)
       .populate({
         path: 'batchId',
-        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status productId',
+        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status product',
         populate: {
-          path: 'productId',
+          path: 'product',
           select: 'productCode name image category',
           populate: {
             path: 'category',
@@ -92,7 +92,7 @@ detailInventoriesRouter.get('/', async (request, response) => {
     // Filter by productId (after population)
     if (productId) {
       detailInventories = detailInventories.filter(
-        inv => inv.batchId?.productId?._id.toString() === productId
+        inv => inv.batchId?.product?._id.toString() === productId
       );
     }
 
@@ -127,8 +127,8 @@ detailInventoriesRouter.get('/', async (request, response) => {
       const searchRegex = new RegExp(search, 'i');
       detailInventories = detailInventories.filter(inv =>
         (inv.batchId?.batchCode && searchRegex.test(inv.batchId.batchCode)) ||
-        (inv.batchId?.productId?.name && searchRegex.test(inv.batchId.productId.name)) ||
-        (inv.batchId?.productId?.productCode && searchRegex.test(inv.batchId.productId.productCode)) ||
+        (inv.batchId?.product?.name && searchRegex.test(inv.batchId.product.name)) ||
+        (inv.batchId?.product?.productCode && searchRegex.test(inv.batchId.product.productCode)) ||
         (inv.location && searchRegex.test(inv.location))
       );
     }
@@ -169,9 +169,9 @@ detailInventoriesRouter.get('/:id', async (request, response) => {
     const detailInventory = await DetailInventory.findById(request.params.id)
       .populate({
         path: 'batchId',
-        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status promotionApplied discountPercentage notes productId',
+        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status promotionApplied discountPercentage notes product',
         populate: {
-          path: 'productId',
+          path: 'product',
           select: 'productCode name image description category unitPrice',
           populate: {
             path: 'category',
@@ -271,9 +271,9 @@ detailInventoriesRouter.post('/', userExtractor, async (request, response) => {
     // Populate batch and product details
     await savedDetailInventory.populate({
       path: 'batchId',
-      select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status productId',
+      select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status product',
       populate: {
-        path: 'productId',
+        path: 'product',
         select: 'productCode name image category',
         populate: {
           path: 'category',
@@ -385,9 +385,9 @@ detailInventoriesRouter.put('/:id', userExtractor, async (request, response) => 
     // Populate batch and product details
     await updatedDetailInventory.populate({
       path: 'batchId',
-      select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status productId',
+      select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status product',
       populate: {
-        path: 'productId',
+        path: 'product',
         select: 'productCode name image category',
         populate: {
           path: 'category',
@@ -438,9 +438,9 @@ detailInventoriesRouter.delete('/:id', userExtractor, async (request, response) 
     const detailInventory = await DetailInventory.findById(request.params.id)
       .populate({
         path: 'batchId',
-        select: 'batchCode status productId',
+        select: 'batchCode quantity product',
         populate: {
-          path: 'productId',
+          path: 'product',
           select: 'productCode name'
         }
       });
