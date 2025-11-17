@@ -15,7 +15,6 @@ const PurchaseOrderList = ({
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
 
-  const [viewItemsModal, setViewItemsModal] = useState(null);
   const [invoiceModal, setInvoiceModal] = useState(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -213,7 +212,7 @@ const PurchaseOrderList = ({
       // - Cancelled: Chỉ hủy status, không cần reverse vì chưa stock in
 
       // Update PO status using the correct endpoint
-      const result = await purchaseOrderService.updatePurchaseOrderStatus(po.id, newStatus);
+      const result = await purchaseOrderService.updateStatus(po.id, newStatus);
       console.log('Status update result:', result);
 
       // Simple status update notification
@@ -264,13 +263,6 @@ const PurchaseOrderList = ({
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
                 SUPPLIER
                 {getSortIcon('supplier')}
-              </p>
-            </div>
-
-            {/* Items Column */}
-            <div className="w-[80px] px-3 flex items-center justify-center flex-shrink-0">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                ITEMS
               </p>
             </div>
 
@@ -357,22 +349,6 @@ const PurchaseOrderList = ({
                     </div>
                   </div>
 
-                  {/* Items - View Icon */}
-                  <div className="w-[80px] px-3 flex items-center justify-center flex-shrink-0">
-                    <button
-                      onClick={() => setViewItemsModal(po)}
-                      className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700 transition-colors"
-                      title="View items"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M2 4H14M2 8H14M2 12H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                      </svg>
-                      <span className="text-[13px] font-normal font-['Poppins',sans-serif]">
-                        {po.details?.length || 0}
-                      </span>
-                    </button>
-                  </div>
-
                   {/* Total */}
                   <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
@@ -421,7 +397,10 @@ const PurchaseOrderList = ({
                   {/* Created By */}
                   <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[12px] font-['Poppins',sans-serif] text-[#6c757d] leading-[18px] truncate">
-                      {po.createdBy?.fullName || 'N/A'}
+                      {(() => {
+                        console.log('PO createdBy:', po.poNumber, po.createdBy);
+                        return po.createdBy?.fullName || 'N/A';
+                      })()}
                     </p>
                   </div>
 
@@ -598,125 +577,11 @@ const PurchaseOrderList = ({
         return null;
       })()}
 
-      {/* Items Modal */}
-      {viewItemsModal && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]"
-          onClick={() => setViewItemsModal(null)}
-        >
-          <div
-            className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <div>
-                <h3 className="text-[16px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-                  Items in PO {viewItemsModal.poNumber}
-                </h3>
-                <p className="text-[12px] text-[#6c757d] mt-1">
-                  Supplier: {viewItemsModal.supplier?.companyName || 'N/A'}
-                </p>
-              </div>
-              <button
-                onClick={() => setViewItemsModal(null)}
-                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M15 5L5 15M5 5L15 15" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="overflow-y-auto max-h-[calc(80vh-140px)]">
-              <table className="w-full">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                      Product
-                    </th>
-                    <th className="px-6 py-3 text-left text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                      Product Code
-                    </th>
-                    <th className="px-6 py-3 text-right text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                      Quantity
-                    </th>
-                    <th className="px-6 py-3 text-right text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                      Cost Price
-                    </th>
-                    <th className="px-6 py-3 text-right text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                      Total
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {viewItemsModal.details && viewItemsModal.details.length > 0 ? (
-                    viewItemsModal.details.map((item, idx) => (
-                      <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529]">
-                            {item.product?.name || 'N/A'}
-                          </p>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#6c757d]">
-                            {item.product?.productCode || 'N/A'}
-                          </p>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529]">
-                            {item.quantity || 0}
-                          </p>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529]">
-                            {formatCurrency(item.costPrice || 0)}
-                          </p>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-                            {formatCurrency(item.total || 0)}
-                          </p>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan="5" className="px-6 py-8 text-center">
-                        <p className="text-[13px] text-[#6c757d] font-['Poppins',sans-serif]">
-                          No items found
-                        </p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-              <div className="flex justify-between items-center">
-                <div className="text-[13px] text-[#6c757d] font-['Poppins',sans-serif]">
-                  Total Items: {viewItemsModal.details?.length || 0}
-                </div>
-                <div className="text-[16px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-                  Total Amount: {formatCurrency(viewItemsModal.totalPrice || 0)}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Invoice Purchase Modal */}
       {invoiceModal && (
         <InvoicePurchaseModal
           purchaseOrder={invoiceModal}
           onClose={() => setInvoiceModal(null)}
-          onViewItems={(po) => {
-            setViewItemsModal(po);
-          }}
         />
       )}
 
