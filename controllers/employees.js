@@ -359,9 +359,16 @@ employeesRouter.delete('/:id', async (request, response) => {
       { session }
     )
 
-    // Delete associated user account if exists
+    // Soft delete associated user account if exists (deactivate instead of hard delete)
     if (employee.userAccount) {
-      await UserAccount.findByIdAndDelete(employee.userAccount._id, { session })
+      await UserAccount.findByIdAndUpdate(
+        employee.userAccount._id,
+        {
+          isActive: false,
+          tokens: [] // Clear all authentication tokens
+        },
+        { session }
+      )
     }
 
     // Delete employee

@@ -97,8 +97,26 @@ userAccountSchema.virtual('employee', {
 // Pre-save hook: Auto-generate user code
 userAccountSchema.pre('save', async function (next) {
   if (this.isNew && !this.userCode) {
-    const count = await mongoose.model('UserAccount').countDocuments();
-    this.userCode = `USER${String(count + 1).padStart(3, '0')}`;
+    try {
+      // Find the highest existing userCode to avoid duplicates
+      const lastUser = await mongoose.model('UserAccount')
+        .findOne({}, { userCode: 1 })
+        .sort({ userCode: -1 })
+        .lean();
+
+      let nextNumber = 1;
+      if (lastUser && lastUser.userCode) {
+        // Extract number from userCode (e.g., "USER004" -> 4)
+        const match = lastUser.userCode.match(/^USER(\d+)$/);
+        if (match) {
+          nextNumber = parseInt(match[1], 10) + 1;
+        }
+      }
+
+      this.userCode = `USER${String(nextNumber).padStart(3, '0')}`;
+    } catch (error) {
+      return next(error);
+    }
   }
   next();
 });
