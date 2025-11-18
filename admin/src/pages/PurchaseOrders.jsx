@@ -349,6 +349,7 @@ export const PurchaseOrders = () => {
               onSort={handleColumnSort}
               sortField={sortField}
               sortOrder={sortOrder}
+              onRefresh={fetchPurchaseOrders}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onApprove={handleApprove}

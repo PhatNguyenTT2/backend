@@ -415,7 +415,7 @@ productsRouter.put('/:id', userExtractor, async (request, response) => {
  * Delete product (soft delete by setting isActive = false)
  * Requires authentication
  * 
- * Note: Cannot delete product if it has active batches or inventory
+ * Note: Can only delete inactive products. Cannot delete if product has active batches or inventory.
  */
 productsRouter.delete('/:id', userExtractor, async (request, response) => {
   try {
@@ -427,6 +427,18 @@ productsRouter.delete('/:id', userExtractor, async (request, response) => {
         error: {
           message: 'Product not found',
           code: 'PRODUCT_NOT_FOUND'
+        }
+      });
+    }
+
+    // Only allow deletion of inactive products
+    if (product.isActive !== false) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Cannot delete active product',
+          code: 'PRODUCT_IS_ACTIVE',
+          details: 'Product must be deactivated before deletion'
         }
       });
     }
@@ -461,18 +473,21 @@ productsRouter.delete('/:id', userExtractor, async (request, response) => {
       });
     }
 
-    // Soft delete - set isActive to false
-    product.isActive = false;
-    await product.save();
+    // Hard delete - remove from database
+    await Product.findByIdAndDelete(request.params.id);
+
+    // Also delete the inventory record
+    if (inventory) {
+      await Inventory.findByIdAndDelete(inventory._id);
+    }
 
     response.json({
       success: true,
-      message: 'Product deleted successfully (soft delete)',
+      message: 'Product deleted successfully',
       data: {
         id: product._id,
         productCode: product.productCode,
-        name: product.name,
-        isActive: product.isActive
+        name: product.name
       }
     });
   } catch (error) {

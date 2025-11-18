@@ -457,10 +457,10 @@ suppliersRouter.put('/:id', userExtractor, async (request, response) => {
 
 /**
  * DELETE /api/suppliers/:id
- * Delete supplier (soft delete by setting isActive to false)
+ * Delete supplier
  * Requires authentication
  * 
- * Note: Cannot delete supplier if they have active purchase orders or outstanding debt
+ * Note: Can only delete inactive suppliers. Cannot delete if supplier has active purchase orders or outstanding debt.
  */
 suppliersRouter.delete('/:id', userExtractor, async (request, response) => {
   try {
@@ -472,6 +472,18 @@ suppliersRouter.delete('/:id', userExtractor, async (request, response) => {
         error: {
           message: 'Supplier not found',
           code: 'SUPPLIER_NOT_FOUND'
+        }
+      });
+    }
+
+    // Only allow deletion of inactive suppliers
+    if (supplier.isActive !== false) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Cannot delete active supplier',
+          code: 'SUPPLIER_IS_ACTIVE',
+          details: 'Supplier must be deactivated before deletion'
         }
       });
     }
@@ -511,18 +523,16 @@ suppliersRouter.delete('/:id', userExtractor, async (request, response) => {
       });
     }
 
-    // Soft delete - set isActive to false instead of actual deletion
-    supplier.isActive = false;
-    await supplier.save();
+    // Hard delete - remove from database
+    await Supplier.findByIdAndDelete(request.params.id);
 
     response.json({
       success: true,
-      message: 'Supplier deactivated successfully',
+      message: 'Supplier deleted successfully',
       data: {
         id: supplier._id,
         supplierCode: supplier.supplierCode,
-        companyName: supplier.companyName,
-        isActive: supplier.isActive
+        companyName: supplier.companyName
       }
     });
   } catch (error) {

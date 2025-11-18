@@ -215,6 +215,11 @@ const PurchaseOrderList = ({
       const result = await purchaseOrderService.updateStatus(po.id, newStatus);
       console.log('Status update result:', result);
 
+      // Refresh data first to update UI immediately
+      if (onRefresh) {
+        await onRefresh();
+      }
+
       // Simple status update notification
       let message = `Purchase Order status updated to ${newStatus}`;
 
@@ -225,10 +230,6 @@ const PurchaseOrderList = ({
       }
 
       alert(message);
-
-      if (onRefresh) {
-        onRefresh();
-      }
     } catch (error) {
       console.error('Error updating purchase order status:', error);
       alert(error.error || error.message || 'Failed to update status');
@@ -454,6 +455,15 @@ const PurchaseOrderList = ({
             { value: 'cancelled', label: 'Cancelled', color: 'bg-[#ef4444]' }
           ];
 
+          // Filter status options based on current status
+          const availableOptions = statusOptions.filter(option => {
+            // If current status is approved, don't allow going back to pending
+            if (po.status === 'approved' && option.value === 'pending') {
+              return false;
+            }
+            return true;
+          });
+
           return (
             <div
               ref={dropdownRef}
@@ -463,7 +473,7 @@ const PurchaseOrderList = ({
                 left: `${dropdownPosition.left}px`
               }}
             >
-              {statusOptions.map((option) => (
+              {availableOptions.map((option) => (
                 <button
                   key={option.value}
                   onClick={() => handleStatusChange(po, option.value)}

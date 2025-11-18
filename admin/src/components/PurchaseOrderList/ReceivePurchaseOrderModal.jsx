@@ -111,23 +111,24 @@ export const ReceivePurchaseOrderModal = ({
         notes: notes || `Received from PO ${purchaseOrder.poNumber}`
       });
 
-      // Step 4: Update DetailPurchaseOrder with batch reference
+      // Step 4: Update DetailPurchaseOrder with batch reference (BEFORE updating PO status)
       await detailPurchaseOrderService.updateDetailPurchaseOrder(
         poDetail._id || poDetail.id,
         { batch: newBatch._id || newBatch.id }
       );
 
-      // Mark item as received
-      setReceivedItems(prev => new Set([...prev, poDetail._id || poDetail.id]));
+      // Mark item as received locally
+      const newReceivedItems = new Set([...receivedItems, poDetail._id || poDetail.id]);
+      setReceivedItems(newReceivedItems);
       setReceivingItem(null);
 
       // Check if all items are received
       const allReceived = poDetails.every(detail =>
-        receivedItems.has(detail._id || detail.id) || detail._id === poDetail._id
+        newReceivedItems.has(detail._id || detail.id)
       );
 
       if (allReceived) {
-        // Update PO status to received
+        // Update PO status to received (LAST STEP)
         await purchaseOrderService.receivePurchaseOrder(purchaseOrder._id || purchaseOrder.id);
 
         // Close modal and refresh

@@ -323,10 +323,10 @@ categoriesRouter.put('/:id', userExtractor, async (request, response) => {
 
 /**
  * DELETE /api/categories/:id
- * Delete category (soft delete by setting isActive = false)
+ * Delete category
  * Requires authentication
  * 
- * Note: Cannot delete category if it has active products
+ * Note: Can only delete inactive categories. Cannot delete if category has active products.
  */
 categoriesRouter.delete('/:id', userExtractor, async (request, response) => {
   try {
@@ -338,6 +338,18 @@ categoriesRouter.delete('/:id', userExtractor, async (request, response) => {
         error: {
           message: 'Category not found',
           code: 'CATEGORY_NOT_FOUND'
+        }
+      });
+    }
+
+    // Only allow deletion of inactive categories
+    if (category.isActive !== false) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Cannot delete active category',
+          code: 'CATEGORY_IS_ACTIVE',
+          details: 'Category must be deactivated before deletion'
         }
       });
     }
@@ -359,18 +371,16 @@ categoriesRouter.delete('/:id', userExtractor, async (request, response) => {
       });
     }
 
-    // Soft delete - set isActive to false
-    category.isActive = false;
-    await category.save();
+    // Hard delete - remove from database
+    await Category.findByIdAndDelete(request.params.id);
 
     response.json({
       success: true,
-      message: 'Category deleted successfully (soft delete)',
+      message: 'Category deleted successfully',
       data: {
         id: category._id,
         categoryCode: category.categoryCode,
-        name: category.name,
-        isActive: category.isActive
+        name: category.name
       }
     });
   } catch (error) {

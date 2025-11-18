@@ -619,7 +619,8 @@ purchaseOrdersRouter.put('/:id', userExtractor, async (request, response) => {
  * Delete purchase order
  * Requires authentication
  * 
- * Note: Can only delete pending purchase orders with no details
+ * Note: Can only delete pending or cancelled purchase orders
+ * All related DetailPurchaseOrder records will be deleted automatically
  */
 purchaseOrdersRouter.delete('/:id', userExtractor, async (request, response) => {
   try {
@@ -635,16 +636,16 @@ purchaseOrdersRouter.delete('/:id', userExtractor, async (request, response) => 
       });
     }
 
-    // Only allow deletion of pending orders
-    if (purchaseOrder.status !== 'pending') {
+    // Only allow deletion of pending or cancelled orders
+    if (purchaseOrder.status !== 'pending' && purchaseOrder.status !== 'cancelled') {
       return response.status(400).json({
         success: false,
         error: {
-          message: 'Can only delete pending purchase orders',
+          message: 'Can only delete pending or cancelled purchase orders',
           code: 'INVALID_STATUS_FOR_DELETION',
           details: {
             currentStatus: purchaseOrder.status,
-            message: 'To remove non-pending orders, cancel them instead'
+            message: 'Only pending or cancelled purchase orders can be deleted'
           }
         }
       });
@@ -669,6 +670,7 @@ purchaseOrdersRouter.delete('/:id', userExtractor, async (request, response) => 
       data: {
         id: purchaseOrder._id,
         poNumber: purchaseOrder.poNumber,
+        status: purchaseOrder.status,
         deletedDetails: detailsCount
       }
     });

@@ -223,6 +223,31 @@ purchaseOrderSchema.pre('save', async function (next) {
     this.receivedDate = new Date();
   }
 
+  // Auto-calculate totalPrice from details if not explicitly set
+  // This ensures totalPrice stays consistent with detail items
+  if (!this.isModified('totalPrice') || this.totalPrice === 0) {
+    try {
+      const DetailPurchaseOrder = mongoose.model('DetailPurchaseOrder');
+      const details = await DetailPurchaseOrder.find({ purchaseOrder: this._id });
+
+      if (details && details.length > 0) {
+        const subtotal = details.reduce((sum, detail) => {
+          const itemTotal = detail.quantity * parseFloat(detail.costPrice || 0);
+          return sum + itemTotal;
+        }, 0);
+
+        const discountPercent = parseFloat(this.discountPercentage || 0);
+        const discountAmount = subtotal * (discountPercent / 100);
+        const shippingFee = parseFloat(this.shippingFee || 0);
+
+        this.totalPrice = subtotal - discountAmount + shippingFee;
+      }
+    } catch (error) {
+      // If calculation fails, continue without setting totalPrice
+      console.error('Error calculating totalPrice:', error);
+    }
+  }
+
   next();
 });
 
