@@ -5,7 +5,11 @@ export const DetailInventoryList = ({
   onSort,
   sortField,
   sortOrder,
-  onViewHistory
+  onViewHistory,
+  onStockIn,
+  onStockOut,
+  onAdjust,
+  onTransfer
 }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
@@ -211,7 +215,7 @@ export const DetailInventoryList = ({
 
               return (
                 <div
-                  key={item.id}
+                  key={item.id || item._id}
                   className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== detailInventory.length - 1 ? 'border-b border-gray-100' : ''
                     }`}
                 >
@@ -281,7 +285,10 @@ export const DetailInventoryList = ({
                   {/* Actions */}
                   <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
                     <button
-                      onClick={(e) => toggleDropdown(`action-${item.id}`, e)}
+                      onClick={(e) => {
+                        const itemId = item.id || item._id;
+                        toggleDropdown(`action-${itemId}`, e);
+                      }}
                       className="p-2 hover:bg-gray-200 rounded-full transition-colors"
                       title="Actions"
                     >
@@ -310,7 +317,9 @@ export const DetailInventoryList = ({
 
       {/* Fixed Position Dropdown Menus */}
       {activeDropdown && (() => {
-        const item = detailInventory.find(i => activeDropdown === `action-${i.id}`);
+        const itemId = activeDropdown.replace('action-', '');
+        const item = detailInventory.find(i => (i.id || i._id) === itemId);
+
         if (!item) return null;
 
         return (
@@ -329,7 +338,7 @@ export const DetailInventoryList = ({
                 }
                 setActiveDropdown(null);
               }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors flex items-center gap-2"
+              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center gap-2"
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M8 4V8L10.5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
