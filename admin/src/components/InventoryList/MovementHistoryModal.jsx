@@ -1,49 +1,50 @@
 import React, { useState, useEffect } from 'react';
-// import inventoryService from '../../services/inventoryService';
+import inventoryMovementBatchService from '../../services/inventoryMovementBatchService';
 
-export const MovementHistoryModal = ({ isOpen, onClose, productId, productName, productSku }) => {
+export const MovementHistoryModal = ({ isOpen, onClose, inventory }) => {
   const [movements, setMovements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [filter, setFilter] = useState('all'); // 'all', 'in', 'out', 'adjustments'
+  const [filter, setFilter] = useState('all'); // all, in, out, adjustment, transfer, audit
 
   useEffect(() => {
-    const fetchMovements = async () => {
-      if (!isOpen || !productId) return;
+    if (isOpen && inventory) {
+      fetchMovements();
+    }
+  }, [isOpen, inventory]);
 
-      setLoading(true);
-      setError(null);
+  const fetchMovements = async () => {
+    setLoading(true);
+    setError(null);
 
-      try {
-        console.log('Fetching movements for product:', productId);
+    try {
+      const productId = inventory.product?._id || inventory.product?.id || inventory.product;
+      const response = await inventoryMovementBatchService.getAllMovements({
+        productId: productId,
+        limit: 100
+      });
 
-        // const data = await inventoryService.getMovements(productId, { limit: 50 });
-        console.log('Movement data:', data);
-
-        setMovements(data.movements || []);
-      } catch (err) {
-        console.error('Error fetching movements:', err);
-        setError(err.error || err.message || 'Failed to load movement history');
-      } finally {
-        setLoading(false);
+      if (response.success && response.data) {
+        setMovements(response.data.movements || []);
+      } else if (Array.isArray(response)) {
+        setMovements(response);
+      } else {
+        setMovements([]);
       }
-    };
-
-    fetchMovements();
-  }, [isOpen, productId]);
+    } catch (err) {
+      console.error('Error fetching movements:', err);
+      setError(err.message || 'Failed to load movement history');
+      setMovements([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!isOpen) return null;
 
-  // Filter movements based on selected tab
   const filteredMovements = (() => {
     if (filter === 'all') return movements;
-    if (filter === 'in') return movements.filter(m => m.type === 'in');
-    if (filter === 'out') return movements.filter(m => m.type === 'out');
-    if (filter === 'adjustments') {
-      // Group adjustment, reserved, and released together
-      return movements.filter(m => ['adjustment', 'reserved', 'released'].includes(m.type));
-    }
-    return movements;
+    return movements.filter(m => m.movementType === filter);
   })();
 
   const getMovementTypeBadge = (type) => {
@@ -51,8 +52,8 @@ export const MovementHistoryModal = ({ isOpen, onClose, productId, productName, 
       'in': { bg: 'bg-green-100', text: 'text-green-700', label: 'Stock In' },
       'out': { bg: 'bg-red-100', text: 'text-red-700', label: 'Stock Out' },
       'adjustment': { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Adjustment' },
-      'reserved': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Reserved' },
-      'released': { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Released' }
+      'transfer': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Transfer' },
+      'audit': { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Audit' }
     };
 
     const badge = badges[type] || badges['adjustment'];
@@ -65,6 +66,7 @@ export const MovementHistoryModal = ({ isOpen, onClose, productId, productName, 
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleString('en-US', {
       month: 'short',
@@ -75,24 +77,37 @@ export const MovementHistoryModal = ({ isOpen, onClose, productId, productName, 
     });
   };
 
+  const formatQuantity = (movement) => {
+    const quantity = movement.quantity;
+    const type = movement.movementType;
+
+    if (type === 'in') {
+      return `+${Math.abs(quantity)}`;
+    } else if (type === 'out') {
+      return `-${Math.abs(quantity)}`;
+    } else if (type === 'adjustment' || type === 'audit') {
+      return quantity > 0 ? `+${quantity}` : `${quantity}`;
+    } else if (type === 'transfer') {
+      return quantity > 0 ? `+${quantity} (→ shelf)` : `${quantity} (→ warehouse)`;
+    }
+    return quantity;
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-[20px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-              Movement History
+              Movement History - All Batches
             </h2>
             <p className="text-[13px] text-gray-600 font-['Poppins',sans-serif] mt-1">
-              {productSku && `${productSku} - `}{productName}
+              Product: {inventory?.product?.productCode} - {inventory?.product?.name}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
               <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
@@ -104,7 +119,9 @@ export const MovementHistoryModal = ({ isOpen, onClose, productId, productName, 
             { value: 'all', label: 'All' },
             { value: 'in', label: 'Stock In' },
             { value: 'out', label: 'Stock Out' },
-            { value: 'adjustments', label: 'Adjustments' }
+            { value: 'adjustment', label: 'Adjustments' },
+            { value: 'transfer', label: 'Transfers' },
+            { value: 'audit', label: 'Audits' }
           ].map(({ value, label }) => (
             <button
               key={value}
@@ -128,7 +145,7 @@ export const MovementHistoryModal = ({ isOpen, onClose, productId, productName, 
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-[13px] font-['Poppins',sans-serif]">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-[13px]">
               {error}
             </div>
           )}
@@ -151,48 +168,27 @@ export const MovementHistoryModal = ({ isOpen, onClose, productId, productName, 
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        {getMovementTypeBadge(movement.type)}
+                        {getMovementTypeBadge(movement.movementType)}
                         <span className="text-[13px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-                          {(() => {
-                            // For 'in' type: always increase
-                            if (movement.type === 'in') return `+${movement.quantity} units`;
-
-                            // For 'out' type: always decrease
-                            if (movement.type === 'out') return `-${movement.quantity} units`;
-
-                            // For 'adjustment': check adjustmentType field first, then fallback to reason
-                            if (movement.type === 'adjustment') {
-                              const isIncrease = movement.adjustmentType === 'increase' ||
-                                movement.reason?.toLowerCase().includes('increase') ||
-                                movement.reason?.toLowerCase().includes('+');
-                              return `${isIncrease ? '+' : '-'}${movement.quantity} units`;
-                            }
-
-                            // For 'reserved': decrease available
-                            if (movement.type === 'reserved') return `-${movement.quantity} units (reserved)`;
-
-                            // For 'released': increase available
-                            if (movement.type === 'released') return `+${movement.quantity} units (released)`;
-
-                            // Default
-                            return `${movement.quantity} units`;
-                          })()}
+                          {formatQuantity(movement)} units
+                        </span>
+                        <span className="text-[11px] text-emerald-600 font-['Poppins',sans-serif] font-medium">
+                          Batch: {movement.batchId?.batchCode || 'N/A'}
                         </span>
                         <span className="text-[12px] text-gray-500 font-['Poppins',sans-serif]">
                           {formatDate(movement.date)}
                         </span>
                       </div>
 
-                      {movement.reason && (
-                        <p className="text-[13px] text-gray-700 font-['Poppins',sans-serif] mb-1">
-                          <span className="font-medium">Reason:</span> {movement.reason}
+                      {movement.movementNumber && (
+                        <p className="text-[12px] text-gray-600 font-['Poppins',sans-serif] mb-1">
+                          <span className="font-medium">Movement #:</span> {movement.movementNumber}
                         </p>
                       )}
 
-                      {movement.referenceId && (
-                        <p className="text-[12px] text-gray-600 font-['Poppins',sans-serif]">
-                          <span className="font-medium">Ref:</span> {movement.referenceId}
-                          {movement.referenceType && ` (${movement.referenceType})`}
+                      {movement.reason && (
+                        <p className="text-[13px] text-gray-700 font-['Poppins',sans-serif] mb-1">
+                          <span className="font-medium">Reason:</span> {movement.reason}
                         </p>
                       )}
 
@@ -204,7 +200,13 @@ export const MovementHistoryModal = ({ isOpen, onClose, productId, productName, 
 
                       {movement.performedBy && (
                         <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif] mt-2">
-                          By: {movement.performedBy.username || movement.performedBy}
+                          By: {movement.performedBy.firstName} {movement.performedBy.lastName}
+                        </p>
+                      )}
+
+                      {movement.purchaseOrderId && (
+                        <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif] mt-1">
+                          PO: {movement.purchaseOrderId.purchaseOrderCode}
                         </p>
                       )}
                     </div>
@@ -222,7 +224,7 @@ export const MovementHistoryModal = ({ isOpen, onClose, productId, productName, 
           </p>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-[13px] font-['Poppins',sans-serif] font-medium"
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-[13px] font-['Poppins',sans-serif] font-medium"
           >
             Close
           </button>
@@ -231,4 +233,3 @@ export const MovementHistoryModal = ({ isOpen, onClose, productId, productName, 
     </div>
   );
 };
-

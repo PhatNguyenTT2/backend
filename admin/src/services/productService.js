@@ -207,6 +207,32 @@ const productService = {
       console.error('Error toggling product active status:', error)
       throw error
     }
+  },
+
+  /**
+   * Get product by productCode with inventory and batch information
+   * Used for POS barcode scanning simulation
+   * @param {string} productCode - Product code (e.g., PROD2025000001)
+   * @param {Object} options - Query options
+   * @param {boolean} options.withInventory - Include inventory info (default: true)
+   * @param {boolean} options.withBatches - Include batch info (default: true)
+   * @param {boolean} options.isActive - Only active products (default: true)
+   * @returns {Promise<Object>} Product data with inventory and batches
+   */
+  getProductByCode: async (productCode, options = {}) => {
+    try {
+      const params = {
+        withInventory: options.withInventory !== false, // default true
+        withBatches: options.withBatches !== false, // default true
+        isActive: options.isActive !== false // default true
+      }
+
+      const response = await api.get(`/products/code/${productCode}`, { params })
+      return response.data
+    } catch (error) {
+      console.error('Get product by code error:', error)
+      throw error
+    }
   }
 }
 

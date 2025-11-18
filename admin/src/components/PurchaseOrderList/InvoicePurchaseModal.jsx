@@ -1,19 +1,119 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import purchaseOrderService from '../../services/purchaseOrderService';
+import detailPurchaseOrderService from '../../services/detailPurchaseOrderService';
 
 /**
  * InvoicePurchaseModal Component
  * Hiển thị chi tiết hóa đơn của purchase order với đầy đủ thông tin
  */
 export const InvoicePurchaseModal = ({ purchaseOrder, onClose, onViewItems }) => {
-  if (!purchaseOrder) return null;
+  const [fullPO, setFullPO] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Sử dụng giá trị trực tiếp từ database
+  useEffect(() => {
+    const fetchFullPO = async () => {
+      if (!purchaseOrder) return;
+
+      // Check if purchaseOrder already has details populated
+      if (purchaseOrder.details && Array.isArray(purchaseOrder.details) && purchaseOrder.details.length > 0) {
+        setFullPO(purchaseOrder);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const response = await purchaseOrderService.getPurchaseOrderById(purchaseOrder.id);
+
+        // Handle different response structures
+        let poData = null;
+        if (response.success && response.data && response.data.purchaseOrder) {
+          poData = response.data.purchaseOrder;
+        } else if (response.data && !response.success) {
+          // Some APIs return data directly without success wrapper
+          poData = response.data;
+        } else if (response.purchaseOrder) {
+          // Direct purchaseOrder in response
+          poData = response.purchaseOrder;
+        } else {
+          // Fallback to passed purchaseOrder
+          poData = purchaseOrder;
+        }
+
+        // If details is still not available, fetch it separately
+        if (!poData.details || !Array.isArray(poData.details) || poData.details.length === 0) {
+          try {
+            const detailsResponse = await detailPurchaseOrderService.getDetailsByPurchaseOrder(purchaseOrder.id); if (detailsResponse.success && detailsResponse.data && detailsResponse.data.detailPurchaseOrders) {
+              poData.details = detailsResponse.data.detailPurchaseOrders;
+            } else if (Array.isArray(detailsResponse.data)) {
+              poData.details = detailsResponse.data;
+            } else if (Array.isArray(detailsResponse)) {
+              poData.details = detailsResponse;
+            }
+          } catch (detailError) {
+            poData.details = [];
+          }
+        }
+
+        setFullPO(poData);
+      } catch (error) {
+        setFullPO(purchaseOrder);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFullPO();
+  }, [purchaseOrder]);
+
+  if (!purchaseOrder) return null;
+  if (loading || !fullPO) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
+        <div className="bg-white rounded-lg shadow-xl p-8">
+          <p className="text-[14px] font-['Poppins',sans-serif] text-gray-600">Loading invoice...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Use fullPO instead of purchaseOrder
+  const po = fullPO;
+
+  // Tính toán các giá trị từ details (backend structure)
+  // Backend: po.details[] với mỗi detail có {quantity, costPrice, total}
+  const details = po.details || [];
+
+  // Subtotal = tổng của tất cả detail.total
+  const subtotal = details.reduce((sum, detail) => {
+    const itemTotal = detail.total || (detail.quantity * (detail.costPrice || 0));
+    return sum + parseFloat(itemTotal);
+  }, 0);
+
+  // Discount amount = subtotal × (discountPercentage / 100)
+  const discountPercentage = parseFloat(po.discountPercentage) || 0;
+  const discountAmount = subtotal * (discountPercentage / 100);
+
+  // Shipping fee từ backend
+  const shippingFee = parseFloat(po.shippingFee) || 0;
+
+  // Total = subtotal - discount + shipping (KHÔNG có tax)
+  const total = po.totalPrice
+    ? parseFloat(po.totalPrice)
+    : subtotal - discountAmount + shippingFee;
+
   const invoiceValues = {
-    subtotal: parseFloat(purchaseOrder.subtotal) || 0,
-    discount: parseFloat(purchaseOrder.discount) || 0,
-    shippingFee: parseFloat(purchaseOrder.shippingFee) || 0,
-    tax: parseFloat(purchaseOrder.tax) || 0,
-    total: parseFloat(purchaseOrder.total) || 0
+    subtotal,
+    discount: discountAmount,
+    discountPercentage,
+    shippingFee,
+    total
+  };
+
+  // Format currency VND
+  const formatCurrency = (amount) => {
+    if (amount === null || amount === undefined) return '₫0';
+    return `₫${amount.toLocaleString('vi-VN')}`;
   };
 
   const handlePrintInvoice = () => {
@@ -74,12 +174,12 @@ export const InvoicePurchaseModal = ({ purchaseOrder, onClose, onViewItems }) =>
           <div className="grid grid-cols-2 gap-4 mb-6 text-[13px]">
             <div>
               <p className="font-['Poppins',sans-serif]">
-                <span className="font-semibold text-emerald-600">PO Number:</span> {purchaseOrder.poNumber || purchaseOrder.id}
+                <span className="font-semibold text-emerald-600">PO Number:</span> {po.poNumber || po.id}
               </p>
             </div>
             <div className="text-right">
               <p className="font-['Poppins',sans-serif]">
-                <span className="font-semibold text-emerald-600">Order Date:</span> {formatDate(purchaseOrder.orderDate)}
+                <span className="font-semibold text-emerald-600">Order Date:</span> {formatDate(po.orderDate)}
               </p>
             </div>
           </div>
@@ -87,44 +187,42 @@ export const InvoicePurchaseModal = ({ purchaseOrder, onClose, onViewItems }) =>
           {/* Supplier Info */}
           <div className="mb-6 space-y-2">
             <p className="text-[14px] font-['Poppins',sans-serif]">
-              <span className="font-semibold text-emerald-600">Supplier Name:</span> {purchaseOrder.supplierName || purchaseOrder.supplier?.companyName || 'N/A'}
+              <span className="font-semibold text-emerald-600">Supplier Name:</span> {po.supplier?.companyName || 'N/A'}
             </p>
-            {purchaseOrder.supplierCode && (
+            {po.supplier?.supplierCode && (
               <p className="text-[13px] font-['Poppins',sans-serif]">
-                <span className="font-semibold text-emerald-600">Supplier Code:</span> {purchaseOrder.supplierCode}
+                <span className="font-semibold text-emerald-600">Supplier Code:</span> {po.supplier.supplierCode}
               </p>
             )}
-            {purchaseOrder.supplier?.email && (
+            {po.supplier?.email && (
               <p className="text-[13px] font-['Poppins',sans-serif]">
-                <span className="font-semibold text-emerald-600">Email:</span> {purchaseOrder.supplier.email}
+                <span className="font-semibold text-emerald-600">Email:</span> {po.supplier.email}
               </p>
             )}
-            {purchaseOrder.supplier?.phone && (
+            {po.supplier?.phone && (
               <p className="text-[13px] font-['Poppins',sans-serif]">
-                <span className="font-semibold text-emerald-600">Phone:</span> {purchaseOrder.supplier.phone}
+                <span className="font-semibold text-emerald-600">Phone:</span> {po.supplier.phone}
               </p>
             )}
-            {purchaseOrder.expectedDeliveryDate && (
+            {po.expectedDeliveryDate && (
               <p className="text-[13px] font-['Poppins',sans-serif]">
                 <span className="font-semibold text-emerald-600">Expected Delivery:</span>
                 <span className="ml-2 text-amber-600">
-                  {formatDate(purchaseOrder.expectedDeliveryDate)}
+                  {formatDate(po.expectedDeliveryDate)}
                 </span>
               </p>
             )}
             <p className="text-[13px] font-['Poppins',sans-serif]">
               <span className="font-semibold text-emerald-600">Status:</span>
-              <span className={`ml-2 capitalize font-medium ${purchaseOrder.status === 'pending' ? 'text-amber-600' :
-                  purchaseOrder.status === 'approved' ? 'text-blue-600' :
-                    purchaseOrder.status === 'received' ? 'text-emerald-600' :
-                      'text-red-600'
+              <span className={`ml-2 capitalize font-medium ${po.status === 'pending' ? 'text-amber-600' :
+                po.status === 'approved' ? 'text-blue-600' :
+                  po.status === 'received' ? 'text-emerald-600' :
+                    'text-red-600'
                 }`}>
-                {purchaseOrder.status || 'N/A'}
+                {po.status || 'N/A'}
               </span>
             </p>
-          </div>
-
-          {/* Items Table */}
+          </div>          {/* Items Table */}
           <div className="mb-6">
             <table className="w-full border-collapse border border-gray-300">
               <thead>
@@ -136,13 +234,10 @@ export const InvoicePurchaseModal = ({ purchaseOrder, onClose, onViewItems }) =>
                     Product Name
                   </th>
                   <th className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-center">
-                    SKU
-                  </th>
-                  <th className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-center">
                     Quantity
                   </th>
                   <th className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right">
-                    Unit Price
+                    Cost Price
                   </th>
                   <th className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right">
                     Amount
@@ -150,85 +245,82 @@ export const InvoicePurchaseModal = ({ purchaseOrder, onClose, onViewItems }) =>
                 </tr>
               </thead>
               <tbody>
-                {purchaseOrder.items && purchaseOrder.items.length > 0 ? (
-                  purchaseOrder.items.map((item, idx) => (
-                    <tr key={idx}>
-                      <td className="border border-gray-300 px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-center">
-                        {idx + 1}
-                      </td>
-                      <td className="border border-gray-300 px-3 py-2 text-[12px] font-['Poppins',sans-serif]">
-                        {item.product?.name || item.productName || 'N/A'}
-                      </td>
-                      <td className="border border-gray-300 px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-center text-gray-600">
-                        {item.product?.sku || item.sku || '-'}
-                      </td>
-                      <td className="border border-gray-300 px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-center">
-                        {item.quantity || 0}
-                      </td>
-                      <td className="border border-gray-300 px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-right">
-                        ${(item.unitPrice || 0).toFixed(2)}
-                      </td>
-                      <td className="border border-gray-300 px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-right">
-                        ${((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))
+                {details && details.length > 0 ? (
+                  details.map((detail, idx) => {
+                    // Backend structure: detail.product (populated), detail.quantity, detail.costPrice, detail.total
+                    const productName = detail.product?.name || 'N/A';
+                    const productCode = detail.product?.productCode || '-';
+                    const quantity = detail.quantity || 0;
+                    const costPrice = detail.costPrice || 0;
+                    const itemTotal = detail.total || (quantity * costPrice);
+
+                    return (
+                      <tr key={detail._id || detail.id || idx}>
+                        <td className="border border-gray-300 px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-center">
+                          {idx + 1}
+                        </td>
+                        <td className="border border-gray-300 px-3 py-2 text-[12px] font-['Poppins',sans-serif]">
+                          {productName}
+                        </td>
+                        <td className="border border-gray-300 px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-center">
+                          {quantity}
+                        </td>
+                        <td className="border border-gray-300 px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-right">
+                          {formatCurrency(costPrice)}
+                        </td>
+                        <td className="border border-gray-300 px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-right">
+                          {formatCurrency(itemTotal)}
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
-                    <td colSpan="6" className="border border-gray-300 px-3 py-4 text-center text-[12px] text-gray-500">
+                    <td colSpan="5" className="border border-gray-300 px-3 py-4 text-center text-[12px] text-gray-500">
                       No items found
                     </td>
                   </tr>
                 )}
                 {/* Subtotal Row */}
                 <tr className="bg-gray-50">
-                  <td colSpan="5" className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right">
+                  <td colSpan="4" className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right">
                     Subtotal:
                   </td>
                   <td className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right">
-                    ${invoiceValues.subtotal.toFixed(2)}
+                    {formatCurrency(invoiceValues.subtotal)}
                   </td>
                 </tr>
                 {/* Discount Row - Chỉ hiển thị khi có discount */}
-                {invoiceValues.discount > 0 && (
+                {invoiceValues.discountPercentage > 0 && (
                   <tr className="bg-gray-50">
-                    <td colSpan="5" className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right text-green-600">
-                      Discount:
+                    <td colSpan="4" className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right text-green-600">
+                      Discount ({invoiceValues.discountPercentage}%):
                     </td>
                     <td className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right text-green-600">
-                      -${invoiceValues.discount.toFixed(2)}
+                      -{formatCurrency(invoiceValues.discount)}
                     </td>
                   </tr>
                 )}
                 {/* Shipping Row */}
                 <tr className="bg-gray-50">
-                  <td colSpan="5" className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right">
+                  <td colSpan="4" className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right">
                     Shipping Fee:
                   </td>
                   <td className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right">
                     {invoiceValues.shippingFee > 0 ? (
-                      `$${invoiceValues.shippingFee.toFixed(2)}`
+                      formatCurrency(invoiceValues.shippingFee)
                     ) : (
                       <span className="text-green-600">FREE</span>
                     )}
                   </td>
                 </tr>
-                {/* Tax Row */}
-                <tr className="bg-gray-50">
-                  <td colSpan="5" className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right">
-                    Tax (10%):
-                  </td>
-                  <td className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right">
-                    ${invoiceValues.tax.toFixed(2)}
-                  </td>
-                </tr>
                 {/* Total Row */}
                 <tr className="bg-emerald-50">
-                  <td colSpan="5" className="border border-gray-300 px-3 py-2 text-[14px] font-bold font-['Poppins',sans-serif] text-right text-emerald-600">
+                  <td colSpan="4" className="border border-gray-300 px-3 py-2 text-[14px] font-bold font-['Poppins',sans-serif] text-right text-emerald-600">
                     TOTAL:
                   </td>
                   <td className="border border-gray-300 px-3 py-2 text-[14px] font-bold font-['Poppins',sans-serif] text-right text-emerald-600">
-                    ${invoiceValues.total.toFixed(2)}
+                    {formatCurrency(invoiceValues.total)}
                   </td>
                 </tr>
               </tbody>
@@ -236,36 +328,34 @@ export const InvoicePurchaseModal = ({ purchaseOrder, onClose, onViewItems }) =>
           </div>
 
           {/* Payment Status */}
-          {purchaseOrder.paymentStatus && (
+          {po.paymentStatus && (
             <div className="mb-6 p-3 bg-gray-50 rounded-lg">
               <div className="flex justify-between items-center text-[13px] font-['Poppins',sans-serif]">
                 <span className="font-semibold text-gray-700">Payment Status:</span>
-                <span className={`font-semibold uppercase ${purchaseOrder.paymentStatus === 'paid' ? 'text-green-600' :
-                    purchaseOrder.paymentStatus === 'partial' ? 'text-amber-600' :
-                      'text-red-600'
+                <span className={`font-semibold uppercase ${po.paymentStatus === 'paid' ? 'text-green-600' :
+                  po.paymentStatus === 'partial' ? 'text-amber-600' :
+                    'text-red-600'
                   }`}>
-                  {purchaseOrder.paymentStatus}
+                  {po.paymentStatus}
                 </span>
               </div>
-              {purchaseOrder.paidAmount !== undefined && (
+              {po.paidAmount !== undefined && (
                 <div className="flex justify-between items-center text-[13px] font-['Poppins',sans-serif] mt-2">
                   <span className="font-semibold text-gray-700">Paid Amount:</span>
                   <span className="font-semibold text-green-600">
-                    ${(parseFloat(purchaseOrder.paidAmount) || 0).toFixed(2)}
+                    {formatCurrency(parseFloat(po.paidAmount) || 0)}
                   </span>
                 </div>
               )}
             </div>
-          )}
-
-          {/* Notes */}
-          {purchaseOrder.notes && (
+          )}          {/* Notes */}
+          {po.notes && (
             <div className="mb-6">
               <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-gray-700 mb-2">
                 Notes:
               </p>
               <p className="text-[12px] font-['Poppins',sans-serif] text-gray-600 p-3 bg-gray-50 rounded-lg">
-                {purchaseOrder.notes}
+                {po.notes}
               </p>
             </div>
           )}
@@ -276,7 +366,17 @@ export const InvoicePurchaseModal = ({ purchaseOrder, onClose, onViewItems }) =>
               Created by
             </p>
             <p className="text-[14px] font-semibold font-['Poppins',sans-serif] text-emerald-600">
-              {purchaseOrder.createdBy || 'admin'}
+              {(() => {
+                // createdBy có thể là ObjectId string hoặc populated object
+                if (!po.createdBy) return 'N/A';
+                if (typeof po.createdBy === 'string') return po.createdBy;
+                if (po.createdBy.fullName) return po.createdBy.fullName;
+                if (po.createdBy.firstName || po.createdBy.lastName) {
+                  return `${po.createdBy.firstName || ''} ${po.createdBy.lastName || ''}`.trim();
+                }
+                if (po.createdBy.employeeCode) return po.createdBy.employeeCode;
+                return 'N/A';
+              })()}
             </p>
           </div>
         </div>
@@ -293,7 +393,7 @@ export const InvoicePurchaseModal = ({ purchaseOrder, onClose, onViewItems }) =>
             {onViewItems && (
               <button
                 onClick={() => {
-                  onViewItems(purchaseOrder);
+                  onViewItems(po);
                   onClose();
                 }}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-[13px] font-['Poppins',sans-serif] font-medium transition-colors flex items-center gap-2"

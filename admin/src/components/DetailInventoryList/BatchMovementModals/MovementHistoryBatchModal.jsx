@@ -18,8 +18,10 @@ export const MovementHistoryBatchModal = ({ isOpen, onClose, detailInventory }) 
     setError(null);
 
     try {
-      const batchId = detailInventory.batchId._id || detailInventory.batchId;
-      const response = await inventoryMovementBatchService.getMovementsByBatch(batchId);
+      const detailInventoryId = detailInventory._id || detailInventory.id;
+      const response = await inventoryMovementBatchService.getAllMovements({
+        inventoryDetail: detailInventoryId
+      });
 
       if (response.success && response.data) {
         setMovements(response.data.movements || []);
@@ -124,8 +126,8 @@ export const MovementHistoryBatchModal = ({ isOpen, onClose, detailInventory }) 
               key={value}
               onClick={() => setFilter(value)}
               className={`px-3 py-1.5 rounded-lg text-[12px] font-['Poppins',sans-serif] font-medium transition-colors ${filter === value
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
               {label}

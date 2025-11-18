@@ -2,7 +2,7 @@
 
 ## 📋 Tổng quan
 
-Document này hướng dẫn chi tiết từng bước để implement tính năng quét mã vạch (barcode scanning) trong hệ thống POS, bao gồm xử lý FEFO tự động cho mặt hàng bình thường và lựa chọn lô thủ công cho mặt hàng tươi sống.
+Document này hướng dẫn chi tiết từng bước để implement tính năng quét mã vạch (barcode scanning) trong hệ thống POS. **Hiện tại sử dụng ProductCode (PROD2025000001) để giả lập quét mã vạch**, bao gồm xử lý FEFO tự động và lựa chọn lô thủ công khi có nhiều batch.
 
 **Tham khảo**: [`BATCH_MANAGEMENT_WORKFLOW.md`](BATCH_MANAGEMENT_WORKFLOW.md) để hiểu rõ business logic.
 
@@ -10,9 +10,9 @@ Document này hướng dẫn chi tiết từng bước để implement tính nă
 
 ## 🎯 Mục tiêu
 
-- ✅ Quét barcode tự động phát hiện và thêm sản phẩm vào giỏ
-- ✅ FEFO tự động cho mặt hàng bình thường
-- ✅ Modal chọn lô cho mặt hàng tươi sống với giá động
+- ✅ Quét productCode (PROD2025000001) tự động phát hiện và thêm sản phẩm vào giỏ
+- ✅ FEFO tự động - chọn batch gần hết hạn nhất
+- ✅ Modal chọn lô khi có nhiều batch khả dụng
 - ✅ Hiển thị batch info trong cart
 - ✅ Checkout với batch allocation chính xác
 
@@ -22,19 +22,20 @@ Document này hướng dẫn chi tiết từng bước để implement tính nă
 
 ### **Phase 1: Backend API** (Priority: HIGH)
 - [x] Model đã có sẵn (Product, ProductBatch, Inventory)
-- [ ] API endpoint `/api/products/barcode/:barcode`
-- [ ] Helper function tính giá động cho fresh products
+- [x] API endpoint `/api/products/code/:productCode`
+- [ ] Helper function tính giá động cho fresh products (optional - future enhancement)
 - [ ] API endpoint create order với batch allocation
 
 ### **Phase 2: Frontend Components** (Priority: HIGH)
-- [ ] Barcode scanner detection trong POSSearchBar
-- [ ] POSBatchSelectModal component
-- [ ] Cart item component với batch info
+- [x] ProductCode scanner detection trong POSSearchBar
+- [x] POSBatchSelectModal component
+- [x] POSMain handlers (scan, batch selection, add to cart)
+- [ ] Cart item component với batch info display
 - [ ] Payment flow với order creation
 
 ### **Phase 3: Testing & Polish** (Priority: MEDIUM)
 - [ ] Test FEFO logic
-- [ ] Test fresh product pricing
+- [ ] Test batch selection modal
 - [ ] Test inventory deduction
 - [ ] Error handling
 - [ ] UI/UX improvements

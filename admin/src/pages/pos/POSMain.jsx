@@ -12,6 +12,7 @@ import {
   POSPaymentModal,
   POSLoadingScreen
 } from '../../components/POSMain';
+import { POSBatchSelectModal } from '../../components/POSMain/POSBatchSelectModal';
 
 export const POSMain = () => {
   const navigate = useNavigate();
@@ -25,6 +26,11 @@ export const POSMain = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(false);
+
+  // Batch selection modal state
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [selectedProductData, setSelectedProductData] = useState(null);
+  const [scanning, setScanning] = useState(false);
 
   // Load employee and verify session
   useEffect(() => {
@@ -126,7 +132,9 @@ export const POSMain = () => {
     };
 
     fetchProducts();
-  }, [selectedCategory, searchTerm]);  // Update time every second
+  }, [selectedCategory, searchTerm]);
+
+  // Update time every second
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -215,6 +223,114 @@ export const POSMain = () => {
     }
   };
 
+  // Handle productCode scanned
+  const handleProductScanned = async (productCode) => {
+    console.log('ProductCode scanned:', productCode);
+    setScanning(true);
+
+    try {
+      // Get product by productCode with inventory and batches
+      const response = await productService.getProductByCode(productCode, {
+        withInventory: true,
+        withBatches: true,
+        isActive: true
+      });
+
+      if (!response.success) {
+        alert(`Product not found: ${productCode}`);
+        return;
+      }
+
+      const { product, inventory, batches, outOfStock } = response.data;
+
+      // Check if out of stock
+      if (outOfStock || !batches || batches.length === 0) {
+        alert(`${product.name} is currently out of stock!`);
+        return;
+      }
+
+      // If multiple batches available, show selection modal
+      if (batches.length > 1) {
+        setSelectedProductData(response.data);
+        setShowBatchModal(true);
+      } else {
+        // Auto-add with the only available batch (FEFO)
+        handleAddProductWithBatch(response.data, batches[0], 1);
+      }
+
+    } catch (error) {
+      console.error('Error scanning product:', error);
+      if (error.response?.status === 404) {
+        alert(`Product not found: ${productCode}`);
+      } else {
+        alert('Failed to scan product. Please try again.');
+      }
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  // Handle batch selected from modal
+  const handleBatchSelected = (selectedBatch, quantity) => {
+    handleAddProductWithBatch(selectedProductData, selectedBatch, quantity);
+    setShowBatchModal(false);
+    setSelectedProductData(null);
+  };
+
+  // Add product with batch info to cart
+  const handleAddProductWithBatch = (productData, batch, quantity) => {
+    const { product, inventory } = productData;
+
+    // Create unique cart item ID combining product and batch
+    const cartItemId = `${product.id}-${batch.id}`;
+
+    const cartItem = {
+      id: cartItemId,
+      productId: product.id,
+      productCode: product.productCode,
+      name: product.name,
+      image: product.image,
+      price: parseFloat(batch.unitPrice || product.unitPrice),
+      quantity: quantity,
+      stock: inventory.quantityAvailable,
+      categoryName: product.category?.name || 'Uncategorized',
+
+      // Batch info
+      batch: {
+        id: batch.id,
+        batchCode: batch.batchCode,
+        expiryDate: batch.expiryDate,
+        availableQty: batch.quantity,
+        daysUntilExpiry: batch.daysUntilExpiry
+      }
+    };
+
+    // Check if this exact product+batch combo already exists in cart
+    const existingItem = cart.find(item => item.id === cartItemId);
+
+    if (existingItem) {
+      // Update quantity
+      const newQuantity = existingItem.quantity + quantity;
+      const maxQty = batch.quantity;
+
+      if (newQuantity > maxQty) {
+        alert(`Not enough stock in this batch. Available: ${maxQty}`);
+        return;
+      }
+
+      setCart(cart.map(item =>
+        item.id === cartItemId
+          ? { ...item, quantity: newQuantity }
+          : item
+      ));
+    } else {
+      // Add new item
+      setCart([...cart, cartItem]);
+    }
+
+    console.log(`Added ${quantity}x ${product.name} (Batch: ${batch.batchCode})`);
+  };
+
   // Update quantity
   const updateQuantity = (productId, newQuantity) => {
     if (newQuantity <= 0) {
@@ -225,7 +341,7 @@ export const POSMain = () => {
     const cartItem = cart.find(item => item.id === productId);
     if (!cartItem) return;
 
-    const availableStock = cartItem.stock || cartItem.inventory?.quantityAvailable || 0;
+    const availableStock = cartItem.batch?.availableQty || cartItem.stock || cartItem.inventory?.quantityAvailable || 0;
 
     if (newQuantity > availableStock) {
       alert(`Not enough stock. Available: ${availableStock}`);
@@ -308,6 +424,7 @@ export const POSMain = () => {
             <POSSearchBar
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
+              onProductScanned={handleProductScanned}
             />
 
             <POSCategoryFilter
@@ -343,6 +460,18 @@ export const POSMain = () => {
         onClose={() => setShowPaymentModal(false)}
         onPayment={handlePayment}
       />
+
+      {/* Batch Selection Modal */}
+      <POSBatchSelectModal
+        isOpen={showBatchModal}
+        productData={selectedProductData}
+        onClose={() => {
+          setShowBatchModal(false);
+          setSelectedProductData(null);
+        }}
+        onBatchSelected={handleBatchSelected}
+      />
     </div>
   );
 };
+

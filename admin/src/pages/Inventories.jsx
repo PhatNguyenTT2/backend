@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { InventoryList, InventoryListHeader } from '../components/InventoryList';
+import { InventoryList, InventoryListHeader, MovementHistoryModal } from '../components/InventoryList';
 import inventoryService from '../services/inventoryService';
 
 export const Inventories = () => {
@@ -33,6 +33,9 @@ export const Inventories = () => {
     totalPages: 1,
     itemsPerPage: 10,
   });
+
+  // Movement History Modal state
+  const [movementHistoryModal, setMovementHistoryModal] = useState({ isOpen: false, item: null });
 
   // Fetch inventory on component mount
   useEffect(() => {
@@ -193,6 +196,10 @@ export const Inventories = () => {
     alert('Update location modal - To be implemented');
   };
 
+  const handleViewMovementHistory = (item) => {
+    setMovementHistoryModal({ isOpen: true, item });
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -241,6 +248,7 @@ export const Inventories = () => {
               onViewDetail={handleViewDetail}
               onEdit={handleEdit}
               onUpdateLocation={handleUpdateLocation}
+              onViewMovementHistory={handleViewMovementHistory}
             />
 
             {/* Pagination */}
@@ -375,6 +383,13 @@ export const Inventories = () => {
             )}
           </div>
         )}
+
+        {/* Movement History Modal */}
+        <MovementHistoryModal
+          isOpen={movementHistoryModal.isOpen}
+          onClose={() => setMovementHistoryModal({ isOpen: false, item: null })}
+          inventory={movementHistoryModal.item}
+        />
       </div>
     </Layout>
   );

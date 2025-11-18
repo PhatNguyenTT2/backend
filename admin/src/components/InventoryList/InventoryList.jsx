@@ -7,7 +7,8 @@ export const InventoryList = ({
   sortOrder,
   onViewDetail,
   onEdit,
-  onUpdateLocation
+  onUpdateLocation,
+  onViewMovementHistory
 }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
@@ -218,7 +219,7 @@ export const InventoryList = ({
             {inventory.map((item, index) => {
               return (
                 <div
-                  key={item.id}
+                  key={item.id || item._id}
                   className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== inventory.length - 1 ? 'border-b border-gray-100' : ''
                     }`}
                 >
@@ -289,7 +290,10 @@ export const InventoryList = ({
                   {/* Actions */}
                   <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
                     <button
-                      onClick={(e) => toggleDropdown(`action-${item.id}`, e)}
+                      onClick={(e) => {
+                        const itemId = item.id || item._id;
+                        toggleDropdown(`action-${itemId}`, e);
+                      }}
                       className="p-2 hover:bg-gray-200 rounded-full transition-colors"
                       title="Actions"
                     >
@@ -318,7 +322,9 @@ export const InventoryList = ({
 
       {/* Fixed Position Dropdown Menus */}
       {activeDropdown && (() => {
-        const item = inventory.find(i => activeDropdown === `action-${i.id}`);
+        const itemId = activeDropdown.replace('action-', '');
+        const item = inventory.find(i => (i.id || i._id) === itemId);
+
         if (!item) return null;
 
         return (
@@ -333,7 +339,8 @@ export const InventoryList = ({
             <button
               onClick={() => {
                 if (onViewDetail) {
-                  onViewDetail(item.product?.id);
+                  const productId = item.product?.id || item.product?._id || item.productId;
+                  onViewDetail(productId);
                 }
                 setActiveDropdown(null);
               }}
@@ -344,6 +351,22 @@ export const InventoryList = ({
                 <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               View Detail
+            </button>
+
+            <button
+              onClick={() => {
+                if (onViewMovementHistory) {
+                  onViewMovementHistory(item);
+                }
+                setActiveDropdown(null);
+              }}
+              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center gap-2"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M8 4V8L10.5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M14 8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8C2 4.68629 4.68629 2 8 2C9.8 2 11.4 2.8 12.5 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Movement History
             </button>
 
             <div className="border-t border-gray-200 my-1"></div>

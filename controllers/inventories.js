@@ -1,6 +1,8 @@
 const inventoriesRouter = require('express').Router();
 const Inventory = require('../models/inventory');
 const Product = require('../models/product');
+const DetailInventory = require('../models/detailInventory');
+const ProductBatch = require('../models/productBatch');
 const { userExtractor } = require('../utils/auth');
 
 /**
@@ -26,6 +28,7 @@ const { userExtractor } = require('../utils/auth');
 /**
  * GET /api/inventories
  * Get all inventories with filtering via query parameters
+ * Auto-calculates quantities from DetailInventory records
  * 
  * Query parameters:
  * - productId: string - Filter by product ID
@@ -74,23 +77,68 @@ inventoriesRouter.get('/', async (request, response) => {
 
     let inventories = await query;
 
-    // Apply filters that require virtuals (after query execution)
+    // For each inventory, calculate totals from DetailInventory
+    const inventoriesWithCalculations = await Promise.all(
+      inventories.map(async (inventory) => {
+        const inventoryObj = inventory.toObject();
+
+        // Get all batches for this product
+        const batches = await ProductBatch.find({
+          product: inventory.product._id
+        }).select('_id');
+
+        const batchIds = batches.map(b => b._id);
+
+        // Get all detail inventories for these batches
+        const detailInventories = await DetailInventory.find({
+          batchId: { $in: batchIds }
+        });
+
+        // Calculate totals
+        let totalOnHand = 0;
+        let totalOnShelf = 0;
+        let totalReserved = 0;
+
+        detailInventories.forEach(detail => {
+          totalOnHand += detail.quantityOnHand || 0;
+          totalOnShelf += detail.quantityOnShelf || 0;
+          totalReserved += detail.quantityReserved || 0;
+        });
+
+        // Update calculated values
+        inventoryObj.quantityOnHand = totalOnHand;
+        inventoryObj.quantityOnShelf = totalOnShelf;
+        inventoryObj.quantityReserved = totalReserved;
+        inventoryObj.quantityAvailable = Math.max(0, totalOnHand + totalOnShelf - totalReserved);
+        inventoryObj.totalQuantity = totalOnHand + totalOnShelf;
+        inventoryObj.needsReorder = inventoryObj.quantityAvailable <= inventoryObj.reorderPoint;
+        inventoryObj.isOutOfStock = inventoryObj.quantityAvailable === 0;
+        inventoryObj.isLowStock = inventoryObj.quantityAvailable > 0 &&
+          inventoryObj.quantityAvailable <= (inventoryObj.reorderPoint * 2);
+
+        return inventoryObj;
+      })
+    );
+
+    // Apply filters that require calculated values
+    let filteredInventories = inventoriesWithCalculations;
+
     if (lowStock === 'true') {
-      inventories = inventories.filter(inv => inv.isLowStock);
+      filteredInventories = filteredInventories.filter(inv => inv.isLowStock);
     }
 
     if (outOfStock === 'true') {
-      inventories = inventories.filter(inv => inv.isOutOfStock);
+      filteredInventories = filteredInventories.filter(inv => inv.isOutOfStock);
     }
 
     if (needsReorder === 'true') {
-      inventories = inventories.filter(inv => inv.needsReorder);
+      filteredInventories = filteredInventories.filter(inv => inv.needsReorder);
     }
 
-    // Search filter (after population)
+    // Search filter
     if (search) {
       const searchRegex = new RegExp(search, 'i');
-      inventories = inventories.filter(inv =>
+      filteredInventories = filteredInventories.filter(inv =>
         (inv.product?.name && searchRegex.test(inv.product.name)) ||
         (inv.product?.productCode && searchRegex.test(inv.product.productCode)) ||
         (inv.warehouseLocation && searchRegex.test(inv.warehouseLocation))
@@ -103,7 +151,7 @@ inventoriesRouter.get('/', async (request, response) => {
     response.json({
       success: true,
       data: {
-        inventories,
+        inventories: filteredInventories,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
@@ -126,7 +174,8 @@ inventoriesRouter.get('/', async (request, response) => {
 
 /**
  * GET /api/inventories/:id
- * Get single inventory by ID with product details
+ * Get single inventory by ID with product details and batch breakdown
+ * Auto-calculates quantities from DetailInventory records
  */
 inventoriesRouter.get('/:id', async (request, response) => {
   try {
@@ -150,9 +199,67 @@ inventoriesRouter.get('/:id', async (request, response) => {
       });
     }
 
+    const inventoryObj = inventory.toObject();
+
+    // Get all batches for this product with their detail inventories
+    const batches = await ProductBatch.find({
+      product: inventory.product._id
+    }).populate('supplier', 'name supplierCode');
+
+    const batchIds = batches.map(b => b._id);
+
+    // Get all detail inventories for these batches
+    const detailInventories = await DetailInventory.find({
+      batchId: { $in: batchIds }
+    }).populate({
+      path: 'batchId',
+      select: 'batchCode expirationDate supplier quantity',
+      populate: {
+        path: 'supplier',
+        select: 'name supplierCode'
+      }
+    });
+
+    // Calculate totals
+    let totalOnHand = 0;
+    let totalOnShelf = 0;
+    let totalReserved = 0;
+
+    detailInventories.forEach(detail => {
+      totalOnHand += detail.quantityOnHand || 0;
+      totalOnShelf += detail.quantityOnShelf || 0;
+      totalReserved += detail.quantityReserved || 0;
+    });
+
+    // Update calculated values
+    inventoryObj.quantityOnHand = totalOnHand;
+    inventoryObj.quantityOnShelf = totalOnShelf;
+    inventoryObj.quantityReserved = totalReserved;
+    inventoryObj.quantityAvailable = Math.max(0, totalOnHand + totalOnShelf - totalReserved);
+    inventoryObj.totalQuantity = totalOnHand + totalOnShelf;
+    inventoryObj.needsReorder = inventoryObj.quantityAvailable <= inventoryObj.reorderPoint;
+    inventoryObj.isOutOfStock = inventoryObj.quantityAvailable === 0;
+    inventoryObj.isLowStock = inventoryObj.quantityAvailable > 0 &&
+      inventoryObj.quantityAvailable <= (inventoryObj.reorderPoint * 2);
+
+    // Add batch breakdown
+    inventoryObj.batchBreakdown = detailInventories.map(detail => ({
+      detailInventoryId: detail._id,
+      batch: detail.batchId,
+      quantityOnHand: detail.quantityOnHand,
+      quantityOnShelf: detail.quantityOnShelf,
+      quantityReserved: detail.quantityReserved,
+      quantityAvailable: detail.quantityAvailable,
+      totalQuantity: detail.totalQuantity,
+      location: detail.location,
+      isOutOfStock: detail.isOutOfStock,
+      hasWarehouseStock: detail.hasWarehouseStock,
+      hasShelfStock: detail.hasShelfStock
+    }));
+
     response.json({
       success: true,
-      data: inventory
+      data: inventoryObj
     });
   } catch (error) {
     console.error('Get inventory by ID error:', error);

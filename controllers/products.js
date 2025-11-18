@@ -502,4 +502,143 @@ productsRouter.delete('/:id', userExtractor, async (request, response) => {
   }
 });
 
+/**
+ * GET /api/products/code/:productCode
+ * Get product by productCode with inventory and batch information
+ * Used by POS system for barcode scanning simulation
+ * 
+ * Query parameters:
+ * - withInventory: boolean - Include inventory info
+ * - withBatches: boolean - Include batch info with FEFO sorting
+ * - isActive: boolean - Only active products
+ */
+productsRouter.get('/code/:productCode', async (request, response) => {
+  try {
+    const { productCode } = request.params;
+    const { withInventory, withBatches, isActive } = request.query;
+
+    // Find product by productCode
+    const query = { productCode: productCode.toUpperCase() };
+    if (isActive === 'true') {
+      query.isActive = true;
+    }
+
+    const product = await Product.findOne(query)
+      .populate('category', 'name categoryCode');
+
+    if (!product) {
+      return response.status(404).json({
+        success: false,
+        error: {
+          message: 'Product not found',
+          code: 'PRODUCT_NOT_FOUND'
+        }
+      });
+    }
+
+    const result = { product: product.toJSON() };
+
+    // Include inventory if requested
+    if (withInventory === 'true') {
+      const inventory = await Inventory.findOne({ product: product._id })
+        .select('quantityOnHand quantityOnShelf quantityReserved reorderPoint warehouseLocation');
+
+      if (!inventory) {
+        result.inventory = null;
+        result.outOfStock = true;
+
+        return response.json({
+          success: true,
+          data: result,
+          message: 'Product has no inventory record'
+        });
+      }
+
+      const inventoryObj = inventory.toJSON();
+      const quantityAvailable = Math.max(0,
+        (inventoryObj.quantityOnHand || 0) +
+        (inventoryObj.quantityOnShelf || 0) -
+        (inventoryObj.quantityReserved || 0)
+      );
+
+      inventoryObj.quantityAvailable = quantityAvailable;
+      result.inventory = inventoryObj;
+      result.outOfStock = quantityAvailable <= 0;
+
+      if (result.outOfStock) {
+        return response.json({
+          success: true,
+          data: result,
+          message: 'Product is out of stock'
+        });
+      }
+
+      // Include batches if requested
+      if (withBatches === 'true') {
+        // Find available batches with FEFO sorting
+        let batches = await ProductBatch.find({
+          product: product._id,
+          status: 'active',
+          quantity: { $gt: 0 },
+          $or: [
+            { expiryDate: { $gt: new Date() } },
+            { expiryDate: null }
+          ]
+        })
+          .populate('supplier', 'name supplierCode')
+          .sort({ expiryDate: 1 }); // FEFO - First Expired First Out
+
+        // Process batches - for now treat all as normal (auto-select first batch)
+        // Can extend later for productType = 'fresh' with dynamic pricing
+        if (batches.length > 0) {
+          result.batches = batches.map((batch, index) => {
+            const batchObj = batch.toJSON();
+
+            // Calculate days until expiry if expiryDate exists
+            if (batch.expiryDate) {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const expiry = new Date(batch.expiryDate);
+              expiry.setHours(0, 0, 0, 0);
+              const diffTime = expiry - today;
+              const daysUntilExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+              batchObj.daysUntilExpiry = daysUntilExpiry;
+            }
+
+            // First batch is auto-selected (FEFO)
+            batchObj.isAutoSelected = index === 0;
+
+            return batchObj;
+          });
+        } else {
+          result.batches = [];
+          result.outOfStock = true;
+
+          return response.json({
+            success: true,
+            data: result,
+            message: 'Product has no available batches'
+          });
+        }
+      }
+    }
+
+    return response.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('Get product by productCode error:', error);
+    return response.status(500).json({
+      success: false,
+      error: {
+        message: 'Server error',
+        details: error.message
+      }
+    });
+  }
+});
+
 module.exports = productsRouter;

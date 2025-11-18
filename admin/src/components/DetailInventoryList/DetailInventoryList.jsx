@@ -109,7 +109,7 @@ export const DetailInventoryList = ({
     <div className="bg-white rounded-lg shadow-sm">
       {/* Scrollable Container */}
       <div className="overflow-x-auto rounded-lg">
-        <div className="min-w-[1400px]">
+        <div className="min-w-[1100px]">
           {/* Table Header */}
           <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
             {/* Batch Code Column - Sortable */}
@@ -120,17 +120,6 @@ export const DetailInventoryList = ({
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
                 Batch Code
                 {getSortIcon('batchCode')}
-              </p>
-            </div>
-
-            {/* Product Name Column - Sortable */}
-            <div
-              className="flex-1 min-w-[180px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('productName')}
-            >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                Product Name
-                {getSortIcon('productName')}
               </p>
             </div>
 
@@ -230,13 +219,6 @@ export const DetailInventoryList = ({
                   <div className="w-[140px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
                       {item.batchId?.batchCode || 'N/A'}
-                    </p>
-                  </div>
-
-                  {/* Product Name */}
-                  <div className="flex-1 min-w-[180px] px-3 flex items-center">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {item.batchId?.productId?.name || 'N/A'}
                     </p>
                   </div>
 
