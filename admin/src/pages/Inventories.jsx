@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export const DetailInventoryList = ({
-  detailInventory = [],
+export const InventoryList = ({
+  inventory = [],
   onSort,
   sortField,
   sortOrder,
-  onViewHistory
+  onViewDetail,
+  onEdit,
+  onUpdateLocation,
+  onViewMovementHistory
 }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
@@ -86,7 +89,15 @@ export const DetailInventoryList = ({
         </span>
       );
     }
-    // In Stock
+    // Low Stock: available <= reorder point AND available > 0
+    if (item.quantityAvailable > 0 && item.quantityAvailable <= item.reorderPoint) {
+      return (
+        <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-[9px] font-bold font-['Poppins',sans-serif] uppercase">
+          Low Stock
+        </span>
+      );
+    }
+    // In Stock: available > reorder point
     return (
       <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-[9px] font-bold font-['Poppins',sans-serif] uppercase">
         In Stock
@@ -109,28 +120,28 @@ export const DetailInventoryList = ({
     <div className="bg-white rounded-lg shadow-sm">
       {/* Scrollable Container */}
       <div className="overflow-x-auto rounded-lg">
-        <div className="min-w-[1100px]">
+        <div className="min-w-[1200px]">
           {/* Table Header */}
           <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
-            {/* Batch Code Column - Sortable */}
+            {/* Product Code Column - Sortable */}
             <div
               className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('batchCode')}
+              onClick={() => handleSortClick('productCode')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                Batch Code
-                {getSortIcon('batchCode')}
+                Product Code
+                {getSortIcon('productCode')}
               </p>
             </div>
 
-            {/* Expiry Date Column - Sortable */}
+            {/* Product Name Column - Sortable */}
             <div
-              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('expiryDate')}
+              className="flex-1 min-w-[200px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('productName')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                Expiry Date
-                {getSortIcon('expiryDate')}
+                Product Name
+                {getSortIcon('productName')}
               </p>
             </div>
 
@@ -174,10 +185,10 @@ export const DetailInventoryList = ({
               </p>
             </div>
 
-            {/* Batch Quantity Column */}
+            {/* Reorder Point Column */}
             <div className="w-[100px] px-3 flex items-center flex-shrink-0">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Batch Qty
+                Reorder At
               </p>
             </div>
 
@@ -205,28 +216,24 @@ export const DetailInventoryList = ({
 
           {/* Table Body */}
           <div className="flex flex-col">
-            {detailInventory.map((item, index) => {
-              const expiryDate = item.batchId?.expiryDate ? new Date(item.batchId.expiryDate) : null;
-              const isExpiringSoon = expiryDate && (expiryDate - new Date()) < (30 * 24 * 60 * 60 * 1000);
-
+            {inventory.map((item, index) => {
               return (
                 <div
-                  key={item.id}
-                  className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== detailInventory.length - 1 ? 'border-b border-gray-100' : ''
+                  key={item.id || item._id}
+                  className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== inventory.length - 1 ? 'border-b border-gray-100' : ''
                     }`}
                 >
-                  {/* Batch Code */}
+                  {/* Product Code */}
                   <div className="w-[140px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
-                      {item.batchId?.batchCode || 'N/A'}
+                      {item.product?.productCode || 'N/A'}
                     </p>
                   </div>
 
-                  {/* Expiry Date */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
-                    <p className={`text-[13px] font-normal font-['Poppins',sans-serif] leading-[20px] ${isExpiringSoon ? 'text-orange-600 font-semibold' : 'text-[#212529]'
-                      }`}>
-                      {formatDate(item.batchId?.expiryDate)}
+                  {/* Product Name */}
+                  <div className="flex-1 min-w-[200px] px-3 flex items-center">
+                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
+                      {item.product?.name || 'N/A'}
                     </p>
                   </div>
 
@@ -253,23 +260,25 @@ export const DetailInventoryList = ({
 
                   {/* Available */}
                   <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    <p className={`text-[13px] font-semibold font-['Poppins',sans-serif] leading-[20px] ${item.quantityAvailable === 0 ? 'text-red-600' : 'text-green-600'
+                    <p className={`text-[13px] font-semibold font-['Poppins',sans-serif] leading-[20px] ${item.quantityAvailable === 0 ? 'text-red-600' :
+                      item.quantityAvailable <= item.reorderPoint ? 'text-yellow-600' :
+                        'text-green-600'
                       }`}>
                       {item.quantityAvailable}
                     </p>
                   </div>
 
-                  {/* Batch Quantity */}
+                  {/* Reorder Point */}
                   <div className="w-[100px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-gray-600 leading-[20px]">
-                      {item.batchId?.quantity || 0}
+                      {item.reorderPoint}
                     </p>
                   </div>
 
                   {/* Location */}
                   <div className="w-[140px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {item.location || 'N/A'}
+                      {item.warehouseLocation || 'N/A'}
                     </p>
                   </div>
 
@@ -281,7 +290,10 @@ export const DetailInventoryList = ({
                   {/* Actions */}
                   <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
                     <button
-                      onClick={(e) => toggleDropdown(`action-${item.id}`, e)}
+                      onClick={(e) => {
+                        const itemId = item.id || item._id;
+                        toggleDropdown(`action-${itemId}`, e);
+                      }}
                       className="p-2 hover:bg-gray-200 rounded-full transition-colors"
                       title="Actions"
                     >
@@ -298,10 +310,10 @@ export const DetailInventoryList = ({
           </div>
 
           {/* Empty State */}
-          {detailInventory.length === 0 && (
+          {inventory.length === 0 && (
             <div className="py-16 text-center">
               <p className="text-gray-500 text-[13px] font-['Poppins',sans-serif]">
-                No batch inventory items found
+                No inventory items found
               </p>
             </div>
           )}
@@ -310,7 +322,9 @@ export const DetailInventoryList = ({
 
       {/* Fixed Position Dropdown Menus */}
       {activeDropdown && (() => {
-        const item = detailInventory.find(i => activeDropdown === `action-${i.id}`);
+        const itemId = activeDropdown.replace('action-', '');
+        const item = inventory.find(i => (i.id || i._id) === itemId);
+
         if (!item) return null;
 
         return (
@@ -324,12 +338,29 @@ export const DetailInventoryList = ({
           >
             <button
               onClick={() => {
-                if (onViewHistory) {
-                  onViewHistory(item);
+                if (onViewDetail) {
+                  const productId = item.product?.id || item.product?._id || item.productId;
+                  onViewDetail(productId);
                 }
                 setActiveDropdown(null);
               }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors flex items-center gap-2"
+              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 8C1 8 3.54545 3 8 3C12.4545 3 15 8 15 8C15 8 12.4545 13 8 13C3.54545 13 1 8 1 8Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              View Detail
+            </button>
+
+            <button
+              onClick={() => {
+                if (onViewMovementHistory) {
+                  onViewMovementHistory(item);
+                }
+                setActiveDropdown(null);
+              }}
+              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center gap-2"
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M8 4V8L10.5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -342,66 +373,33 @@ export const DetailInventoryList = ({
 
             <button
               onClick={() => {
-                if (onStockIn) {
-                  onStockIn(item);
+                if (onEdit) {
+                  onEdit(item);
                 }
                 setActiveDropdown(null);
               }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 12V4M8 4L5 7M8 4L11 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M2 12H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Stock In
-            </button>
-
-            <button
-              onClick={() => {
-                if (onStockOut) {
-                  onStockOut(item);
-                }
-                setActiveDropdown(null);
-              }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center gap-2"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 4V12M8 12L5 9M8 12L11 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M2 4H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Stock Out
-            </button>
-
-            <div className="border-t border-gray-200 my-1"></div>
-
-            <button
-              onClick={() => {
-                if (onAdjust) {
-                  onAdjust(item);
-                }
-                setActiveDropdown(null);
-              }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition-colors flex items-center gap-2"
+              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors flex items-center gap-2"
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M11.333 2C11.5081 1.82489 11.716 1.686 11.9447 1.59124C12.1735 1.49647 12.4187 1.4477 12.6663 1.4477C12.914 1.4477 13.1592 1.49647 13.3879 1.59124C13.6167 1.686 13.8246 1.82489 13.9997 2C14.1748 2.17511 14.3137 2.38298 14.4084 2.61176C14.5032 2.84053 14.552 3.08574 14.552 3.33336C14.552 3.58098 14.5032 3.82619 14.4084 4.05496C14.3137 4.28374 14.1748 4.49161 13.9997 4.66672L5.33301 13.3334L1.33301 14.6667L2.66634 10.6667L11.333 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Adjust Stock
+              Edit Settings
             </button>
 
             <button
               onClick={() => {
-                if (onTransfer) {
-                  onTransfer(item);
+                if (onUpdateLocation) {
+                  onUpdateLocation(item);
                 }
                 setActiveDropdown(null);
               }}
               className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M2 8H14M14 8L10 4M14 8L10 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M8 5V8L10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Transfer Stock
+              Update Location
             </button>
           </div>
         );
