@@ -6,16 +6,30 @@ export const InventoryListHeader = ({
   searchQuery,
   onSearchChange,
   filterView,
-  onFilterViewChange
+  onFilterViewChange,
+  onBulkTransfer
 }) => {
   return (
     <div className="bg-white rounded-lg shadow-sm">
       <div className="p-4">
-        {/* Top Row - Title */}
+        {/* Top Row - Title and Actions */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-[20px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
             Inventory Management
           </h2>
+
+          {/* Bulk Transfer Button */}
+          {onBulkTransfer && (
+            <button
+              onClick={onBulkTransfer}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-[13px] font-semibold font-['Poppins',sans-serif] flex items-center gap-2"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 8H14M14 8L10 4M14 8L10 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Bulk Transfer Stock
+            </button>
+          )}
         </div>
 
         {/* Bottom Row - Search and Filters */}

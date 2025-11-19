@@ -26,7 +26,7 @@ export const DetailInventoryList = ({
   const getSortIcon = (field) => {
     if (sortField !== field) {
       return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M6 3V9M6 3L4 5M6 3L8 5" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
@@ -34,13 +34,13 @@ export const DetailInventoryList = ({
 
     if (sortOrder === 'asc') {
       return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M6 9V3M6 3L4 5M6 3L8 5" stroke="#10B981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     } else {
       return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M6 3V9M6 9L4 7M6 9L8 7" stroke="#10B981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
@@ -121,7 +121,7 @@ export const DetailInventoryList = ({
               className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('batchCode')}
             >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
                 Batch Code
                 {getSortIcon('batchCode')}
               </p>
@@ -132,7 +132,7 @@ export const DetailInventoryList = ({
               className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('expiryDate')}
             >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
                 Expiry Date
                 {getSortIcon('expiryDate')}
               </p>
@@ -140,10 +140,10 @@ export const DetailInventoryList = ({
 
             {/* On Hand Column - Sortable */}
             <div
-              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('quantityOnHand')}
             >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
                 On Hand
                 {getSortIcon('quantityOnHand')}
               </p>
@@ -151,17 +151,17 @@ export const DetailInventoryList = ({
 
             {/* On Shelf Column - Sortable */}
             <div
-              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('quantityOnShelf')}
             >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
                 On Shelf
                 {getSortIcon('quantityOnShelf')}
               </p>
             </div>
 
             {/* Reserved Column */}
-            <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+            <div className="w-[110px] px-3 flex items-center flex-shrink-0">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                 Reserved
               </p>
@@ -169,24 +169,24 @@ export const DetailInventoryList = ({
 
             {/* Available Column - Sortable */}
             <div
-              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('quantityAvailable')}
             >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
                 Available
                 {getSortIcon('quantityAvailable')}
               </p>
             </div>
 
             {/* Batch Quantity Column */}
-            <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+            <div className="w-[110px] px-3 flex items-center flex-shrink-0">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                 Batch Qty
               </p>
             </div>
 
             {/* Location Column */}
-            <div className="w-[140px] px-3 flex items-center flex-shrink-0">
+            <div className="flex-1 min-w-[100px] px-3 flex items-center">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                 Location
               </p>
@@ -235,28 +235,28 @@ export const DetailInventoryList = ({
                   </div>
 
                   {/* On Hand */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
                       {item.quantityOnHand}
                     </p>
                   </div>
 
                   {/* On Shelf */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
                       {item.quantityOnShelf}
                     </p>
                   </div>
 
                   {/* Reserved */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[110px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-gray-600 leading-[20px]">
                       {item.quantityReserved}
                     </p>
                   </div>
 
                   {/* Available */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className={`text-[13px] font-semibold font-['Poppins',sans-serif] leading-[20px] ${item.quantityAvailable === 0 ? 'text-red-600' : 'text-green-600'
                       }`}>
                       {item.quantityAvailable}
@@ -264,14 +264,14 @@ export const DetailInventoryList = ({
                   </div>
 
                   {/* Batch Quantity */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[110px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-gray-600 leading-[20px]">
                       {item.batchId?.quantity || 0}
                     </p>
                   </div>
 
                   {/* Location */}
-                  <div className="w-[140px] px-3 flex items-center flex-shrink-0">
+                  <div className="flex-1 min-w-[100px] px-3 flex items-center">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
                       {item.location || 'N/A'}
                     </p>

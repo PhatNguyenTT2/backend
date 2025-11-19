@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { InventoryList, InventoryListHeader, MovementHistoryModal } from '../components/InventoryList';
+import { InventoryList, InventoryListHeader, MovementHistoryModal, TransferStockBulkModal } from '../components/InventoryList';
 import inventoryService from '../services/inventoryService';
 
 export const Inventories = () => {
@@ -36,6 +36,9 @@ export const Inventories = () => {
 
   // Movement History Modal state
   const [movementHistoryModal, setMovementHistoryModal] = useState({ isOpen: false, item: null });
+
+  // Bulk Transfer Modal state
+  const [bulkTransferModal, setBulkTransferModal] = useState(false);
 
   // Fetch inventory on component mount
   useEffect(() => {
@@ -200,6 +203,14 @@ export const Inventories = () => {
     setMovementHistoryModal({ isOpen: true, item });
   };
 
+  const handleBulkTransfer = () => {
+    setBulkTransferModal(true);
+  };
+
+  const handleBulkTransferSuccess = () => {
+    fetchInventory(); // Refresh inventory list
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -214,6 +225,7 @@ export const Inventories = () => {
           onSearchChange={handleSearchChange}
           filterView={filterView}
           onFilterViewChange={handleFilterViewChange}
+          onBulkTransfer={handleBulkTransfer}
         />
 
         {/* Loading State */}
@@ -389,6 +401,13 @@ export const Inventories = () => {
           isOpen={movementHistoryModal.isOpen}
           onClose={() => setMovementHistoryModal({ isOpen: false, item: null })}
           inventory={movementHistoryModal.item}
+        />
+
+        {/* Bulk Transfer Modal */}
+        <TransferStockBulkModal
+          isOpen={bulkTransferModal}
+          onClose={() => setBulkTransferModal(false)}
+          onSuccess={handleBulkTransferSuccess}
         />
       </div>
     </Layout>
