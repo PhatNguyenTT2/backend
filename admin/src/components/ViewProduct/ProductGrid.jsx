@@ -36,6 +36,7 @@ export const ProductGrid = ({ filters = {}, sortBy = 'newest', onPaginationChang
       const params = {
         page: pagination.currentPage,
         per_page: pagination.perPage,
+        withInventory: true, // Include inventory data to show on-shelf quantities
         ...filters
       };
 
