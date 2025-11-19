@@ -574,6 +574,27 @@ const inventoryMovementBatchService = {
       console.error('Error updating movement date:', error)
       throw error
     }
+  },
+
+  /**
+   * Bulk transfer stock between warehouse and shelf
+   * @param {Array} transfers - Array of { detailInventoryId, quantity }
+   * @param {string} direction - 'toShelf' or 'toWarehouse'
+   * @param {Object} additionalData - Additional data (date, performedBy, reason, notes)
+   * @returns {Promise<Object>} Bulk transfer results with summary
+   */
+  bulkTransfer: async (transfers, direction, additionalData = {}) => {
+    try {
+      const response = await api.post('/inventory-movement-batches/bulk-transfer', {
+        transfers,
+        direction,
+        ...additionalData
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error performing bulk transfer:', error)
+      throw error
+    }
   }
 }
 

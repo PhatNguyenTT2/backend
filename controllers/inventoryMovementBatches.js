@@ -583,6 +583,174 @@ inventoryMovementBatchesRouter.put('/:id', userExtractor, async (request, respon
 });
 
 /**
+ * POST /api/inventory-movement-batches/bulk-transfer
+ * Bulk transfer stock between warehouse and shelf
+ * Requires authentication
+ * 
+ * Request body:
+ * - transfers: Array of { detailInventoryId, quantity }
+ * - direction: 'toShelf' | 'toWarehouse'
+ * - date: Date (optional)
+ * - performedBy: Employee ID (optional)
+ * - reason: String (optional)
+ * - notes: String (optional)
+ */
+inventoryMovementBatchesRouter.post('/bulk-transfer', userExtractor, async (request, response) => {
+  try {
+    const {
+      transfers,
+      direction,
+      date,
+      performedBy,
+      reason,
+      notes
+    } = request.body;
+
+    // Validation
+    if (!transfers || !Array.isArray(transfers) || transfers.length === 0) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Transfers array is required and must not be empty',
+          code: 'MISSING_TRANSFERS'
+        }
+      });
+    }
+
+    if (!direction || !['toShelf', 'toWarehouse'].includes(direction)) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Valid direction is required (toShelf or toWarehouse)',
+          code: 'INVALID_DIRECTION'
+        }
+      });
+    }
+
+    const results = {
+      succeeded: [],
+      failed: []
+    };
+
+    // Process each transfer
+    for (const transfer of transfers) {
+      try {
+        const { detailInventoryId, quantity } = transfer;
+
+        if (!detailInventoryId || !quantity || quantity <= 0) {
+          results.failed.push({
+            detailInventoryId,
+            error: 'Invalid detailInventoryId or quantity'
+          });
+          continue;
+        }
+
+        // Get detail inventory
+        const detailInventory = await DetailInventory.findById(detailInventoryId)
+          .populate('batchId');
+
+        if (!detailInventory) {
+          results.failed.push({
+            detailInventoryId,
+            error: 'Detail inventory not found'
+          });
+          continue;
+        }
+
+        // Check stock availability
+        if (direction === 'toShelf') {
+          // Warehouse -> Shelf
+          if (detailInventory.quantityOnHand < quantity) {
+            results.failed.push({
+              detailInventoryId,
+              batchCode: detailInventory.batchId?.batchCode,
+              error: `Insufficient warehouse stock (available: ${detailInventory.quantityOnHand}, requested: ${quantity})`
+            });
+            continue;
+          }
+        } else {
+          // Shelf -> Warehouse
+          if (detailInventory.quantityOnShelf < quantity) {
+            results.failed.push({
+              detailInventoryId,
+              batchCode: detailInventory.batchId?.batchCode,
+              error: `Insufficient shelf stock (available: ${detailInventory.quantityOnShelf}, requested: ${quantity})`
+            });
+            continue;
+          }
+        }
+
+        // Create movement record
+        // Positive quantity = warehouse to shelf
+        // Negative quantity = shelf to warehouse
+        const movementQuantity = direction === 'toShelf' ? quantity : -quantity;
+
+        const movement = new InventoryMovementBatch({
+          batchId: detailInventory.batchId._id,
+          inventoryDetail: detailInventoryId,
+          movementType: 'transfer',
+          quantity: movementQuantity,
+          reason: reason || 'Bulk Stock Transfer',
+          date: date || new Date(),
+          performedBy: performedBy || request.user?.id || null,
+          notes: notes || null
+        });
+
+        await movement.save();
+
+        // Update inventory quantities
+        if (direction === 'toShelf') {
+          detailInventory.quantityOnHand -= quantity;
+          detailInventory.quantityOnShelf += quantity;
+        } else {
+          detailInventory.quantityOnShelf -= quantity;
+          detailInventory.quantityOnHand += quantity;
+        }
+
+        await detailInventory.save();
+
+        results.succeeded.push({
+          detailInventoryId,
+          batchCode: detailInventory.batchId?.batchCode,
+          quantity,
+          movementId: movement._id
+        });
+      } catch (error) {
+        console.error(`Error processing transfer for ${transfer.detailInventoryId}:`, error);
+        results.failed.push({
+          detailInventoryId: transfer.detailInventoryId,
+          error: error.message
+        });
+      }
+    }
+
+    const summary = {
+      total: transfers.length,
+      succeeded: results.succeeded.length,
+      failed: results.failed.length
+    };
+
+    response.status(200).json({
+      success: true,
+      data: {
+        summary,
+        results
+      },
+      message: `Bulk transfer completed: ${summary.succeeded} succeeded, ${summary.failed} failed`
+    });
+  } catch (error) {
+    console.error('Bulk transfer error:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to perform bulk transfer',
+        details: error.message
+      }
+    });
+  }
+});
+
+/**
  * DELETE /api/inventory-movement-batches/:id
  * Delete inventory movement batch
  * Requires authentication

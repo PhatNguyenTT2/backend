@@ -207,6 +207,14 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
           };
         });
 
+      // Prepare additional data
+      const additionalData = {
+        date: formData.date,
+        performedBy: formData.performedBy,
+        reason: formData.reason,
+        notes: formData.notes
+      };
+
       // Call bulk transfer API
       const response = await inventoryMovementBatchService.bulkTransfer(transfers, direction, additionalData);
 
