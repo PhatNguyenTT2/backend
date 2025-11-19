@@ -1,409 +1,398 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Layout } from '../components/Layout';
+import { Breadcrumb } from '../components/Breadcrumb';
+import { InventoryList, InventoryListHeader, MovementHistoryModal } from '../components/InventoryList';
+import inventoryService from '../services/inventoryService';
 
-export const InventoryList = ({
-  inventory = [],
-  onSort,
-  sortField,
-  sortOrder,
-  onViewDetail,
-  onEdit,
-  onUpdateLocation,
-  onViewMovementHistory
-}) => {
-  const [activeDropdown, setActiveDropdown] = useState(null);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
-  const dropdownRef = useRef(null);
+export const Inventories = () => {
+  const navigate = useNavigate();
 
-  // Handle sort click
-  const handleSortClick = (field) => {
-    if (onSort) {
-      onSort(field);
-    }
-  };
+  // Breadcrumb items
+  const breadcrumbItems = [
+    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Inventories', href: '/inventories' },
+  ];
 
-  // Get sort icon with color
-  const getSortIcon = (field) => {
-    if (sortField !== field) {
-      return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
-          <path d="M6 3V9M6 3L4 5M6 3L8 5" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      );
-    }
+  const [inventory, setInventory] = useState([]);
+  const [filteredInventory, setFilteredInventory] = useState([]);
+  const [paginatedInventory, setPaginatedInventory] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-    if (sortOrder === 'asc') {
-      return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
-          <path d="M6 9V3M6 3L4 5M6 3L8 5" stroke="#10B981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      );
-    } else {
-      return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
-          <path d="M6 3V9M6 9L4 7M6 9L8 7" stroke="#10B981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      );
-    }
-  };
+  // Filters and sorting
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState('productCode');
+  const [sortOrder, setSortOrder] = useState('asc');
+  const [filterView, setFilterView] = useState('all'); // all, low-stock, out-of-stock, needs-reorder
 
-  // Toggle dropdown
-  const toggleDropdown = (dropdownId, event) => {
-    if (activeDropdown === dropdownId) {
-      setActiveDropdown(null);
-    } else {
-      const buttonRect = event.currentTarget.getBoundingClientRect();
-      const leftPosition = buttonRect.right - 160;
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    itemsPerPage: 10,
+  });
 
-      setDropdownPosition({
-        top: buttonRect.bottom + 4,
-        left: leftPosition
-      });
-      setActiveDropdown(dropdownId);
-    }
-  };
+  // Movement History Modal state
+  const [movementHistoryModal, setMovementHistoryModal] = useState({ isOpen: false, item: null });
 
-  // Close dropdown when clicking outside
+  // Fetch inventory on component mount
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setActiveDropdown(null);
+    fetchInventory();
+  }, []);
+
+  // Apply filters and sorting when data or filters change
+  useEffect(() => {
+    let result = [...inventory];
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(item =>
+        item.product?.name?.toLowerCase().includes(query) ||
+        item.product?.productCode?.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply view filter
+    if (filterView === 'low-stock') {
+      result = result.filter(item =>
+        item.quantityAvailable > 0 && item.quantityAvailable <= item.reorderPoint
+      );
+    } else if (filterView === 'out-of-stock') {
+      result = result.filter(item => item.quantityAvailable === 0);
+    } else if (filterView === 'needs-reorder') {
+      result = result.filter(item => item.needsReorder === true);
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      let aVal, bVal;
+
+      // Handle product-related fields
+      if (sortField === 'productCode') {
+        aVal = a.product?.productCode || '';
+        bVal = b.product?.productCode || '';
+      } else if (sortField === 'productName') {
+        aVal = a.product?.name || '';
+        bVal = b.product?.name || '';
+      } else {
+        aVal = a[sortField];
+        bVal = b[sortField];
       }
-    };
 
-    if (activeDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+      // Handle null/undefined values
+      if (aVal == null) aVal = '';
+      if (bVal == null) bVal = '';
 
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [activeDropdown]);
+      // Handle different data types
+      if (['quantityOnHand', 'quantityOnShelf', 'quantityReserved', 'quantityAvailable', 'reorderPoint'].includes(sortField)) {
+        aVal = Number(aVal) || 0;
+        bVal = Number(bVal) || 0;
+      } else if (sortField === 'productName' || sortField === 'productCode') {
+        aVal = String(aVal).toLowerCase();
+        bVal = String(bVal).toLowerCase();
+      }
 
-  // Get stock status badge
-  const getStockStatusBadge = (item) => {
-    // Out of Stock: available = 0
-    if (item.quantityAvailable === 0) {
-      return (
-        <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-[9px] font-bold font-['Poppins',sans-serif] uppercase">
-          Out of Stock
-        </span>
-      );
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    setFilteredInventory(result);
+
+    // Update pagination
+    const totalPages = Math.ceil(result.length / itemsPerPage);
+    setPagination(prev => ({
+      ...prev,
+      currentPage: 1, // Reset to first page on filter change
+      totalPages,
+      itemsPerPage,
+    }));
+  }, [inventory, searchQuery, sortField, sortOrder, itemsPerPage, filterView]);
+
+  // Paginate filtered inventory
+  useEffect(() => {
+    const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
+    const endIndex = startIndex + pagination.itemsPerPage;
+    setPaginatedInventory(filteredInventory.slice(startIndex, endIndex));
+  }, [filteredInventory, pagination.currentPage, pagination.itemsPerPage]);
+
+  const fetchInventory = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Fetch all inventory with product details populated
+      const response = await inventoryService.getAllInventories();
+
+      // Handle response structure
+      if (response.success && response.data && response.data.inventories) {
+        setInventory(response.data.inventories);
+      } else if (Array.isArray(response)) {
+        // Fallback if response is directly an array
+        setInventory(response);
+      } else {
+        console.error('Unexpected response structure:', response);
+        setInventory([]);
+      }
+    } catch (err) {
+      console.error('Error fetching inventory:', err);
+      setError(err.message || 'Failed to load inventory');
+      setInventory([]);
+    } finally {
+      setIsLoading(false);
     }
-    // Low Stock: available <= reorder point AND available > 0
-    if (item.quantityAvailable > 0 && item.quantityAvailable <= item.reorderPoint) {
-      return (
-        <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-[9px] font-bold font-['Poppins',sans-serif] uppercase">
-          Low Stock
-        </span>
-      );
-    }
-    // In Stock: available > reorder point
-    return (
-      <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-[9px] font-bold font-['Poppins',sans-serif] uppercase">
-        In Stock
-      </span>
-    );
   };
 
-  // Format date
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+  const handleColumnSort = (field) => {
+    if (sortField === field) {
+      // Toggle sort order if clicking the same field
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new field and default to ascending
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const handleSearchChange = (query) => {
+    setSearchQuery(query);
+  };
+
+  const handleItemsPerPageChange = (value) => {
+    setItemsPerPage(value);
+  };
+
+  const handleFilterViewChange = (view) => {
+    setFilterView(view);
+  };
+
+  const handlePageChange = (newPage) => {
+    setPagination(prev => ({
+      ...prev,
+      currentPage: newPage
+    }));
+    // Scroll to top smoothly
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleViewDetail = (productId) => {
+    if (productId) {
+      navigate(`/inventory/detail/${productId}`);
+    }
+  };
+
+  const handleEdit = (item) => {
+    // TODO: Implement edit inventory settings modal
+    console.log('Edit inventory:', item);
+    alert('Edit inventory settings modal - To be implemented');
+  };
+
+  const handleUpdateLocation = (item) => {
+    // TODO: Implement update location modal
+    console.log('Update location:', item);
+    alert('Update location modal - To be implemented');
+  };
+
+  const handleViewMovementHistory = (item) => {
+    setMovementHistoryModal({ isOpen: true, item });
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm">
-      {/* Scrollable Container */}
-      <div className="overflow-x-auto rounded-lg">
-        <div className="min-w-[1200px]">
-          {/* Table Header */}
-          <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
-            {/* Product Code Column - Sortable */}
-            <div
-              className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('productCode')}
-            >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                Product Code
-                {getSortIcon('productCode')}
-              </p>
-            </div>
+    <Layout>
+      <div className="space-y-6">
+        {/* Breadcrumb */}
+        <Breadcrumb items={breadcrumbItems} />
 
-            {/* Product Name Column - Sortable */}
-            <div
-              className="flex-1 min-w-[200px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('productName')}
-            >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                Product Name
-                {getSortIcon('productName')}
-              </p>
-            </div>
+        {/* Inventory List Header */}
+        <InventoryListHeader
+          itemsPerPage={itemsPerPage}
+          onItemsPerPageChange={handleItemsPerPageChange}
+          searchQuery={searchQuery}
+          onSearchChange={handleSearchChange}
+          filterView={filterView}
+          onFilterViewChange={handleFilterViewChange}
+        />
 
-            {/* On Hand Column - Sortable */}
-            <div
-              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('quantityOnHand')}
-            >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                On Hand
-                {getSortIcon('quantityOnHand')}
-              </p>
-            </div>
-
-            {/* On Shelf Column - Sortable */}
-            <div
-              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('quantityOnShelf')}
-            >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                On Shelf
-                {getSortIcon('quantityOnShelf')}
-              </p>
-            </div>
-
-            {/* Reserved Column */}
-            <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Reserved
-              </p>
-            </div>
-
-            {/* Available Column - Sortable */}
-            <div
-              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('quantityAvailable')}
-            >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                Available
-                {getSortIcon('quantityAvailable')}
-              </p>
-            </div>
-
-            {/* Reorder Point Column */}
-            <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Reorder At
-              </p>
-            </div>
-
-            {/* Location Column */}
-            <div className="w-[140px] px-3 flex items-center flex-shrink-0">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Location
-              </p>
-            </div>
-
-            {/* Status Column */}
-            <div className="w-[120px] px-3 flex items-center flex-shrink-0">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Status
-              </p>
-            </div>
-
-            {/* Actions Column */}
-            <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Actions
-              </p>
-            </div>
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
           </div>
+        )}
 
-          {/* Table Body */}
-          <div className="flex flex-col">
-            {inventory.map((item, index) => {
-              return (
-                <div
-                  key={item.id || item._id}
-                  className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== inventory.length - 1 ? 'border-b border-gray-100' : ''
-                    }`}
-                >
-                  {/* Product Code */}
-                  <div className="w-[140px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
-                      {item.product?.productCode || 'N/A'}
-                    </p>
-                  </div>
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            <p className="font-medium">Error loading inventory</p>
+            <p className="text-sm mt-1">{error}</p>
+            <button
+              onClick={fetchInventory}
+              className="mt-2 text-sm underline hover:no-underline"
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
-                  {/* Product Name */}
-                  <div className="flex-1 min-w-[200px] px-3 flex items-center">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {item.product?.name || 'N/A'}
-                    </p>
-                  </div>
+        {/* Inventory List Table */}
+        {!isLoading && !error && (
+          <>
+            <InventoryList
+              inventory={paginatedInventory}
+              onSort={handleColumnSort}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              onViewDetail={handleViewDetail}
+              onEdit={handleEdit}
+              onUpdateLocation={handleUpdateLocation}
+              onViewMovementHistory={handleViewMovementHistory}
+            />
 
-                  {/* On Hand */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      {item.quantityOnHand}
-                    </p>
-                  </div>
+            {/* Pagination */}
+            {pagination.totalPages > 1 && (
+              <div className="flex items-center justify-center mt-6">
+                <div className="flex items-center gap-2">
+                  {/* Previous button */}
+                  <button
+                    onClick={() => handlePageChange(pagination.currentPage - 1)}
+                    disabled={pagination.currentPage === 1}
+                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      }`}
+                  >
+                    ‹ Previous
+                  </button>
 
-                  {/* On Shelf */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      {item.quantityOnShelf}
-                    </p>
-                  </div>
+                  {/* Page numbers */}
+                  {(() => {
+                    const maxPagesToShow = 5;
+                    const { totalPages, currentPage } = pagination;
 
-                  {/* Reserved */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-gray-600 leading-[20px]">
-                      {item.quantityReserved}
-                    </p>
-                  </div>
+                    // Calculate start and end page numbers to display
+                    let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+                    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
 
-                  {/* Available */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    <p className={`text-[13px] font-semibold font-['Poppins',sans-serif] leading-[20px] ${item.quantityAvailable === 0 ? 'text-red-600' :
-                      item.quantityAvailable <= item.reorderPoint ? 'text-yellow-600' :
-                        'text-green-600'
-                      }`}>
-                      {item.quantityAvailable}
-                    </p>
-                  </div>
+                    // Adjust start if we're near the end
+                    if (endPage - startPage < maxPagesToShow - 1) {
+                      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+                    }
 
-                  {/* Reorder Point */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-gray-600 leading-[20px]">
-                      {item.reorderPoint}
-                    </p>
-                  </div>
+                    const pages = [];
 
-                  {/* Location */}
-                  <div className="w-[140px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {item.warehouseLocation || 'N/A'}
-                    </p>
-                  </div>
+                    // First page + ellipsis
+                    if (startPage > 1) {
+                      pages.push(
+                        <button
+                          key={1}
+                          onClick={() => handlePageChange(1)}
+                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                        >
+                          1
+                        </button>
+                      );
+                      if (startPage > 2) {
+                        pages.push(
+                          <span key="ellipsis-start" className="px-2 text-gray-400">
+                            ...
+                          </span>
+                        );
+                      }
+                    }
 
-                  {/* Status Badge */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
-                    {getStockStatusBadge(item)}
-                  </div>
+                    // Page numbers
+                    for (let page = startPage; page <= endPage; page++) {
+                      pages.push(
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${currentPage === page
+                            ? 'bg-[#3bb77e] text-white'
+                            : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                            }`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    }
 
-                  {/* Actions */}
-                  <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
-                    <button
-                      onClick={(e) => {
-                        const itemId = item.id || item._id;
-                        toggleDropdown(`action-${itemId}`, e);
-                      }}
-                      className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-                      title="Actions"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="3" cy="8" r="1.5" fill="#6B7280" />
-                        <circle cx="8" cy="8" r="1.5" fill="#6B7280" />
-                        <circle cx="13" cy="8" r="1.5" fill="#6B7280" />
-                      </svg>
-                    </button>
-                  </div>
+                    // Ellipsis + last page
+                    if (endPage < totalPages) {
+                      if (endPage < totalPages - 1) {
+                        pages.push(
+                          <span key="ellipsis-end" className="px-2 text-gray-400">
+                            ...
+                          </span>
+                        );
+                      }
+                      pages.push(
+                        <button
+                          key={totalPages}
+                          onClick={() => handlePageChange(totalPages)}
+                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                        >
+                          {totalPages}
+                        </button>
+                      );
+                    }
+
+                    return pages;
+                  })()}
+
+                  {/* Next button */}
+                  <button
+                    onClick={() => handlePageChange(pagination.currentPage + 1)}
+                    disabled={pagination.currentPage === pagination.totalPages}
+                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      }`}
+                  >
+                    Next ›
+                  </button>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            )}
 
-          {/* Empty State */}
-          {inventory.length === 0 && (
-            <div className="py-16 text-center">
-              <p className="text-gray-500 text-[13px] font-['Poppins',sans-serif]">
-                No inventory items found
-              </p>
-            </div>
-          )}
-        </div>
+            {/* Results Summary */}
+            {paginatedInventory.length > 0 && (
+              <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
+                Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to {Math.min(pagination.currentPage * pagination.itemsPerPage, filteredInventory.length)} of {filteredInventory.length} items
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && filteredInventory.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
+            <p className="text-gray-500 text-sm">No inventory items found</p>
+            {(searchQuery || filterView !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setFilterView('all');
+                }}
+                className="mt-2 text-sm text-emerald-600 hover:underline"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Movement History Modal */}
+        <MovementHistoryModal
+          isOpen={movementHistoryModal.isOpen}
+          onClose={() => setMovementHistoryModal({ isOpen: false, item: null })}
+          inventory={movementHistoryModal.item}
+        />
       </div>
-
-      {/* Fixed Position Dropdown Menus */}
-      {activeDropdown && (() => {
-        const itemId = activeDropdown.replace('action-', '');
-        const item = inventory.find(i => (i.id || i._id) === itemId);
-
-        if (!item) return null;
-
-        return (
-          <div
-            ref={dropdownRef}
-            className="fixed w-40 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
-            style={{
-              top: `${dropdownPosition.top}px`,
-              left: `${dropdownPosition.left}px`
-            }}
-          >
-            <button
-              onClick={() => {
-                if (onViewDetail) {
-                  const productId = item.product?.id || item.product?._id || item.productId;
-                  onViewDetail(productId);
-                }
-                setActiveDropdown(null);
-              }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M1 8C1 8 3.54545 3 8 3C12.4545 3 15 8 15 8C15 8 12.4545 13 8 13C3.54545 13 1 8 1 8Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              View Detail
-            </button>
-
-            <button
-              onClick={() => {
-                if (onViewMovementHistory) {
-                  onViewMovementHistory(item);
-                }
-                setActiveDropdown(null);
-              }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center gap-2"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 4V8L10.5 10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M14 8C14 11.3137 11.3137 14 8 14C4.68629 14 2 11.3137 2 8C2 4.68629 4.68629 2 8 2C9.8 2 11.4 2.8 12.5 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Movement History
-            </button>
-
-            <div className="border-t border-gray-200 my-1"></div>
-
-            <button
-              onClick={() => {
-                if (onEdit) {
-                  onEdit(item);
-                }
-                setActiveDropdown(null);
-              }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors flex items-center gap-2"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M11.333 2C11.5081 1.82489 11.716 1.686 11.9447 1.59124C12.1735 1.49647 12.4187 1.4477 12.6663 1.4477C12.914 1.4477 13.1592 1.49647 13.3879 1.59124C13.6167 1.686 13.8246 1.82489 13.9997 2C14.1748 2.17511 14.3137 2.38298 14.4084 2.61176C14.5032 2.84053 14.552 3.08574 14.552 3.33336C14.552 3.58098 14.5032 3.82619 14.4084 4.05496C14.3137 4.28374 14.1748 4.49161 13.9997 4.66672L5.33301 13.3334L1.33301 14.6667L2.66634 10.6667L11.333 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Edit Settings
-            </button>
-
-            <button
-              onClick={() => {
-                if (onUpdateLocation) {
-                  onUpdateLocation(item);
-                }
-                setActiveDropdown(null);
-              }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 14C11.3137 14 14 11.3137 14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M8 5V8L10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Update Location
-            </button>
-          </div>
-        );
-      })()}
-    </div>
+    </Layout>
   );
 };
+
+export default Inventories;
