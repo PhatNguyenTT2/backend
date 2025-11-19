@@ -90,6 +90,75 @@ inventorySchema.virtual('isLowStock').get(function () {
   return this.quantityAvailable > 0 && this.quantityAvailable <= (this.reorderPoint * 2);
 });
 
+// ============ STATIC METHODS ============
+/**
+ * Recalculate and update inventory quantities from DetailInventory
+ * This method aggregates all DetailInventory records for a product
+ * and updates the main Inventory record
+ */
+inventorySchema.statics.recalculateFromDetails = async function (productId) {
+  const DetailInventory = mongoose.model('DetailInventory');
+
+  try {
+    // Aggregate quantities from all detail inventories for this product
+    const aggregation = await DetailInventory.aggregate([
+      {
+        $lookup: {
+          from: 'productbatches',
+          localField: 'batchId',
+          foreignField: '_id',
+          as: 'batch'
+        }
+      },
+      {
+        $unwind: '$batch'
+      },
+      {
+        $match: {
+          'batch.product': new mongoose.Types.ObjectId(productId)
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalOnHand: { $sum: '$quantityOnHand' },
+          totalOnShelf: { $sum: '$quantityOnShelf' },
+          totalReserved: { $sum: '$quantityReserved' }
+        }
+      }
+    ]);
+
+    const totals = aggregation[0] || {
+      totalOnHand: 0,
+      totalOnShelf: 0,
+      totalReserved: 0
+    };
+
+    // Update the inventory record
+    const inventory = await this.findOneAndUpdate(
+      { product: productId },
+      {
+        quantityOnHand: totals.totalOnHand || 0,
+        quantityOnShelf: totals.totalOnShelf || 0,
+        quantityReserved: totals.totalReserved || 0
+      },
+      { new: true, upsert: false }
+    );
+
+    return inventory;
+  } catch (error) {
+    console.error('Error recalculating inventory:', error);
+    throw error;
+  }
+};
+
+/**
+ * Recalculate inventory for a specific inventory ID
+ */
+inventorySchema.methods.recalculate = async function () {
+  return this.constructor.recalculateFromDetails(this.product);
+};
+
 // ============ JSON TRANSFORMATION ============
 inventorySchema.set('toJSON', {
   virtuals: true,

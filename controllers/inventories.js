@@ -556,4 +556,120 @@ inventoriesRouter.delete('/:id', userExtractor, async (request, response) => {
   }
 });
 
+/**
+ * POST /api/inventories/recalculate-all
+ * Recalculate all inventory quantities from DetailInventory
+ * Useful for syncing data or fixing inconsistencies
+ * Requires authentication
+ */
+inventoriesRouter.post('/recalculate-all', userExtractor, async (request, response) => {
+  try {
+    const inventories = await Inventory.find({}).populate('product', 'productCode name');
+
+    const results = {
+      total: inventories.length,
+      succeeded: 0,
+      failed: 0,
+      details: []
+    };
+
+    for (const inventory of inventories) {
+      try {
+        const updated = await Inventory.recalculateFromDetails(inventory.product._id);
+
+        if (updated) {
+          results.succeeded++;
+          results.details.push({
+            productId: inventory.product._id,
+            productCode: inventory.product.productCode,
+            productName: inventory.product.name,
+            status: 'success',
+            onHand: updated.quantityOnHand,
+            onShelf: updated.quantityOnShelf,
+            reserved: updated.quantityReserved
+          });
+        }
+      } catch (error) {
+        results.failed++;
+        results.details.push({
+          productId: inventory.product._id,
+          productCode: inventory.product.productCode,
+          productName: inventory.product.name,
+          status: 'failed',
+          error: error.message
+        });
+      }
+    }
+
+    response.json({
+      success: true,
+      message: `Recalculated ${results.succeeded} of ${results.total} inventories`,
+      data: results
+    });
+  } catch (error) {
+    console.error('Recalculate all inventories error:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to recalculate inventories',
+        details: error.message
+      }
+    });
+  }
+});
+
+/**
+ * POST /api/inventories/:id/recalculate
+ * Recalculate specific inventory quantities from DetailInventory
+ * Requires authentication
+ */
+inventoriesRouter.post('/:id/recalculate', userExtractor, async (request, response) => {
+  try {
+    const inventory = await Inventory.findById(request.params.id).populate('product', 'productCode name');
+
+    if (!inventory) {
+      return response.status(404).json({
+        success: false,
+        error: {
+          message: 'Inventory not found',
+          code: 'INVENTORY_NOT_FOUND'
+        }
+      });
+    }
+
+    const updated = await Inventory.recalculateFromDetails(inventory.product._id);
+
+    response.json({
+      success: true,
+      message: 'Inventory recalculated successfully',
+      data: {
+        product: {
+          id: inventory.product._id,
+          productCode: inventory.product.productCode,
+          name: inventory.product.name
+        },
+        before: {
+          onHand: inventory.quantityOnHand,
+          onShelf: inventory.quantityOnShelf,
+          reserved: inventory.quantityReserved
+        },
+        after: {
+          onHand: updated.quantityOnHand,
+          onShelf: updated.quantityOnShelf,
+          reserved: updated.quantityReserved
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Recalculate inventory error:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to recalculate inventory',
+        details: error.message
+      }
+    });
+  }
+});
+
 module.exports = inventoriesRouter;

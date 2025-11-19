@@ -92,7 +92,7 @@ export const Products = () => {
       if (bVal == null) bVal = '';
 
       // Handle different data types
-      if (sortField === 'unitPrice' || sortField === 'stock') {
+      if (sortField === 'unitPrice' || sortField === 'onShelf') {
         aVal = Number(aVal) || 0;
         bVal = Number(bVal) || 0;
       } else {
@@ -137,18 +137,30 @@ export const Products = () => {
 
       // Handle response structure
       if (response.success && response.data && response.data.products) {
-        // Process products to add categoryName for easier sorting
+        // Debug: Check if inventory is populated
+        console.log('Products with inventory:', response.data.products.map(p => ({
+          code: p.productCode,
+          hasInventory: !!p.inventory,
+          onShelf: p.inventory?.quantityOnShelf
+        })));
+
+        // Process products to add categoryName and onShelf for easier access
+        // Keep inventory object intact so ProductList can access other inventory fields
         const processedProducts = response.data.products.map(product => ({
           ...product,
           categoryName: product.category?.name || '',
-          stock: product.inventory?.quantityAvailable || 0
+          onShelf: product.inventory?.quantityOnShelf || 0,
+          // Ensure inventory object is preserved
+          inventory: product.inventory || null
         }));
         setProducts(processedProducts);
       } else if (Array.isArray(response)) {
         const processedProducts = response.map(product => ({
           ...product,
           categoryName: product.category?.name || '',
-          stock: product.inventory?.quantityAvailable || 0
+          onShelf: product.inventory?.quantityOnShelf || 0,
+          // Ensure inventory object is preserved
+          inventory: product.inventory || null
         }));
         setProducts(processedProducts);
       } else {
@@ -208,8 +220,10 @@ export const Products = () => {
       return;
     }
 
-    if ((product.stock || 0) > 0) {
-      alert(`Cannot delete product with stock. Current stock: ${product.stock}`);
+    // Check both onShelf and total inventory
+    const totalStock = (product.inventory?.quantityOnHand || 0) + (product.inventory?.quantityOnShelf || 0);
+    if (totalStock > 0) {
+      alert(`Cannot delete product with inventory. On Shelf: ${product.onShelf || 0}, In Warehouse: ${product.inventory?.quantityOnHand || 0}`);
       return;
     }
 
@@ -322,8 +336,8 @@ export const Products = () => {
                     onClick={() => handlePageChange(pagination.currentPage - 1)}
                     disabled={pagination.currentPage === 1}
                     className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
-                        ? 'text-gray-400 cursor-not-allowed'
-                        : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
                       }`}
                   >
                     ‹ Previous
@@ -370,8 +384,8 @@ export const Products = () => {
                           key={page}
                           onClick={() => handlePageChange(page)}
                           className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${page === currentPage
-                              ? 'bg-[#3bb77e] text-white'
-                              : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                            ? 'bg-[#3bb77e] text-white'
+                            : 'text-[#3bb77e] hover:bg-[#def9ec]'
                             }`}
                         >
                           {page}
@@ -407,8 +421,8 @@ export const Products = () => {
                     onClick={() => handlePageChange(pagination.currentPage + 1)}
                     disabled={pagination.currentPage === pagination.totalPages}
                     className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
-                        ? 'text-gray-400 cursor-not-allowed'
-                        : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
                       }`}
                   >
                     Next ›

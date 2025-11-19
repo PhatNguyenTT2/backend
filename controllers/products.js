@@ -102,7 +102,7 @@ productsRouter.get('/', async (request, response) => {
 
     // Populate inventory if requested
     if (withInventory === 'true') {
-      query = query.populate('inventory', 'quantityAvailable quantityReserved quantityOnShelf');
+      query = query.populate('inventory', 'quantityOnHand quantityOnShelf quantityReserved reorderPoint warehouseLocation');
     }
 
     const products = await query;
@@ -147,7 +147,7 @@ productsRouter.get('/:id', async (request, response) => {
         select: 'batchCode quantity expiryDate manufacturingDate costPrice unitPrice promotionApplied discountPercentage',
         options: { sort: { expiryDate: 1 } }
       })
-      .populate('inventory', 'quantityAvailable quantityReserved quantityOnShelf quantityOnHand');
+      .populate('inventory', 'quantityOnHand quantityOnShelf quantityReserved reorderPoint warehouseLocation');
 
     if (!product) {
       return response.status(404).json({

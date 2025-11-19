@@ -85,10 +85,10 @@ productSchema.virtual('inventory', {
   justOne: true
 });
 
-// Virtual: Total stock from inventory (when populated)
-productSchema.virtual('stock').get(function () {
+// Virtual: On shelf quantity from inventory (when populated)
+productSchema.virtual('onShelf').get(function () {
   if (this.inventory) {
-    return this.inventory.quantityAvailable || 0;
+    return this.inventory.quantityOnShelf || 0;
   }
   return 0;
 });
@@ -135,6 +135,8 @@ productSchema.pre('save', async function (next) {
 
 // ============ JSON TRANSFORMATION ============
 productSchema.set('toJSON', {
+  virtuals: true,
+  getters: true,
   transform: (document, returnedObject) => {
     returnedObject.id = returnedObject._id.toString();
     delete returnedObject._id;

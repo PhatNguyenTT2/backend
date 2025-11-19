@@ -96,23 +96,85 @@ detailInventorySchema.virtual('hasShelfStock').get(function () {
 detailInventorySchema.pre('save', async function (next) {
   try {
     // Populate batch if not already populated
-    if (!this.populated('batch')) {
-      await this.populate('batch');
+    if (!this.populated('batchId')) {
+      await this.populate('batchId');
     }
 
-    if (this.batch) {
+    if (this.batchId) {
       const totalInventory = this.quantityOnHand + this.quantityOnShelf + this.quantityReserved;
 
       // Warning: In production, you might want to handle this differently
       // This is a soft check - adjust based on your business logic
-      if (totalInventory > this.batch.quantity) {
-        console.warn(`DetailInventory total (${totalInventory}) exceeds batch quantity (${this.batch.quantity})`);
+      if (totalInventory > this.batchId.quantity) {
+        console.warn(`DetailInventory total (${totalInventory}) exceeds batch quantity (${this.batchId.quantity})`);
       }
     }
   } catch (error) {
     console.error('Error in DetailInventory pre-save:', error);
   }
   next();
+});
+
+// Post-save: Update parent Inventory after DetailInventory changes
+detailInventorySchema.post('save', async function (doc) {
+  try {
+    const Inventory = mongoose.model('Inventory');
+
+    // Get the product ID from the batch
+    if (!doc.populated('batchId')) {
+      await doc.populate('batchId');
+    }
+
+    if (doc.batchId && doc.batchId.product) {
+      // Recalculate parent inventory
+      await Inventory.recalculateFromDetails(doc.batchId.product);
+      console.log(`✅ Inventory updated for product: ${doc.batchId.product}`);
+    }
+  } catch (error) {
+    console.error('Error updating parent inventory after DetailInventory save:', error);
+  }
+});
+
+// Post-remove: Update parent Inventory after DetailInventory deletion
+detailInventorySchema.post('remove', async function (doc) {
+  try {
+    const Inventory = mongoose.model('Inventory');
+
+    // Get the product ID from the batch
+    if (!doc.populated('batchId')) {
+      await doc.populate('batchId');
+    }
+
+    if (doc.batchId && doc.batchId.product) {
+      // Recalculate parent inventory
+      await Inventory.recalculateFromDetails(doc.batchId.product);
+      console.log(`✅ Inventory updated after DetailInventory deletion for product: ${doc.batchId.product}`);
+    }
+  } catch (error) {
+    console.error('Error updating parent inventory after DetailInventory removal:', error);
+  }
+});
+
+// Post-findOneAndUpdate: Update parent Inventory after update operations
+detailInventorySchema.post('findOneAndUpdate', async function (doc) {
+  if (doc) {
+    try {
+      const Inventory = mongoose.model('Inventory');
+
+      // Get the product ID from the batch
+      if (!doc.populated('batchId')) {
+        await doc.populate('batchId');
+      }
+
+      if (doc.batchId && doc.batchId.product) {
+        // Recalculate parent inventory
+        await Inventory.recalculateFromDetails(doc.batchId.product);
+        console.log(`✅ Inventory updated after DetailInventory update for product: ${doc.batchId.product}`);
+      }
+    } catch (error) {
+      console.error('Error updating parent inventory after DetailInventory update:', error);
+    }
+  }
 });
 
 // ============ JSON TRANSFORMATION ============

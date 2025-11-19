@@ -28,7 +28,7 @@ export const ProductCard = ({ product, onAddToCart, onClick }) => {
   const productId = product.id || product._id;
   const price = product.unitPrice || 0;
   const categoryName = product.category?.name || product.categoryName || 'Uncategorized';
-  const stock = product.stock || product.inventory?.quantityAvailable || 0;
+  const onShelfQuantity = product.inventory?.quantityOnShelf || 0;
   const imageUrl = product.image || null;
 
   const handleClick = () => {
@@ -144,24 +144,21 @@ export const ProductCard = ({ product, onAddToCart, onClick }) => {
         {/* Stock Status */}
         <div className="pt-3 border-t border-gray-100">
           {product.isActive ? (
-            stock > 0 ? (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-green-600 font-medium flex items-center">
-                  <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  In Stock
-                </span>
-                <span className="text-gray-500">{stock} units</span>
-              </div>
-            ) : (
-              <div className="text-xs text-red-600 font-medium flex items-center">
+            <div className="flex items-center justify-between text-xs">
+              <span className={`font-medium flex items-center ${onShelfQuantity > 0 ? 'text-green-600' : 'text-red-600'}`}>
                 <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  {onShelfQuantity > 0 ? (
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  ) : (
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  )}
                 </svg>
-                Out of Stock
-              </div>
-            )
+                {onShelfQuantity > 0 ? 'On Shelf' : 'Not on shelf'}
+              </span>
+              <span className={`font-semibold ${onShelfQuantity > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {onShelfQuantity} {onShelfQuantity === 1 ? 'unit' : 'units'}
+              </span>
+            </div>
           ) : (
             <div className="text-xs text-gray-500 font-medium">
               Product Inactive

@@ -437,6 +437,36 @@ const inventoryService = {
       console.error('Error checking inventory existence:', error)
       throw error
     }
+  },
+
+  /**
+   * Recalculate all inventory quantities from DetailInventory
+   * Useful for syncing data or fixing inconsistencies
+   * @returns {Promise<Object>} Recalculation results
+   */
+  recalculateAll: async () => {
+    try {
+      const response = await api.post('/inventories/recalculate-all')
+      return response.data
+    } catch (error) {
+      console.error('Error recalculating all inventories:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Recalculate specific inventory quantities from DetailInventory
+   * @param {string} inventoryId - Inventory ID
+   * @returns {Promise<Object>} Recalculation result with before/after data
+   */
+  recalculateInventory: async (inventoryId) => {
+    try {
+      const response = await api.post(`/inventories/${inventoryId}/recalculate`)
+      return response.data
+    } catch (error) {
+      console.error('Error recalculating inventory:', error)
+      throw error
+    }
   }
 }
 

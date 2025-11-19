@@ -160,10 +160,10 @@ export const ProductList = ({ products = [], onSort, sortField, sortOrder, onEdi
               </p>
             </div>
 
-            {/* Stock Column */}
+            {/* On Shelf Column */}
             <div className="w-[80px] px-3 flex items-center flex-shrink-0">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Stock
+                On Shelf
               </p>
             </div>
 
@@ -248,13 +248,13 @@ export const ProductList = ({ products = [], onSort, sortField, sortOrder, onEdi
                   </p>
                 </div>
 
-                {/* Stock */}
+                {/* On Shelf */}
                 <div className="w-[80px] px-3 flex items-center flex-shrink-0">
-                  <p className={`text-[13px] font-medium font-['Poppins',sans-serif] leading-[20px] ${(product.stock || product.inventory?.quantityAvailable || 0) > 0
+                  <p className={`text-[13px] font-medium font-['Poppins',sans-serif] leading-[20px] ${(product.inventory?.quantityOnShelf || 0) > 0
                     ? 'text-emerald-600'
                     : 'text-red-600'
                     }`}>
-                    {product.stock || product.inventory?.quantityAvailable || 0}
+                    {product.inventory?.quantityOnShelf || 0}
                   </p>
                 </div>
 
