@@ -89,6 +89,14 @@ const ProductBatches = () => {
       const response = await productBatchService.getAllBatches(params);
 
       if (response.success) {
+        // Debug: Check batch data structure
+        console.log('Fetched batches:', response.data.batches.map(b => ({
+          batchCode: b.batchCode,
+          costPrice: b.costPrice,
+          unitPrice: b.unitPrice,
+          quantity: b.quantity
+        })));
+
         setBatches(response.data.batches || []);
         setPagination(response.data.pagination || {
           currentPage: 1,
@@ -302,8 +310,8 @@ const ProductBatches = () => {
                     onClick={() => setFilters({ ...filters, page: pagination.currentPage - 1 })}
                     disabled={pagination.currentPage === 1}
                     className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
-                        ? 'text-gray-400 cursor-not-allowed'
-                        : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
                       }`}
                   >
                     ‹ Previous
@@ -317,8 +325,8 @@ const ProductBatches = () => {
                         key={page}
                         onClick={() => setFilters({ ...filters, page })}
                         className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === page
-                            ? 'bg-[#3bb77e] text-white'
-                            : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                          ? 'bg-[#3bb77e] text-white'
+                          : 'text-[#3bb77e] hover:bg-[#def9ec]'
                           }`}
                       >
                         {page}
@@ -331,8 +339,8 @@ const ProductBatches = () => {
                     onClick={() => setFilters({ ...filters, page: pagination.currentPage + 1 })}
                     disabled={pagination.currentPage === pagination.totalPages}
                     className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
-                        ? 'text-gray-400 cursor-not-allowed'
-                        : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
                       }`}
                   >
                     Next ›

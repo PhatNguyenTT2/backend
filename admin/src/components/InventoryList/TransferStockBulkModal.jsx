@@ -72,8 +72,11 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
       // Fetch current employee info if user has employeeId
       if (user?.employeeId) {
         const employeeResponse = await employeeService.getEmployeeById(user.employeeId);
+        console.log('Employee Response:', employeeResponse); // Debug log
         if (employeeResponse.success && employeeResponse.data) {
-          setCurrentEmployee(employeeResponse.data.employee);
+          const employee = employeeResponse.data.employee;
+          console.log('Current Employee:', employee); // Debug log
+          setCurrentEmployee(employee);
           setFormData(prev => ({
             ...prev,
             performedBy: user.employeeId
@@ -164,6 +167,28 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
 
     if (selectedBatches.length === 0) {
       setError('Please select at least one batch');
+      return;
+    }
+
+    // Validate that each product has at least one batch selected
+    const productsWithoutBatches = [];
+    for (const inventoryId of selectedProducts) {
+      const inventory = allProducts.find(p => (p._id || p.id) === inventoryId);
+      const batches = productBatches[inventoryId] || [];
+
+      // Check if any batch from this product is selected
+      const hasBatchSelected = batches.some(batch => {
+        const detailId = batch._id || batch.id;
+        return batchSelections[detailId]?.selected;
+      });
+
+      if (!hasBatchSelected) {
+        productsWithoutBatches.push(inventory?.product?.name || 'Unknown Product');
+      }
+    }
+
+    if (productsWithoutBatches.length > 0) {
+      setError(`Please select at least one batch for: ${productsWithoutBatches.join(', ')}`);
       return;
     }
 
@@ -602,11 +627,16 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                   </label>
                   <input
                     type="text"
-                    value={currentEmployee?.fullName || currentEmployee?.firstName && currentEmployee?.lastName ? `${currentEmployee.firstName} ${currentEmployee.lastName}` : currentUser?.username || 'N/A'}
+                    value={
+                      currentEmployee?.fullName ||
+                      (currentEmployee?.firstName && currentEmployee?.lastName
+                        ? `${currentEmployee.firstName} ${currentEmployee.lastName}`.trim()
+                        : currentUser?.username || 'N/A')
+                    }
                     disabled
                     className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] bg-gray-100 text-gray-600 cursor-not-allowed"
                   />
-                  <p className="text-[11px] text-gray-500 mt-1">Current logged in user</p>
+                  <p className="text-[11px] text-gray-500 mt-1">Current logged in employee</p>
                 </div>
               </div>
 

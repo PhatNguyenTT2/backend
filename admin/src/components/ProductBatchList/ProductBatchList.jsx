@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { AddProductBatchModal } from './AddProductBatchModal';
 import { EditProductBatchModal } from './EditProductBatchModal';
 
 // Helper function to format VND currency
@@ -242,7 +241,7 @@ export const ProductBatchList = ({
                   {/* Expiry Date */}
                   <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className={`text-[13px] font-normal font-['Poppins',sans-serif] leading-[20px] ${batch.isNearExpiry ? 'text-orange-600 font-medium' :
-                        batch.isExpired ? 'text-red-600 font-medium' : 'text-[#212529]'
+                      batch.isExpired ? 'text-red-600 font-medium' : 'text-[#212529]'
                       }`}>
                       {formatDate(batch.expiryDate)}
                       {batch.isNearExpiry && (
@@ -403,15 +402,6 @@ export const ProductBatchList = ({
           return null;
         })()}
       </div>
-
-      {/* Add Batch Modal */}
-      <AddProductBatchModal
-        isOpen={addModalOpen}
-        onClose={onCloseAddModal}
-        onSuccess={onAddSuccess}
-        productId={productId}
-      />
-
       {/* Edit Batch Modal */}
       <EditProductBatchModal
         isOpen={editModalOpen}

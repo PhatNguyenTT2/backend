@@ -55,9 +55,12 @@ export const StockOutBatchModal = ({ isOpen, onClose, onSuccess, detailInventory
     setError(null);
 
     try {
+      const detailInventoryId = detailInventory._id || detailInventory.id;
+      const batchId = detailInventory.batchId?._id || detailInventory.batchId?.id || detailInventory.batchId;
+
       const movementData = {
-        batchId: detailInventory.batchId._id || detailInventory.batchId,
-        inventoryDetail: detailInventory._id || detailInventory.id,
+        batchId: batchId,
+        inventoryDetail: detailInventoryId,
         movementType: 'out',
         quantity: quantity,
         reason: formData.reason,
@@ -107,10 +110,10 @@ export const StockOutBatchModal = ({ isOpen, onClose, onSuccess, detailInventory
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <h3 className="text-[14px] font-semibold text-red-900 mb-2">Batch Information:</h3>
             <div className="space-y-1 text-[12px] text-red-800">
-              <p><span className="font-semibold">Batch Code:</span> {detailInventory?.batchId?.batchCode}</p>
-              <p><span className="font-semibold">Product:</span> {detailInventory?.batchId?.productId?.name}</p>
-              <p><span className="font-semibold">Available:</span> {detailInventory?.quantityAvailable}</p>
-              <p><span className="font-semibold">On Hand:</span> {detailInventory?.quantityOnHand} | <span className="font-semibold">On Shelf:</span> {detailInventory?.quantityOnShelf}</p>
+              <p><span className="font-semibold">Batch Code:</span> {detailInventory?.batchId?.batchCode || 'N/A'}</p>
+              <p><span className="font-semibold">Product:</span> {detailInventory?.batchId?.product?.name || detailInventory?.batchId?.productId?.name || 'N/A'}</p>
+              <p><span className="font-semibold">Available:</span> {detailInventory?.quantityAvailable || 0}</p>
+              <p><span className="font-semibold">On Hand:</span> {detailInventory?.quantityOnHand || 0} | <span className="font-semibold">On Shelf:</span> {detailInventory?.quantityOnShelf || 0}</p>
             </div>
           </div>
 

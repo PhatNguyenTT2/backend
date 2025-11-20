@@ -150,21 +150,6 @@ export const ProductBatchListHeader = ({
             <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
               <button
                 onClick={() => {
-                  onAddBatch && onAddBatch();
-                  setShowActionsDropdown(false);
-                }}
-                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors flex items-center gap-2"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Add Batch
-              </button>
-
-              <div className="border-t border-gray-200 my-1"></div>
-
-              <button
-                onClick={() => {
                   console.log('Export CSV');
                   setShowActionsDropdown(false);
                 }}

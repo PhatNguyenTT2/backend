@@ -6,10 +6,8 @@ export const DetailInventoryList = ({
   sortField,
   sortOrder,
   onViewHistory,
-  onStockIn,
   onStockOut,
-  onAdjust,
-  onTransfer
+  onAdjust
 }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
@@ -325,12 +323,13 @@ export const DetailInventoryList = ({
         return (
           <div
             ref={dropdownRef}
-            className="fixed w-40 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
+            className="fixed w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
             style={{
               top: `${dropdownPosition.top}px`,
               left: `${dropdownPosition.left}px`
             }}
           >
+            {/* Movement History */}
             <button
               onClick={() => {
                 if (onViewHistory) {
@@ -349,40 +348,7 @@ export const DetailInventoryList = ({
 
             <div className="border-t border-gray-200 my-1"></div>
 
-            <button
-              onClick={() => {
-                if (onStockIn) {
-                  onStockIn(item);
-                }
-                setActiveDropdown(null);
-              }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-green-50 hover:text-green-600 transition-colors flex items-center gap-2"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 12V4M8 4L5 7M8 4L11 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M2 12H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Stock In
-            </button>
-
-            <button
-              onClick={() => {
-                if (onStockOut) {
-                  onStockOut(item);
-                }
-                setActiveDropdown(null);
-              }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center gap-2"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 4V12M8 12L5 9M8 12L11 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M2 4H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Stock Out
-            </button>
-
-            <div className="border-t border-gray-200 my-1"></div>
-
+            {/* Adjust Stock */}
             <button
               onClick={() => {
                 if (onAdjust) {
@@ -398,19 +364,21 @@ export const DetailInventoryList = ({
               Adjust Stock
             </button>
 
+            {/* Stock Out */}
             <button
               onClick={() => {
-                if (onTransfer) {
-                  onTransfer(item);
+                if (onStockOut) {
+                  onStockOut(item);
                 }
                 setActiveDropdown(null);
               }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center gap-2"
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M2 8H14M14 8L10 4M14 8L10 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M8 4V12M8 12L5 9M8 12L11 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 4H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              Transfer Stock
+              Stock Out
             </button>
           </div>
         );

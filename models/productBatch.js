@@ -159,6 +159,17 @@ productBatchSchema.set('toJSON', {
     returnedObject.id = returnedObject._id.toString();
     delete returnedObject._id;
     delete returnedObject.__v;
+
+    // Convert Decimal128 to number for JSON response
+    if (returnedObject.costPrice) {
+      returnedObject.costPrice = parseFloat(returnedObject.costPrice.toString());
+    }
+    if (returnedObject.unitPrice) {
+      returnedObject.unitPrice = parseFloat(returnedObject.unitPrice.toString());
+    }
+    if (returnedObject.discountPercentage) {
+      returnedObject.discountPercentage = parseFloat(returnedObject.discountPercentage.toString());
+    }
   }
 });
 

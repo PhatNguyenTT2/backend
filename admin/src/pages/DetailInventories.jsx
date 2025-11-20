@@ -4,10 +4,8 @@ import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { DetailInventoryList, DetailInventoryListHeader } from '../components/DetailInventoryList';
 import {
-  StockInBatchModal,
   StockOutBatchModal,
   AdjustStockBatchModal,
-  TransferStockBatchModal,
   MovementHistoryBatchModal
 } from '../components/DetailInventoryList/BatchMovementModals';
 import detailInventoryService from '../services/detailInventoryService';
@@ -272,10 +270,6 @@ export const DetailInventories = () => {
           onSearchChange={handleSearchChange}
           filterView={filterView}
           onFilterViewChange={handleFilterViewChange}
-          onStockIn={() => setStockInModal({ isOpen: true, item: null })}
-          onStockOut={() => setStockOutModal({ isOpen: true, item: null })}
-          onAdjust={() => setAdjustModal({ isOpen: true, item: null })}
-          onTransfer={() => setTransferModal({ isOpen: true, item: null })}
         />
 
         {/* Loading State */}
@@ -308,6 +302,8 @@ export const DetailInventories = () => {
               sortField={sortField}
               sortOrder={sortOrder}
               onViewHistory={handleViewHistory}
+              onStockOut={handleStockOut}
+              onAdjust={handleAdjust}
             />
 
             {/* Pagination */}
@@ -432,13 +428,6 @@ export const DetailInventories = () => {
       </div>
 
       {/* Modals */}
-      <StockInBatchModal
-        isOpen={stockInModal.isOpen}
-        onClose={() => setStockInModal({ isOpen: false, item: null })}
-        onSuccess={handleMovementSuccess}
-        detailInventory={stockInModal.item}
-      />
-
       <StockOutBatchModal
         isOpen={stockOutModal.isOpen}
         onClose={() => setStockOutModal({ isOpen: false, item: null })}
@@ -452,14 +441,6 @@ export const DetailInventories = () => {
         onSuccess={handleMovementSuccess}
         detailInventory={adjustModal.item}
       />
-
-      <TransferStockBatchModal
-        isOpen={transferModal.isOpen}
-        onClose={() => setTransferModal({ isOpen: false, item: null })}
-        onSuccess={handleMovementSuccess}
-        detailInventory={transferModal.item}
-      />
-
       <MovementHistoryBatchModal
         isOpen={historyModal.isOpen}
         onClose={() => setHistoryModal({ isOpen: false, item: null })}
