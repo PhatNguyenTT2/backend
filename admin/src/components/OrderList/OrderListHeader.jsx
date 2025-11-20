@@ -3,13 +3,16 @@ import React, { useState, useRef, useEffect } from 'react';
 export const OrderListHeader = ({
   itemsPerPage = 20,
   onItemsPerPageChange,
-  searchQuery = '',
-  onSearchChange,
+  searchTerm = '',
   onSearch,
-  onAddOrder
+  onAddOrder,
+  statusFilter,
+  onStatusFilterChange
 }) => {
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const dropdownRef = useRef(null);
+  const statusRef = useRef(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -17,16 +20,29 @@ export const OrderListHeader = ({
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowActionsDropdown(false);
       }
+      if (statusRef.current && !statusRef.current.contains(event.target)) {
+        setShowStatusDropdown(false);
+      }
     };
 
-    if (showActionsDropdown) {
+    if (showActionsDropdown || showStatusDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showActionsDropdown]);
+  }, [showActionsDropdown, showStatusDropdown]);
+
+  const statusOptions = [
+    { value: '', label: 'All Status' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'processing', label: 'Processing' },
+    { value: 'shipping', label: 'Shipping' },
+    { value: 'delivered', label: 'Delivered' },
+    { value: 'cancelled', label: 'Cancelled' }
+  ];
+
   return (
     <div className="bg-white p-4 rounded-lg shadow-sm">
       <div className="flex items-center justify-between gap-3">
@@ -44,7 +60,7 @@ export const OrderListHeader = ({
             <select
               value={itemsPerPage}
               onChange={(e) => onItemsPerPageChange && onItemsPerPageChange(parseInt(e.target.value))}
-              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="10">10</option>
               <option value="20">20</option>
@@ -58,17 +74,66 @@ export const OrderListHeader = ({
             </div>
           </div>
 
+          {/* Status Filter Dropdown */}
+          <div className="relative w-[120px]" ref={statusRef}>
+            <button
+              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] flex items-center justify-between hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <span className="truncate">{statusFilter ? statusOptions.find(opt => opt.value === statusFilter)?.label : 'All Status'}</span>
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 12 12"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className={`transition-transform flex-shrink-0 ${showStatusDropdown ? 'rotate-180' : ''}`}
+              >
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+
+            {/* Status Dropdown Menu */}
+            {showStatusDropdown && (
+              <div className="absolute left-0 mt-2 w-full min-w-[140px] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
+                {statusOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => {
+                      onStatusFilterChange && onStatusFilterChange(option.value);
+                      setShowStatusDropdown(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors ${statusFilter === option.value
+                        ? 'bg-blue-50 text-blue-600'
+                        : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Search Input */}
           <div className="flex-1 max-w-[300px]">
-            <div className="relative h-[36px]">
+            <div className="flex h-[36px] gap-1">
               <input
                 type="text"
-                placeholder="Search by ID or Name..."
-                value={searchQuery}
-                onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
-                className="w-full h-full bg-white border border-[#ced4da] rounded-lg pl-3 pr-10 py-2 text-[12px] font-['Poppins',sans-serif] text-gray-900 placeholder:text-[#6c757d] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                placeholder="Search by Order #, Customer..."
+                value={searchTerm}
+                onChange={(e) => onSearch && onSearch(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && onSearch) {
+                    onSearch(searchTerm);
+                  }
+                }}
+                className="flex-1 bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-gray-900 placeholder:text-[#6c757d] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <button
+                className="w-[40px] bg-white border border-[#ced4da] rounded-lg flex items-center justify-center hover:bg-gray-50 transition-colors flex-shrink-0"
+                onClick={() => onSearch && onSearch(searchTerm)}
+              >
                 <svg
                   width="14"
                   height="14"
@@ -91,7 +156,7 @@ export const OrderListHeader = ({
                     strokeLinejoin="round"
                   />
                 </svg>
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -100,7 +165,7 @@ export const OrderListHeader = ({
         <div className="relative ml-auto" ref={dropdownRef}>
           <button
             onClick={() => setShowActionsDropdown(!showActionsDropdown)}
-            className="h-[36px] px-4 bg-emerald-600 hover:bg-emerald-700 border border-emerald-600 rounded-lg text-white text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap"
+            className="h-[36px] px-4 bg-blue-600 hover:bg-blue-700 border border-blue-600 rounded-lg text-white text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 whitespace-nowrap"
           >
             <span>Actions</span>
             <svg
@@ -123,7 +188,7 @@ export const OrderListHeader = ({
                   onAddOrder && onAddOrder();
                   setShowActionsDropdown(false);
                 }}
-                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors flex items-center gap-2"
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

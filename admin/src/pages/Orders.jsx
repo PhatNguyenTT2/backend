@@ -1,90 +1,63 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { OrderListHeader, OrderList } from '../components/OrderList';
-import { AddOrderModal, EditOrderModal } from '../components/OrderModals';
-// import orderService from '../services/orderService';
+import { OrderList, OrderListHeader, AddOrderModal, EditOrderModal } from '../components/OrderList';
+import orderService from '../services/orderService';
 
-const Orders = () => {
+export const Orders = () => {
   // Breadcrumb items
   const breadcrumbItems = [
     { label: 'Dashboard', href: '/dashboard' },
-    { label: 'Orders', href: null },
+    { label: 'Orders', href: '/orders' },
   ];
 
-  // State management
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [paginatedOrders, setPaginatedOrders] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [pagination, setPagination] = useState({
-    current_page: 1,
-    per_page: 20,
-    total: 0,
-    total_pages: 0
-  });
 
-  // Filters
-  const [filters, setFilters] = useState({
-    page: 1,
-    per_page: 20,
-    status: '',
-    payment_status: ''
-  });
+  // Modal states
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
 
-  // Search state
+  // Filters and sorting
+  const [itemsPerPage, setItemsPerPage] = useState(20);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Sort state
-  const [sortField, setSortField] = useState('createdAt');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [sortField, setSortField] = useState('orderDate');
   const [sortOrder, setSortOrder] = useState('desc');
 
-  // Modal state
-  const [addOrderModal, setAddOrderModal] = useState(false);
-  const [editOrderModal, setEditOrderModal] = useState(null);
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    itemsPerPage: 20,
+  });
 
-  // Fetch orders from API
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // const response = await orderService.getOrders(filters);
-
-      if (response.success) {
-        // const formattedOrders = orderService.formatOrdersForDisplay(response.data.orders);
-        // setOrders(formattedOrders);
-        setPagination(response.data.pagination);
-      }
-    } catch (err) {
-      console.error('Error fetching orders:', err);
-      setError(err.error || 'Failed to fetch orders. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch orders on component mount and when filters change
+  // Fetch orders on component mount
   useEffect(() => {
     fetchOrders();
-  }, [filters]);
+  }, []);
 
-  // Apply search and sorting when data or filters change (Auto-filter like Categories)
+  // Apply search, filter and sorting when data or filters change
   useEffect(() => {
     let result = [...orders];
 
-    // Apply search filter - search by ID, order number, or customer name
+    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      result = result.filter(order => {
-        const orderNumber = (order.orderNumber || '').toLowerCase();
-        const customerName = (order.customerName || '').toLowerCase();
-        const orderId = (order.id || '').toString().toLowerCase();
+      result = result.filter(order =>
+        order.orderNumber?.toLowerCase().includes(query) ||
+        order.customer?.fullName?.toLowerCase().includes(query) ||
+        order.customer?.phone?.includes(query)
+      );
+    }
 
-        return orderNumber.includes(query) ||
-          customerName.includes(query) ||
-          orderId.includes(query);
-      });
+    // Apply status filter
+    if (statusFilter) {
+      result = result.filter(order => order.status === statusFilter);
     }
 
     // Apply sorting
@@ -92,15 +65,21 @@ const Orders = () => {
       let aVal = a[sortField];
       let bVal = b[sortField];
 
+      // Handle nested customer name
+      if (sortField === 'customer') {
+        aVal = a.customer?.fullName || '';
+        bVal = b.customer?.fullName || '';
+      }
+
       // Handle null/undefined values
       if (aVal == null) aVal = '';
       if (bVal == null) bVal = '';
 
       // Handle different data types
       if (sortField === 'total') {
-        aVal = parseFloat(aVal) || 0;
-        bVal = parseFloat(bVal) || 0;
-      } else if (sortField === 'date' || sortField === 'createdAt') {
+        aVal = Number(aVal) || 0;
+        bVal = Number(bVal) || 0;
+      } else if (sortField === 'orderDate') {
         aVal = new Date(aVal).getTime();
         bVal = new Date(bVal).getTime();
       } else {
@@ -108,101 +87,153 @@ const Orders = () => {
         bVal = String(bVal).toLowerCase();
       }
 
-      if (sortOrder === 'asc') {
-        return aVal > bVal ? 1 : -1;
-      } else {
-        return aVal < bVal ? 1 : -1;
-      }
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
     });
 
     setFilteredOrders(result);
-  }, [orders, searchQuery, sortField, sortOrder]);
 
-  // Handle status change
-  const handleStatusChange = async (orderId, newStatus) => {
+    // Update pagination
+    const totalPages = Math.ceil(result.length / itemsPerPage);
+    setPagination(prev => ({
+      ...prev,
+      currentPage: 1, // Reset to first page on filter change
+      totalPages,
+      itemsPerPage,
+    }));
+  }, [orders, searchQuery, statusFilter, sortField, sortOrder, itemsPerPage]);
+
+  // Paginate filtered orders
+  useEffect(() => {
+    const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
+    const endIndex = startIndex + pagination.itemsPerPage;
+    setPaginatedOrders(filteredOrders.slice(startIndex, endIndex));
+  }, [filteredOrders, pagination.currentPage, pagination.itemsPerPage]);
+
+  const fetchOrders = async () => {
     try {
-      // const response = await orderService.updateOrderStatus(orderId, newStatus);
+      setIsLoading(true);
+      setError(null);
 
-      if (response.success) {
-        // Refresh orders list
-        await fetchOrders();
+      // Fetch orders with populated customer and createdBy
+      const response = await orderService.getAllOrders({
+        populate: 'customer,createdBy'
+      });
 
-        // Show success message (you can add toast notification here)
-        console.log('Order status updated successfully');
-      }
+      // Map response to include id field for consistency
+      const ordersData = (response.orders || []).map(order => ({
+        ...order,
+        id: order._id
+      }));
+
+      setOrders(ordersData);
     } catch (err) {
-      console.error('Error updating order status:', err);
-      alert(err.error || 'Failed to update order status');
+      console.error('Error fetching orders:', err);
+      setError(err.message || 'Failed to load orders');
+      setOrders([]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Handle delete order
-  const handleDeleteOrder = async (order) => {
-    // Validation: Check payment status
-    const allowedPaymentStatuses = ['paid', 'failed', 'refunded'];
-    const paymentStatus = order.paymentStatus.toLowerCase();
-
-    if (!allowedPaymentStatuses.includes(paymentStatus)) {
-      alert(`Cannot delete order with payment status '${order.paymentStatus}'. Only orders with payment status 'Paid', 'Failed', or 'Refunded' can be deleted.`);
-      return;
-    }
-
-    // Confirm deletion
-    if (!window.confirm(`Are you sure you want to delete order ${order.orderNumber}?\n\nThis action cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      // const response = await orderService.deleteOrder(order.id);
-
-      if (response.success) {
-        // Refresh orders list
-        await fetchOrders();
-        console.log('Order deleted successfully');
-      }
-    } catch (err) {
-      console.error('Error deleting order:', err);
-      alert(err.error || 'Failed to delete order');
-    }
+  const handleColumnSort = (field, order) => {
+    setSortField(field);
+    setSortOrder(order);
   };
 
-  // Handle filter changes
-  const handleItemsPerPageChange = (newPerPage) => {
-    setFilters({ ...filters, per_page: newPerPage, page: 1 });
-  };
-
-  // Handle search change - auto-filter (no need to click search button)
-  const handleSearchChange = (query) => {
-    setSearchQuery(query);
-  };
-
-  // Handle search button click (optional - mainly for UX consistency)
   const handleSearch = (query) => {
     setSearchQuery(query);
   };
 
-  // Handle column sort
-  const handleColumnSort = (field) => {
-    let newSortOrder = 'asc';
+  const handleItemsPerPageChange = (value) => {
+    setItemsPerPage(value);
+  };
 
-    // Toggle sort order if clicking the same field
-    if (sortField === field) {
-      newSortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+  const handleStatusFilterChange = (value) => {
+    setStatusFilter(value);
+  };
+
+  const handlePageChange = (newPage) => {
+    setPagination(prev => ({
+      ...prev,
+      currentPage: newPage
+    }));
+    // Scroll to top smoothly
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleAddOrder = () => {
+    setShowAddModal(true);
+  };
+
+  const handleView = (order) => {
+    // Open edit modal in view mode
+    setSelectedOrder(order);
+    setShowEditModal(true);
+  };
+
+  const handleEdit = (order) => {
+    setSelectedOrder(order);
+    setShowEditModal(true);
+  };
+
+  const handleAddSuccess = () => {
+    console.log('Order created successfully');
+    fetchOrders(); // Refresh the list
+  };
+
+  const handleEditSuccess = () => {
+    console.log('Order updated successfully');
+    fetchOrders(); // Refresh the list
+    setSelectedOrder(null);
+  };
+
+  const handleUpdateStatus = async (order, newStatus) => {
+    try {
+      // Validation: Cannot mark as delivered if payment is not completed
+      if (newStatus === 'delivered' && order.paymentStatus !== 'paid') {
+        alert('Cannot mark order as delivered without payment being completed.');
+        return;
+      }
+
+      await orderService.updateOrder(order.id, { status: newStatus });
+      fetchOrders(); // Refresh the list
+    } catch (err) {
+      console.error('Error updating order status:', err);
+      alert(err.response?.data?.message || 'Failed to update order status');
+    }
+  };
+
+  const handleUpdatePayment = async (order, newPaymentStatus) => {
+    try {
+      await orderService.updateOrder(order.id, { paymentStatus: newPaymentStatus });
+      fetchOrders(); // Refresh the list
+    } catch (err) {
+      console.error('Error updating payment status:', err);
+      alert(err.response?.data?.message || 'Failed to update payment status');
+    }
+  };
+
+  const handleDelete = async (order) => {
+    // Validation: Can only delete pending orders with pending payment
+    if (order.status !== 'pending' || order.paymentStatus !== 'pending') {
+      alert('Can only delete pending orders with pending payment.');
+      return;
     }
 
-    setSortField(field);
-    setSortOrder(newSortOrder);
-  };
+    if (!window.confirm(`Are you sure you want to delete order ${order.orderNumber}?`)) {
+      return;
+    }
 
-  // Handle add order
-  const handleAddOrder = () => {
-    setAddOrderModal(true);
-  };
-
-  // Handle order created successfully
-  const handleOrderSuccess = (data) => {
-    console.log('Order created successfully:', data);
-    fetchOrders(); // Refresh list
+    try {
+      await orderService.deleteOrder(order.id);
+      alert('Order deleted successfully!');
+      fetchOrders(); // Refresh the list
+    } catch (err) {
+      console.error('Error deleting order:', err);
+      alert(err.response?.data?.message || 'Failed to delete order');
+    }
   };
 
   return (
@@ -213,18 +244,19 @@ const Orders = () => {
 
         {/* Order List Header */}
         <OrderListHeader
-          itemsPerPage={filters.per_page}
+          itemsPerPage={itemsPerPage}
           onItemsPerPageChange={handleItemsPerPageChange}
-          searchQuery={searchQuery}
-          onSearchChange={handleSearchChange}
+          searchTerm={searchQuery}
           onSearch={handleSearch}
           onAddOrder={handleAddOrder}
+          statusFilter={statusFilter}
+          onStatusFilterChange={handleStatusFilterChange}
         />
 
         {/* Loading State */}
-        {loading && (
+        {isLoading && (
           <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
         )}
 
@@ -243,29 +275,31 @@ const Orders = () => {
         )}
 
         {/* Order List Table */}
-        {!loading && !error && (
+        {!isLoading && !error && (
           <>
             <OrderList
-              orders={filteredOrders}
-              onStatusChange={handleStatusChange}
-              onEdit={(order) => setEditOrderModal(order)}
-              onDelete={handleDeleteOrder}
+              orders={paginatedOrders}
               onSort={handleColumnSort}
               sortField={sortField}
               sortOrder={sortOrder}
+              onView={handleView}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onUpdateStatus={handleUpdateStatus}
+              onUpdatePayment={handleUpdatePayment}
             />
 
             {/* Pagination */}
-            {pagination.total_pages > 1 && (
+            {pagination.totalPages > 1 && (
               <div className="flex items-center justify-center mt-6">
                 <div className="flex items-center gap-2">
                   {/* Previous button */}
                   <button
-                    onClick={() => setFilters({ ...filters, page: pagination.current_page - 1 })}
-                    disabled={!pagination.has_prev}
-                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${!pagination.has_prev
+                    onClick={() => handlePageChange(pagination.currentPage - 1)}
+                    disabled={pagination.currentPage === 1}
+                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
                       ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      : 'text-blue-600 hover:bg-blue-50'
                       }`}
                   >
                     ‹ Previous
@@ -274,8 +308,7 @@ const Orders = () => {
                   {/* Page numbers */}
                   {(() => {
                     const maxPagesToShow = 5;
-                    const totalPages = pagination.total_pages;
-                    const currentPage = pagination.current_page;
+                    const { totalPages, currentPage } = pagination;
 
                     // Calculate start and end page numbers to display
                     let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
@@ -293,8 +326,8 @@ const Orders = () => {
                       pages.push(
                         <button
                           key={1}
-                          onClick={() => setFilters({ ...filters, page: 1 })}
-                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                          onClick={() => handlePageChange(1)}
+                          className="px-3 py-2 rounded text-blue-600 hover:bg-blue-50 transition-colors text-[12px] font-['Poppins',sans-serif]"
                         >
                           1
                         </button>
@@ -313,10 +346,10 @@ const Orders = () => {
                       pages.push(
                         <button
                           key={page}
-                          onClick={() => setFilters({ ...filters, page })}
+                          onClick={() => handlePageChange(page)}
                           className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${currentPage === page
-                            ? 'bg-[#3bb77e] text-white'
-                            : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-blue-600 hover:bg-blue-50'
                             }`}
                         >
                           {page}
@@ -336,8 +369,8 @@ const Orders = () => {
                       pages.push(
                         <button
                           key={totalPages}
-                          onClick={() => setFilters({ ...filters, page: totalPages })}
-                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                          onClick={() => handlePageChange(totalPages)}
+                          className="px-3 py-2 rounded text-blue-600 hover:bg-blue-50 transition-colors text-[12px] font-['Poppins',sans-serif]"
                         >
                           {totalPages}
                         </button>
@@ -349,11 +382,11 @@ const Orders = () => {
 
                   {/* Next button */}
                   <button
-                    onClick={() => setFilters({ ...filters, page: pagination.current_page + 1 })}
-                    disabled={!pagination.has_next}
-                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${!pagination.has_next
+                    onClick={() => handlePageChange(pagination.currentPage + 1)}
+                    disabled={pagination.currentPage === pagination.totalPages}
+                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
                       ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      : 'text-blue-600 hover:bg-blue-50'
                       }`}
                   >
                     Next ›
@@ -363,42 +396,51 @@ const Orders = () => {
             )}
 
             {/* Results Summary */}
-            {filteredOrders.length > 0 && (
+            {paginatedOrders.length > 0 && (
               <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
-                Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of {pagination.total} orders
-                {searchQuery && ` (filtered from ${orders.length} total)`}
+                Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
+                {Math.min(pagination.currentPage * pagination.itemsPerPage, filteredOrders.length)} of{' '}
+                {filteredOrders.length} orders
               </div>
             )}
           </>
         )}
 
-        {/* Empty State - No Results from Search */}
-        {!loading && !error && filteredOrders.length === 0 && orders.length > 0 && (
+        {/* Empty State */}
+        {!isLoading && !error && filteredOrders.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
-            <p className="text-gray-500 text-sm">No orders found matching "{searchQuery}"</p>
-            <button
-              onClick={() => setSearchQuery('')}
-              className="mt-2 text-sm text-emerald-600 hover:underline"
-            >
-              Clear search
-            </button>
+            <p className="text-gray-500 text-sm">No orders found</p>
+            {(searchQuery || statusFilter) && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('');
+                }}
+                className="mt-2 text-sm text-blue-600 hover:underline"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         )}
       </div>
 
       {/* Add Order Modal */}
       <AddOrderModal
-        isOpen={addOrderModal}
-        onClose={() => setAddOrderModal(false)}
-        onSuccess={handleOrderSuccess}
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={handleAddSuccess}
       />
 
       {/* Edit Order Modal */}
       <EditOrderModal
-        isOpen={!!editOrderModal}
-        onClose={() => setEditOrderModal(null)}
-        onSuccess={handleOrderSuccess}
-        order={editOrderModal}
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedOrder(null);
+        }}
+        onSuccess={handleEditSuccess}
+        order={selectedOrder}
       />
     </Layout>
   );

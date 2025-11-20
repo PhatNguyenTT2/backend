@@ -1,2 +1,4 @@
-export { OrderListHeader } from './OrderListHeader';
 export { OrderList } from './OrderList';
+export { OrderListHeader } from './OrderListHeader';
+export { AddOrderModal } from './AddOrderModal';
+export { EditOrderModal } from './EditOrderModal';

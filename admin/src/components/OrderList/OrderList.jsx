@@ -1,26 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { InvoiceModal, ViewItemsModal } from '../OrderModals';
 
-export const OrderList = ({ orders = [], onStatusChange, onSort, sortField, sortOrder, onEdit, onDelete }) => {
-  const [activeDropdown, setActiveDropdown] = useState(null); // Format: 'order-{orderId}', 'payment-{orderId}', 'action-{orderId}'
+export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, onEdit, onDelete, onUpdateStatus, onUpdatePayment }) => {
+  const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
-  const [pendingChanges, setPendingChanges] = useState({}); // Track pending changes
-  const [viewItemsModal, setViewItemsModal] = useState(null); // Track which order's items to view
-  const [viewDetailsModal, setViewDetailsModal] = useState(null); // Track which order to view invoice details
   const dropdownRef = useRef(null);
 
-  // Handle sort click
-  const handleSortClick = (field) => {
-    if (onSort) {
-      onSort(field);
-    }
-  };
-
-  // Get sort icon with color
   const getSortIcon = (field) => {
     if (sortField !== field) {
       return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M6 3V9M6 3L4 5M6 3L8 5" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
@@ -28,38 +16,78 @@ export const OrderList = ({ orders = [], onStatusChange, onSort, sortField, sort
 
     if (sortOrder === 'asc') {
       return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M6 9V3M6 3L4 5M6 3L8 5" stroke="#10B981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     } else {
       return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-1">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M6 3V9M6 9L4 7M6 9L8 7" stroke="#10B981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
     }
   };
 
+  const handleSortClick = (field) => {
+    if (onSort) {
+      const newOrder = sortField === field && sortOrder === 'asc' ? 'desc' : 'asc';
+      onSort(field, newOrder);
+    }
+  };
+
+  // Get status badge color
+  const getStatusColor = (status) => {
+    const colors = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      processing: 'bg-blue-100 text-blue-800',
+      shipping: 'bg-purple-100 text-purple-800',
+      delivered: 'bg-green-100 text-green-800',
+      cancelled: 'bg-red-100 text-red-800'
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  // Get payment status badge color
+  const getPaymentColor = (paymentStatus) => {
+    const colors = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      paid: 'bg-green-100 text-green-800',
+      failed: 'bg-red-100 text-red-800',
+      refunded: 'bg-gray-100 text-gray-800'
+    };
+    return colors[paymentStatus] || 'bg-gray-100 text-gray-800';
+  };
+
+  // Format currency
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(amount || 0);
+  };
+
+  // Format date
+  const formatDate = (date) => {
+    if (!date) return '-';
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   // Toggle dropdown
-  const toggleDropdown = (dropdownId, event) => {
-    console.log('Toggle dropdown:', dropdownId);
-    console.log('Current activeDropdown:', activeDropdown);
+  const toggleDropdown = (orderId, type, event) => {
+    const dropdownId = `${type}-${orderId}`;
 
     if (activeDropdown === dropdownId) {
       setActiveDropdown(null);
     } else {
       const buttonRect = event.currentTarget.getBoundingClientRect();
-
-      // Determine position based on dropdown type
-      let leftPosition;
-      if (dropdownId.startsWith('order-') || dropdownId.startsWith('payment-')) {
-        // For Order Status and Payment Status: show dropdown to the right of button
-        leftPosition = buttonRect.left;
-      } else {
-        // For Actions: show dropdown aligned to the right (as before)
-        leftPosition = buttonRect.right - 160; // 160px is dropdown width
-      }
+      const leftPosition = type === 'action' ? buttonRect.right - 160 : buttonRect.left;
 
       setDropdownPosition({
         top: buttonRect.bottom + 4,
@@ -68,16 +96,6 @@ export const OrderList = ({ orders = [], onStatusChange, onSort, sortField, sort
       setActiveDropdown(dropdownId);
     }
   };
-
-  // Handle order status change
-  const handleOrderStatusChange = (orderId, newStatus) => {
-    if (onStatusChange) {
-      onStatusChange(orderId, newStatus);
-    }
-    setActiveDropdown(null);
-  };
-
-
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -96,109 +114,79 @@ export const OrderList = ({ orders = [], onStatusChange, onSort, sortField, sort
     };
   }, [activeDropdown]);
 
-  // Get order status badge styling
-  const getOrderStatusStyles = (status) => {
-    const statusMap = {
-      pending: 'bg-[#fbbf24]',      // Yellow
-      processing: 'bg-[#3b82f6]',   // Blue
-      shipping: 'bg-[#8b5cf6]',     // Purple
-      delivered: 'bg-[#10b981]',    // Green
-      cancelled: 'bg-[#ef4444]',    // Red
-    };
-    return statusMap[status?.toLowerCase()] || 'bg-gray-500';
-  };
-
-  // Get payment status badge styling
-  const getPaymentStatusStyles = (paymentStatus) => {
-    const statusMap = {
-      pending: 'bg-[#fbbf24]',      // Yellow
-      paid: 'bg-[#10b981]',         // Green
-      failed: 'bg-[#ef4444]',       // Red
-      refunded: 'bg-[#f59e0b]',     // Orange
-    };
-    return statusMap[paymentStatus?.toLowerCase()] || 'bg-gray-500';
-  };
-
-  // Order status options for dropdown
-  const orderStatusOptions = [
-    { value: 'pending', label: 'Pending', color: 'bg-[#fbbf24]' },
-    { value: 'processing', label: 'Processing', color: 'bg-[#3b82f6]' },
-    { value: 'shipping', label: 'Shipping', color: 'bg-[#8b5cf6]' },
-    { value: 'delivered', label: 'Delivered', color: 'bg-[#10b981]' },
-    { value: 'cancelled', label: 'Cancelled', color: 'bg-[#ef4444]' },
-  ];
-
-
-
   return (
     <div className="bg-white rounded-lg shadow-sm">
-      {/* Scrollable Container - overflow-x-auto allows horizontal scroll */}
+      {/* Scrollable Container */}
       <div className="overflow-x-auto rounded-lg">
-        <div className="min-w-[1200px]">
+        <div className="min-w-[1000px]">
           {/* Table Header */}
           <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
-            {/* ID Column - Sortable */}
+            {/* Order Number Column - Sortable */}
             <div
               className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('orderNumber')}
             >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                ID
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
+                Order #
                 {getSortIcon('orderNumber')}
               </p>
             </div>
 
-            {/* Name Column - Sortable */}
-            <div
-              className="flex-1 min-w-[200px] px-3 flex items-center cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('customerName')}
-            >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
-                Name
-                {getSortIcon('customerName')}
-              </p>
-            </div>
-
-            {/* Items Column */}
-            <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
+            {/* Customer Column */}
+            <div className="flex-1 min-w-[140px] px-3 flex items-center">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                ITEMS
+                Customer
               </p>
             </div>
 
-            {/* Date Column - Sortable */}
+            {/* Order Date Column - Sortable */}
             <div
-              className="w-[180px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
-              onClick={() => handleSortClick('date')}
+              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('orderDate')}
             >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
                 Date
-                {getSortIcon('date')}
+                {getSortIcon('orderDate')}
               </p>
             </div>
 
             {/* Total Column - Sortable */}
             <div
-              className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('total')}
             >
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
                 Total
                 {getSortIcon('total')}
               </p>
             </div>
 
-            {/* Order Status Column */}
-            <div className="w-[160px] px-3 flex items-center flex-shrink-0">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Order Status
+            {/* Status Column - Sortable */}
+            <div
+              className="w-[110px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('status')}
+            >
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
+                Status
+                {getSortIcon('status')}
               </p>
             </div>
 
-            {/* Payment Status Column */}
-            <div className="w-[160px] px-3 flex items-center flex-shrink-0">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
+            {/* Payment Status Column - Sortable */}
+            <div
+              className="w-[110px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              onClick={() => handleSortClick('paymentStatus')}
+            >
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
                 Payment
+                {getSortIcon('paymentStatus')}
+              </p>
+            </div>
+
+            {/* Delivery Type Column */}
+            <div className="w-[90px] px-3 flex items-center flex-shrink-0">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
+                Delivery
               </p>
             </div>
 
@@ -212,110 +200,99 @@ export const OrderList = ({ orders = [], onStatusChange, onSort, sortField, sort
 
           {/* Table Body */}
           <div className="flex flex-col">
-            {orders.map((order, index) => {
-              const orderDropdownId = `order-${order.id}`;
-
-              return (
-                <div
-                  key={order.id}
-                  className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== orders.length - 1 ? 'border-b border-gray-100' : ''
-                    }`}
-                >
-                  {/* ID - Display orderNumber */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
-                      {order.orderNumber || `#${order.id}`}
-                    </p>
-                  </div>
-
-                  {/* Name */}
-                  <div className="flex-1 min-w-[200px] px-3 flex items-center">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {order.customerName}
-                    </p>
-                  </div>
-
-                  {/* Items - View Icon */}
-                  <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
-                    <button
-                      onClick={() => setViewItemsModal(order)}
-                      className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700 transition-colors"
-                      title="View items"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M2 4H14M2 8H14M2 12H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                      </svg>
-                      <span className="text-[13px] font-normal font-['Poppins',sans-serif]">
-                        {order.items?.length || 0}
-                      </span>
-                    </button>
-                  </div>
-
-                  {/* Date */}
-                  <div className="w-[180px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      {order.date}
-                    </p>
-                  </div>
-
-                  {/* Total */}
-                  <div className="w-[140px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      ${order.total}
-                    </p>
-                  </div>
-
-                  {/* Order Status Badge with Dropdown */}
-                  <div className="w-[160px] px-3 flex items-center flex-shrink-0">
-                    {order.paymentStatus?.toLowerCase() !== 'failed' ? (
-                      <button
-                        onClick={(e) => toggleDropdown(orderDropdownId, e)}
-                        className={`${getOrderStatusStyles(order.status)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
-                      >
-                        <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
-                          {order.status}
-                        </span>
-                        <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M1 1L4 4L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                    ) : (
-                      <div className={`${getOrderStatusStyles(order.status)} px-2 py-1 rounded inline-flex items-center`}>
-                        <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
-                          {order.status}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Payment Status Badge (Read-only) */}
-                  <div className="w-[160px] px-3 flex items-center flex-shrink-0">
-                    <span
-                      className={`${getPaymentStatusStyles(order.paymentStatus)} px-2 py-1 rounded inline-flex items-center`}
-                    >
-                      <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
-                        {order.paymentStatus || 'pending'}
-                      </span>
-                    </span>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
-                    <button
-                      onClick={(e) => toggleDropdown(`action-${order.id}`, e)}
-                      className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-                      title="Actions"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="3" cy="8" r="1.5" fill="#6B7280" />
-                        <circle cx="8" cy="8" r="1.5" fill="#6B7280" />
-                        <circle cx="13" cy="8" r="1.5" fill="#6B7280" />
-                      </svg>
-                    </button>
-                  </div>
+            {orders.map((order, index) => (
+              <div
+                key={order.id}
+                className={`flex items-center min-h-[60px] hover:bg-gray-50 transition-colors ${index !== orders.length - 1 ? 'border-b border-gray-100' : ''
+                  }`}
+              >
+                {/* Order Number */}
+                <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[12px] font-medium font-['Poppins',sans-serif] text-blue-600 leading-[20px] truncate">
+                    {order.orderNumber || '-'}
+                  </p>
                 </div>
-              );
-            })}
+
+                {/* Customer */}
+                <div className="flex-1 min-w-[140px] px-3 flex flex-col justify-center py-2">
+                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
+                    {order.customer?.fullName || '-'}
+                  </p>
+                  {order.customer?.phone && (
+                    <p className="text-[11px] text-gray-500 truncate">{order.customer.phone}</p>
+                  )}
+                </div>
+
+                {/* Order Date */}
+                <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[12px] font-normal font-['Poppins',sans-serif] text-gray-600 leading-[20px]">
+                    {formatDate(order.orderDate)}
+                  </p>
+                </div>
+
+                {/* Total */}
+                <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
+                    {formatCurrency(order.total)}
+                  </p>
+                </div>
+
+                {/* Status - Dropdown */}
+                <div className="w-[110px] px-3 flex items-center flex-shrink-0">
+                  <button
+                    onClick={(e) => toggleDropdown(order.id, 'status', e)}
+                    className={`${getStatusColor(order.status)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
+                  >
+                    <span className="text-[9px] font-bold font-['Poppins',sans-serif] leading-[10px] uppercase truncate">
+                      {order.status || 'pending'}
+                    </span>
+                    <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 1L4 4L7 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Payment Status - Dropdown */}
+                <div className="w-[110px] px-3 flex items-center flex-shrink-0">
+                  <button
+                    onClick={(e) => toggleDropdown(order.id, 'payment', e)}
+                    className={`${getPaymentColor(order.paymentStatus)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
+                  >
+                    <span className="text-[9px] font-bold font-['Poppins',sans-serif] leading-[10px] uppercase truncate">
+                      {order.paymentStatus || 'pending'}
+                    </span>
+                    <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1 1L4 4L7 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Delivery Type */}
+                <div className="w-[90px] px-3 flex items-center flex-shrink-0">
+                  <span className={`text-[10px] font-medium font-['Poppins',sans-serif] px-2 py-0.5 rounded ${order.deliveryType === 'delivery'
+                    ? 'bg-indigo-100 text-indigo-800'
+                    : 'bg-orange-100 text-orange-800'
+                    }`}>
+                    {order.deliveryType === 'delivery' ? '🚚 Delivery' : '📦 Pickup'}
+                  </span>
+                </div>
+
+                {/* Actions */}
+                <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
+                  <button
+                    onClick={(e) => toggleDropdown(order.id, 'action', e)}
+                    className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                    title="Actions"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="3" cy="8" r="1.5" fill="#6B7280" />
+                      <circle cx="8" cy="8" r="1.5" fill="#6B7280" />
+                      <circle cx="13" cy="8" r="1.5" fill="#6B7280" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Empty State */}
@@ -329,23 +306,27 @@ export const OrderList = ({ orders = [], onStatusChange, onSort, sortField, sort
         </div>
       </div>
 
-      {/* Fixed Position Dropdown Menus - Rendered outside table container */}
+      {/* Fixed Position Dropdown Menu */}
       {activeDropdown && (() => {
-        // Find the order based on activeDropdown ID
         const order = orders.find(o =>
-          activeDropdown === `order-${o.id}` ||
-          activeDropdown === `payment-${o.id}` ||
-          activeDropdown === `action-${o.id}`
+          activeDropdown.includes(o.id)
         );
-
         if (!order) return null;
 
-        // Determine dropdown type
-        const isOrderStatus = activeDropdown === `order-${order.id}`;
-        const isAction = activeDropdown === `action-${order.id}`;
+        const isStatusDropdown = activeDropdown === `status-${order.id}`;
+        const isPaymentDropdown = activeDropdown === `payment-${order.id}`;
+        const isActionDropdown = activeDropdown === `action-${order.id}`;
 
-        // Render Order Status Dropdown
-        if (isOrderStatus) {
+        // Render Status Dropdown
+        if (isStatusDropdown) {
+          const statusOptions = [
+            { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
+            { value: 'processing', label: 'Processing', color: 'bg-blue-100 text-blue-800' },
+            { value: 'shipping', label: 'Shipping', color: 'bg-purple-100 text-purple-800' },
+            { value: 'delivered', label: 'Delivered', color: 'bg-green-100 text-green-800' },
+            { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' }
+          ];
+
           return (
             <div
               ref={dropdownRef}
@@ -355,16 +336,70 @@ export const OrderList = ({ orders = [], onStatusChange, onSort, sortField, sort
                 left: `${dropdownPosition.left}px`
               }}
             >
-              {orderStatusOptions.map((option) => (
+              {statusOptions.map((option) => (
                 <button
                   key={option.value}
-                  onClick={() => handleOrderStatusChange(order.id, option.value)}
+                  onClick={() => {
+                    if (onUpdateStatus) {
+                      onUpdateStatus(order, option.value);
+                    }
+                    setActiveDropdown(null);
+                  }}
                   className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  disabled={order.status === option.value}
                 >
-                  <span className={`${option.color} w-2 h-2 rounded-full`}></span>
-                  <span className="text-[12px] font-['Poppins',sans-serif] text-[#212529] capitalize">
+                  <span className={`${option.color} px-2 py-0.5 rounded text-[10px] font-bold uppercase`}>
                     {option.label}
                   </span>
+                  {order.status === option.value && (
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-auto">
+                      <path d="M10 3L4.5 8.5L2 6" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+          );
+        }
+
+        // Render Payment Status Dropdown
+        if (isPaymentDropdown) {
+          const paymentOptions = [
+            { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
+            { value: 'paid', label: 'Paid', color: 'bg-green-100 text-green-800' },
+            { value: 'failed', label: 'Failed', color: 'bg-red-100 text-red-800' },
+            { value: 'refunded', label: 'Refunded', color: 'bg-gray-100 text-gray-800' }
+          ];
+
+          return (
+            <div
+              ref={dropdownRef}
+              className="fixed min-w-[140px] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
+              style={{
+                top: `${dropdownPosition.top}px`,
+                left: `${dropdownPosition.left}px`
+              }}
+            >
+              {paymentOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => {
+                    if (onUpdatePayment) {
+                      onUpdatePayment(order, option.value);
+                    }
+                    setActiveDropdown(null);
+                  }}
+                  className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  disabled={order.paymentStatus === option.value}
+                >
+                  <span className={`${option.color} px-2 py-0.5 rounded text-[10px] font-bold uppercase`}>
+                    {option.label}
+                  </span>
+                  {order.paymentStatus === option.value && (
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-auto">
+                      <path d="M10 3L4.5 8.5L2 6" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
                 </button>
               ))}
             </div>
@@ -372,7 +407,10 @@ export const OrderList = ({ orders = [], onStatusChange, onSort, sortField, sort
         }
 
         // Render Actions Dropdown
-        if (isAction) {
+        if (isActionDropdown) {
+          const canEdit = order.status !== 'delivered' && order.status !== 'cancelled';
+          const canDelete = order.status === 'pending' && order.paymentStatus === 'pending';
+
           return (
             <div
               ref={dropdownRef}
@@ -384,35 +422,29 @@ export const OrderList = ({ orders = [], onStatusChange, onSort, sortField, sort
             >
               <button
                 onClick={() => {
-                  setViewDetailsModal(order);
+                  onView && onView(order);
                   setActiveDropdown(null);
                 }}
-                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors flex items-center gap-2"
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
               >
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="2" y="2" width="12" height="12" rx="1" stroke="currentColor" strokeWidth="1.5" />
-                  <path d="M5 5h6M5 8h6M5 11h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <path d="M1 8C1 8 3.5 3 8 3C12.5 3 15 8 15 8C15 8 12.5 13 8 13C3.5 13 1 8 1 8Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M8 10C9.10457 10 10 9.10457 10 8C10 6.89543 9.10457 6 8 6C6.89543 6 6 6.89543 6 8C6 9.10457 6.89543 10 8 10Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                View Invoice
+                View Details
               </button>
 
               <button
                 onClick={() => {
-                  if (onEdit) {
-                    onEdit(order);
-                  }
+                  onEdit && onEdit(order);
                   setActiveDropdown(null);
                 }}
-                disabled={order.paymentStatus?.toLowerCase() !== 'pending'}
-                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${order.paymentStatus?.toLowerCase() !== 'pending'
+                disabled={!canEdit}
+                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${!canEdit
                   ? 'text-gray-400 cursor-not-allowed opacity-50'
-                  : 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'
+                  : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
                   }`}
-                title={
-                  order.paymentStatus?.toLowerCase() !== 'pending'
-                    ? "Can only edit orders with payment status 'Pending'"
-                    : 'Edit order'
-                }
+                title={!canEdit ? 'Cannot edit delivered or cancelled orders' : 'Edit order'}
               >
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M11.333 2.00004C11.5081 1.82494 11.716 1.68605 11.9447 1.59129C12.1735 1.49653 12.4187 1.44775 12.6663 1.44775C12.914 1.44775 13.1592 1.49653 13.3879 1.59129C13.6167 1.68605 13.8246 1.82494 13.9997 2.00004C14.1748 2.17513 14.3137 2.383 14.4084 2.61178C14.5032 2.84055 14.552 3.08575 14.552 3.33337C14.552 3.58099 14.5032 3.82619 14.4084 4.05497C14.3137 4.28374 14.1748 4.49161 13.9997 4.66671L5.33301 13.3334L1.33301 14.6667L2.66634 10.6667L11.333 2.00004Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -424,19 +456,17 @@ export const OrderList = ({ orders = [], onStatusChange, onSort, sortField, sort
 
               <button
                 onClick={() => {
-                  if (onDelete) {
-                    onDelete(order);
-                  }
+                  onDelete && onDelete(order);
                   setActiveDropdown(null);
                 }}
-                disabled={!['paid', 'failed', 'refunded'].includes(order.paymentStatus.toLowerCase())}
-                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${!['paid', 'failed', 'refunded'].includes(order.paymentStatus.toLowerCase())
+                disabled={!canDelete}
+                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${!canDelete
                   ? 'text-gray-400 cursor-not-allowed opacity-50'
                   : 'text-gray-700 hover:bg-red-50 hover:text-red-600'
                   }`}
                 title={
-                  !['paid', 'failed', 'refunded'].includes(order.paymentStatus.toLowerCase())
-                    ? "Can only delete orders with payment status 'Paid', 'Failed', or 'Refunded'"
+                  !canDelete
+                    ? 'Can only delete pending orders with pending payment'
                     : 'Delete order'
                 }
               >
@@ -452,19 +482,6 @@ export const OrderList = ({ orders = [], onStatusChange, onSort, sortField, sort
 
         return null;
       })()}
-
-      {/* Items Modal */}
-      <ViewItemsModal
-        order={viewItemsModal}
-        onClose={() => setViewItemsModal(null)}
-      />
-
-      {/* Invoice Modal */}
-      <InvoiceModal
-        order={viewDetailsModal}
-        onClose={() => setViewDetailsModal(null)}
-        onViewItems={setViewItemsModal}
-      />
     </div>
   );
 };

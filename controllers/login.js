@@ -89,7 +89,8 @@ loginRouter.post('/', async (request, response) => {
           fullName: employee?.fullName || user.username,
           phone: employee?.phone || '',
           role: user.role.roleName,
-          permissions: user.role.permissions
+          permissions: user.role.permissions,
+          employeeId: employee?._id || null
         }
       }
     })
@@ -317,7 +318,8 @@ loginRouter.get('/me', async (request, response) => {
           permissions: user.role.permissions,
           isActive: user.isActive,
           lastLogin: user.lastLogin,
-          createdAt: user.createdAt
+          createdAt: user.createdAt,
+          employeeId: employee?._id || null
         }
       }
     })

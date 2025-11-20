@@ -627,12 +627,7 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                   </label>
                   <input
                     type="text"
-                    value={
-                      currentEmployee?.fullName ||
-                      (currentEmployee?.firstName && currentEmployee?.lastName
-                        ? `${currentEmployee.firstName} ${currentEmployee.lastName}`.trim()
-                        : currentUser?.username || 'N/A')
-                    }
+                    value={currentEmployee?.fullName || currentUser?.username || 'N/A'}
                     disabled
                     className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] bg-gray-100 text-gray-600 cursor-not-allowed"
                   />
