@@ -3,6 +3,8 @@ const Order = require('../models/order');
 const OrderDetail = require('../models/orderDetail');
 const Customer = require('../models/customer');
 const Employee = require('../models/employee');
+const Product = require('../models/product');
+const { selectBatchFEFO } = require('../utils/batchHelpers');
 const mongoose = require('mongoose');
 
 /**
@@ -233,25 +235,26 @@ ordersRouter.get('/:id', async (request, response) => {
 
 /**
  * POST /api/orders
- * Create new order
+ * Create new order with automatic FEFO batch selection
  * 
  * Request body:
  * {
  *   customer: ObjectId (required),
- *   createdBy: ObjectId (required),
+ *   createdBy: ObjectId (optional, will use system if not provided),
  *   orderDate: Date (optional, defaults to now),
  *   deliveryType: 'delivery' | 'pickup' (optional, defaults to 'delivery'),
- *   address: String (optional),
+ *   shippingAddress: String (optional, but required if deliveryType is 'delivery'),
  *   shippingFee: Number (optional, defaults to 0),
+ *   discount: Number (optional, defaults to 0 - this is discount amount, not percentage),
  *   discountPercentage: Number (optional, defaults to 0),
  *   status: String (optional, defaults to 'pending'),
  *   paymentStatus: String (optional, defaults to 'pending'),
- *   details: Array of {
+ *   items: Array of {
  *     product: ObjectId (required),
- *     batch: ObjectId (required),
  *     quantity: Number (required),
  *     unitPrice: Number (required),
  *     notes: String (optional)
+ *     // batch will be auto-selected using FEFO
  *   }
  * }
  */
@@ -262,34 +265,37 @@ ordersRouter.post('/', async (request, response) => {
       createdBy,
       orderDate,
       deliveryType,
-      address,
+      shippingAddress,
+      address, // Support both shippingAddress and address
       shippingFee,
+      discount,
       discountPercentage,
       status,
       paymentStatus,
-      details
+      items,
+      details // Support both items and details
     } = request.body;
 
+    // Use items or details (for backward compatibility)
+    const orderItems = items || details;
+
     // Validate required fields
-    if (!customer || !createdBy) {
+    if (!customer) {
       return response.status(400).json({
         success: false,
         error: {
-          message: 'Missing required fields',
-          code: 'MISSING_FIELDS',
-          details: {
-            required: ['customer', 'createdBy']
-          }
+          message: 'Customer is required',
+          code: 'MISSING_CUSTOMER'
         }
       });
     }
 
-    if (!details || !Array.isArray(details) || details.length === 0) {
+    if (!orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
       return response.status(400).json({
         success: false,
         error: {
-          message: 'Order must have at least one detail item',
-          code: 'MISSING_ORDER_DETAILS'
+          message: 'Order must have at least one item',
+          code: 'MISSING_ORDER_ITEMS'
         }
       });
     }
@@ -306,15 +312,75 @@ ordersRouter.post('/', async (request, response) => {
       });
     }
 
-    // Validate employee exists
-    const employeeExists = await Employee.findById(createdBy);
-    if (!employeeExists) {
-      return response.status(404).json({
-        success: false,
-        error: {
-          message: 'Employee not found',
-          code: 'EMPLOYEE_NOT_FOUND'
-        }
+    // Validate employee if provided
+    let validatedCreatedBy = createdBy;
+    if (createdBy) {
+      const employeeExists = await Employee.findById(createdBy);
+      if (!employeeExists) {
+        return response.status(404).json({
+          success: false,
+          error: {
+            message: 'Employee not found',
+            code: 'EMPLOYEE_NOT_FOUND'
+          }
+        });
+      }
+    } else {
+      // If no employee provided, find a system/admin employee
+      const systemEmployee = await Employee.findOne({ isActive: true }).sort({ createdAt: 1 });
+      if (systemEmployee) {
+        validatedCreatedBy = systemEmployee._id;
+      }
+    }
+
+    // Validate items and auto-select batches using FEFO
+    const processedItems = [];
+    for (const item of orderItems) {
+      if (!item.product || !item.quantity || item.quantity <= 0) {
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'Each item must have a valid product and quantity',
+            code: 'INVALID_ITEM'
+          }
+        });
+      }
+
+      // Get product to check existence and get price if not provided
+      const product = await Product.findById(item.product);
+      if (!product) {
+        return response.status(404).json({
+          success: false,
+          error: {
+            message: `Product not found: ${item.product}`,
+            code: 'PRODUCT_NOT_FOUND'
+          }
+        });
+      }
+
+      // Auto-select batch using FEFO
+      const batchSelection = await selectBatchFEFO(item.product, item.quantity);
+
+      if (!batchSelection) {
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: `Insufficient stock for product: ${product.name}`,
+            code: 'INSUFFICIENT_STOCK',
+            details: {
+              product: product.name,
+              requestedQuantity: item.quantity
+            }
+          }
+        });
+      }
+
+      processedItems.push({
+        product: item.product,
+        batch: batchSelection.batch._id,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice || product.unitPrice,
+        notes: item.notes
       });
     }
 
@@ -326,10 +392,10 @@ ordersRouter.post('/', async (request, response) => {
       // Create order
       const order = new Order({
         customer,
-        createdBy,
+        createdBy: validatedCreatedBy,
         orderDate: orderDate || Date.now(),
         deliveryType: deliveryType || 'delivery',
-        address,
+        address: shippingAddress || address,
         shippingFee: shippingFee || 0,
         discountPercentage: discountPercentage || 0,
         status: status || 'pending',
@@ -339,16 +405,16 @@ ordersRouter.post('/', async (request, response) => {
 
       await order.save({ session });
 
-      // Create order details
+      // Create order details with auto-selected batches
       const orderDetails = [];
-      for (const detail of details) {
+      for (const item of processedItems) {
         const orderDetail = new OrderDetail({
           order: order._id,
-          product: detail.product,
-          batch: detail.batch,
-          quantity: detail.quantity,
-          unitPrice: detail.unitPrice,
-          notes: detail.notes
+          product: item.product,
+          batch: item.batch,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          notes: item.notes
         });
 
         await orderDetail.save({ session });
@@ -364,8 +430,8 @@ ordersRouter.post('/', async (request, response) => {
         {
           path: 'details',
           populate: [
-            { path: 'product', select: 'productCode name unitPrice' },
-            { path: 'batch', select: 'batchCode expiryDate' }
+            { path: 'product', select: 'productCode name unitPrice image' },
+            { path: 'batch', select: 'batchCode expiryDate mfgDate' }
           ]
         }
       ]);
@@ -373,7 +439,7 @@ ordersRouter.post('/', async (request, response) => {
       response.status(201).json({
         success: true,
         data: { order },
-        message: 'Order created successfully'
+        message: 'Order created successfully with FEFO batch allocation'
       });
     } catch (error) {
       await session.abortTransaction();
