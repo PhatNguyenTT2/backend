@@ -268,8 +268,6 @@ ordersRouter.post('/', async (request, response) => {
       shippingAddress,
       address, // Support both shippingAddress and address
       shippingFee,
-      discount,
-      discountPercentage,
       status,
       paymentStatus,
       items,
@@ -300,9 +298,9 @@ ordersRouter.post('/', async (request, response) => {
       });
     }
 
-    // Validate customer exists
-    const customerExists = await Customer.findById(customer);
-    if (!customerExists) {
+    // Validate customer exists and get discount percentage based on customer type
+    const customerDoc = await Customer.findById(customer);
+    if (!customerDoc) {
       return response.status(404).json({
         success: false,
         error: {
@@ -311,6 +309,15 @@ ordersRouter.post('/', async (request, response) => {
         }
       });
     }
+
+    // Auto-calculate discount percentage based on customer type
+    const discountPercentageMap = {
+      'guest': 0,
+      'retail': 10,
+      'wholesale': 15,
+      'vip': 20
+    };
+    const autoDiscountPercentage = discountPercentageMap[customerDoc.customerType?.toLowerCase()] || 0;
 
     // Validate employee if provided
     let validatedCreatedBy = createdBy;
@@ -328,9 +335,16 @@ ordersRouter.post('/', async (request, response) => {
     } else {
       // If no employee provided, find a system/admin employee
       const systemEmployee = await Employee.findOne({ isActive: true }).sort({ createdAt: 1 });
-      if (systemEmployee) {
-        validatedCreatedBy = systemEmployee._id;
+      if (!systemEmployee) {
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'No active employee found. Please create an employee first.',
+            code: 'NO_EMPLOYEE_FOUND'
+          }
+        });
       }
+      validatedCreatedBy = systemEmployee._id;
     }
 
     // Validate items and auto-select batches using FEFO
@@ -389,7 +403,7 @@ ordersRouter.post('/', async (request, response) => {
     session.startTransaction();
 
     try {
-      // Create order
+      // Create order with auto-calculated discount percentage
       const order = new Order({
         customer,
         createdBy: validatedCreatedBy,
@@ -397,8 +411,8 @@ ordersRouter.post('/', async (request, response) => {
         deliveryType: deliveryType || 'delivery',
         address: shippingAddress || address,
         shippingFee: shippingFee || 0,
-        discountPercentage: discountPercentage || 0,
-        status: status || 'pending',
+        discountPercentage: autoDiscountPercentage,
+        status: status || 'draft',
         paymentStatus: paymentStatus || 'pending',
         total: 0 // Will be calculated from details
       });
@@ -496,7 +510,6 @@ ordersRouter.put('/:id', async (request, response) => {
       deliveryType,
       address,
       shippingFee,
-      discountPercentage,
       status,
       paymentStatus
     } = request.body;
@@ -528,9 +541,10 @@ ordersRouter.put('/:id', async (request, response) => {
     if (deliveryType !== undefined) order.deliveryType = deliveryType;
     if (address !== undefined) order.address = address;
     if (shippingFee !== undefined) order.shippingFee = shippingFee;
-    if (discountPercentage !== undefined) order.discountPercentage = discountPercentage;
     if (status !== undefined) order.status = status;
     if (paymentStatus !== undefined) order.paymentStatus = paymentStatus;
+
+    // Note: discountPercentage is auto-calculated from customer type and cannot be manually updated
 
     await order.save();
 

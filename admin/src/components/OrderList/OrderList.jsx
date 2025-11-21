@@ -39,8 +39,8 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
   // Get status badge color
   const getStatusColor = (status) => {
     const colors = {
+      draft: 'bg-gray-100 text-gray-800',
       pending: 'bg-yellow-100 text-yellow-800',
-      processing: 'bg-blue-100 text-blue-800',
       shipping: 'bg-purple-100 text-purple-800',
       delivered: 'bg-green-100 text-green-800',
       cancelled: 'bg-red-100 text-red-800'
@@ -320,8 +320,8 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
         // Render Status Dropdown
         if (isStatusDropdown) {
           const statusOptions = [
+            { value: 'draft', label: 'Draft', color: 'bg-gray-100 text-gray-800' },
             { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
-            { value: 'processing', label: 'Processing', color: 'bg-blue-100 text-blue-800' },
             { value: 'shipping', label: 'Shipping', color: 'bg-purple-100 text-purple-800' },
             { value: 'delivered', label: 'Delivered', color: 'bg-green-100 text-green-800' },
             { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' }

@@ -92,10 +92,10 @@ const orderSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: {
-      values: ['pending', 'processing', 'shipping', 'delivered', 'cancelled'],
+      values: ['draft', 'pending', 'shipping', 'delivered', 'cancelled'],
       message: '{VALUE} is not a valid status'
     },
-    default: 'pending'
+    default: 'draft'
   }
 
 }, {
@@ -152,7 +152,7 @@ orderSchema.virtual('isCompleted').get(function () {
 
 // Virtual: Check if order can be cancelled
 orderSchema.virtual('canBeCancelled').get(function () {
-  return ['pending', 'processing'].includes(this.status) &&
+  return ['draft', 'pending'].includes(this.status) &&
     this.paymentStatus !== 'paid';
 });
 
