@@ -371,9 +371,9 @@ const PurchaseOrderList = ({
                     </p>
                   </div>
 
-                  {/* PO Status - Dropdown */}
+                  {/* PO Status - Dropdown (Only pending can change to cancelled via dropdown) */}
                   <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    {(po.status === 'pending' || po.status === 'approved') ? (
+                    {po.status === 'pending' ? (
                       <button
                         onClick={(e) => toggleDropdown(`status-${po.id}`, e)}
                         disabled={updatingStatus}
@@ -450,19 +450,12 @@ const PurchaseOrderList = ({
         if (isStatus) {
           const statusOptions = [
             { value: 'pending', label: 'Pending', color: 'bg-[#f59e0b]' },
-            { value: 'approved', label: 'Approved', color: 'bg-[#3b82f6]' },
-            { value: 'received', label: 'Received', color: 'bg-[#10b981]' },
             { value: 'cancelled', label: 'Cancelled', color: 'bg-[#ef4444]' }
           ];
 
-          // Filter status options based on current status
-          const availableOptions = statusOptions.filter(option => {
-            // If current status is approved, don't allow going back to pending
-            if (po.status === 'approved' && option.value === 'pending') {
-              return false;
-            }
-            return true;
-          });
+          // Only allow pending -> cancelled transition from List UI
+          // (Other transitions like approve/receive are done via specific action buttons)
+          const availableOptions = statusOptions;
 
           return (
             <div

@@ -93,6 +93,17 @@ productSchema.virtual('onShelf').get(function () {
   return 0;
 });
 
+// Virtual: Total quantity on shelf from all batches (when batches are populated)
+// This is the ACTUAL available quantity for sale
+productSchema.virtual('totalQuantityOnShelf').get(function () {
+  if (this.batches && Array.isArray(this.batches)) {
+    return this.batches.reduce((total, batch) => {
+      return total + (batch.quantityOnShelf || 0);
+    }, 0);
+  }
+  return 0;
+});
+
 // ============ MIDDLEWARE ============
 /**
  * Pre-save hook: Auto-generate productCode

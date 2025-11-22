@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { OrderList, OrderListHeader, AddOrderModal, EditOrderModal } from '../components/OrderList';
+import { OrderList, OrderListHeader, AddOrderModal, EditOrderModal, InvoiceOrderModal } from '../components/OrderList';
 import orderService from '../services/orderService';
 
 export const Orders = () => {
@@ -20,6 +20,7 @@ export const Orders = () => {
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
 
   // Filters and sorting
@@ -118,19 +119,28 @@ export const Orders = () => {
 
       // Fetch orders with populated customer and createdBy
       const response = await orderService.getAllOrders({
-        populate: 'customer,createdBy'
+        withDetails: false, // Don't need full details for list view
+        limit: 1000 // Get more orders for client-side filtering
       });
 
+      console.log('📥 Orders API response:', response);
+
+      // Extract orders from response.data.orders
+      const ordersArray = response?.data?.orders || response?.orders || [];
+      console.log('📦 Orders array:', ordersArray.length, 'orders');
+
       // Map response to include id field for consistency
-      const ordersData = (response.orders || []).map(order => ({
+      const ordersData = ordersArray.map(order => ({
         ...order,
-        id: order._id
+        id: order._id || order.id
       }));
 
+      console.log('✅ Mapped orders data:', ordersData.length, 'orders');
       setOrders(ordersData);
     } catch (err) {
-      console.error('Error fetching orders:', err);
-      setError(err.message || 'Failed to load orders');
+      console.error('❌ Error fetching orders:', err);
+      console.error('Error response:', err.response?.data);
+      setError(err.response?.data?.error?.message || err.message || 'Failed to load orders');
       setOrders([]);
     } finally {
       setIsLoading(false);
@@ -176,6 +186,11 @@ export const Orders = () => {
   const handleEdit = (order) => {
     setSelectedOrder(order);
     setShowEditModal(true);
+  };
+
+  const handleViewInvoice = (order) => {
+    setSelectedOrder(order);
+    setShowInvoiceModal(true);
   };
 
   const handleAddSuccess = () => {
@@ -287,6 +302,7 @@ export const Orders = () => {
               onDelete={handleDelete}
               onUpdateStatus={handleUpdateStatus}
               onUpdatePayment={handleUpdatePayment}
+              onViewInvoice={handleViewInvoice}
             />
 
             {/* Pagination */}
@@ -441,6 +457,16 @@ export const Orders = () => {
         }}
         onSuccess={handleEditSuccess}
         order={selectedOrder}
+      />
+
+      {/* Invoice Order Modal */}
+      <InvoiceOrderModal
+        order={showInvoiceModal ? selectedOrder : null}
+        onClose={() => {
+          setShowInvoiceModal(false);
+          setSelectedOrder(null);
+        }}
+        onViewItems={handleView}
       />
     </Layout>
   );

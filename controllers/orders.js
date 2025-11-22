@@ -4,6 +4,7 @@ const OrderDetail = require('../models/orderDetail');
 const Customer = require('../models/customer');
 const Employee = require('../models/employee');
 const Product = require('../models/product');
+const ProductBatch = require('../models/productBatch');
 const { selectBatchFEFO } = require('../utils/batchHelpers');
 const mongoose = require('mongoose');
 
@@ -144,7 +145,14 @@ ordersRouter.get('/', async (request, response) => {
     // Build query
     let query = Order.find(filter)
       .populate('customer', 'customerCode fullName phone email address')
-      .populate('createdBy', 'fullName phone')
+      .populate({
+        path: 'createdBy',
+        select: 'fullName phone',
+        populate: {
+          path: 'userAccount',
+          select: 'userCode username'
+        }
+      })
       .skip(skip)
       .limit(parseInt(limit))
       .sort(sort);
@@ -198,7 +206,14 @@ ordersRouter.get('/:id', async (request, response) => {
   try {
     const order = await Order.findById(request.params.id)
       .populate('customer', 'customerCode fullName phone email address customerType gender')
-      .populate('createdBy', 'fullName phone email')
+      .populate({
+        path: 'createdBy',
+        select: 'fullName phone email',
+        populate: {
+          path: 'userAccount',
+          select: 'userCode username'
+        }
+      })
       .populate({
         path: 'details',
         populate: [
@@ -509,10 +524,20 @@ ordersRouter.put('/:id', async (request, response) => {
     const {
       deliveryType,
       address,
+      shippingAddress, // Frontend gửi shippingAddress
       shippingFee,
       status,
-      paymentStatus
+      paymentStatus,
+      notes,
+      items
     } = request.body;
+
+    console.log('📥 Update order request:', {
+      orderId: request.params.id,
+      deliveryType,
+      hasItems: items ? items.length : 0,
+      status
+    });
 
     const order = await Order.findById(request.params.id);
 
@@ -526,6 +551,8 @@ ordersRouter.put('/:id', async (request, response) => {
       });
     }
 
+    console.log('📦 Current order status:', order.status);
+
     // Check if order can be updated
     if (order.status === 'delivered' || order.status === 'cancelled') {
       return response.status(400).json({
@@ -537,16 +564,207 @@ ordersRouter.put('/:id', async (request, response) => {
       });
     }
 
+    // Handle items update for draft orders
+    if (items && Array.isArray(items) && items.length > 0) {
+      console.log('🔄 Updating items:', items.length, 'items');
+
+      // Only allow item updates for draft orders
+      if (order.status !== 'draft') {
+        console.log('❌ Cannot update items - order status:', order.status);
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'Items can only be updated for draft orders',
+            code: 'ITEMS_LOCKED'
+          }
+        });
+      }
+
+      // Validate and process items
+      const processedItems = [];
+      for (const item of items) {
+        console.log('🔍 Processing item:', { product: item.product, quantity: item.quantity, unitPrice: item.unitPrice });
+
+        if (!item.product || !item.quantity || item.quantity <= 0) {
+          console.log('❌ Invalid item:', item);
+          return response.status(400).json({
+            success: false,
+            error: {
+              message: 'Each item must have a valid product and quantity',
+              code: 'INVALID_ITEM'
+            }
+          });
+        }
+
+        // Get product to validate existence
+        const product = await Product.findById(item.product);
+        if (!product) {
+          console.log('❌ Product not found:', item.product);
+          return response.status(404).json({
+            success: false,
+            error: {
+              message: `Product not found: ${item.product}`,
+              code: 'PRODUCT_NOT_FOUND'
+            }
+          });
+        }
+
+        console.log('✅ Product found:', product.name);
+
+        // Check inventory quantityOnShelf (actual available for sale)
+        const Inventory = require('../models/inventory');
+        const inventory = await Inventory.findOne({ product: item.product });
+
+        if (!inventory) {
+          console.log('❌ Inventory not found for product:', product.name);
+          return response.status(400).json({
+            success: false,
+            error: {
+              message: `Inventory not found for product: ${product.name}`,
+              code: 'INVENTORY_NOT_FOUND'
+            }
+          });
+        }
+
+        const availableOnShelf = inventory.quantityOnShelf || 0;
+        console.log('📊 Quantity on shelf:', availableOnShelf, 'needed:', item.quantity);
+
+        if (availableOnShelf < item.quantity) {
+          console.log('❌ Insufficient stock for:', product.name, `(need ${item.quantity}, have ${availableOnShelf})`);
+          return response.status(400).json({
+            success: false,
+            error: {
+              message: `Insufficient stock for product: ${product.name}. Available: ${availableOnShelf}, Needed: ${item.quantity}`,
+              code: 'INSUFFICIENT_STOCK'
+            }
+          });
+        }
+
+        // Get available batches with detail inventory for FEFO allocation
+        const DetailInventory = require('../models/detailInventory');
+        const batchesWithInventory = await ProductBatch.find({
+          product: item.product
+        }).sort({ expiryDate: 1 });
+
+        console.log('📦 Available batches for FEFO:', batchesWithInventory.length);
+
+        // Select batch using FEFO (earliest expiry first) that has stock on shelf
+        let selectedBatch = null;
+        for (const batch of batchesWithInventory) {
+          const detailInv = await DetailInventory.findOne({ batchId: batch._id });
+          if (detailInv && detailInv.quantityOnShelf > 0) {
+            selectedBatch = batch;
+            console.log('✅ Selected batch (FEFO):', batch.batchCode, 'Qty on shelf:', detailInv.quantityOnShelf);
+            break;
+          }
+        }
+
+        if (!selectedBatch) {
+          console.log('❌ No batch with shelf stock found for:', product.name);
+          return response.status(400).json({
+            success: false,
+            error: {
+              message: `No batch available for product: ${product.name}`,
+              code: 'NO_BATCH_AVAILABLE'
+            }
+          });
+        }
+
+        processedItems.push({
+          product: item.product,
+          batch: selectedBatch._id,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice || product.unitPrice
+        });
+      }
+
+      console.log('📝 Starting transaction to update order details...');
+
+      // Delete existing order details and create new ones
+      const session = await mongoose.startSession();
+      await session.startTransaction();
+
+      try {
+        // Delete old details
+        const deleteResult = await OrderDetail.deleteMany({ order: order._id }, { session });
+        console.log('🗑️ Deleted old details:', deleteResult.deletedCount);
+
+        // Create new details
+        const orderDetails = await OrderDetail.insertMany(
+          processedItems.map(item => ({
+            ...item,
+            order: order._id
+          })),
+          { session }
+        );
+        console.log('✅ Created new details:', orderDetails.length);
+
+        // Recalculate order total
+        const subtotal = orderDetails.reduce((sum, detail) => sum + (detail.quantity * detail.unitPrice), 0);
+        console.log('💰 Calculated subtotal:', subtotal);
+
+        // Get customer for discount calculation
+        const customer = await Customer.findById(order.customer);
+        const discountPercentageMap = {
+          'guest': 0,
+          'retail': 10,
+          'wholesale': 15,
+          'vip': 20
+        };
+        const discountPercentage = discountPercentageMap[customer?.customerType?.toLowerCase()] || 0;
+        const discountAmount = (subtotal * discountPercentage) / 100;
+
+        console.log('🎁 Discount:', { percentage: discountPercentage, amount: discountAmount });
+
+        // Update order totals (will save later with other fields)
+        order.subtotal = subtotal;
+        order.discount = discountAmount;
+        order.discountPercentage = discountPercentage;
+        // Don't calculate totalAmount here - will do after updating shippingFee
+
+        await session.commitTransaction();
+        console.log('✅ Transaction committed successfully');
+      } catch (error) {
+        await session.abortTransaction();
+        console.error('❌ Transaction failed:', error);
+        throw error;
+      } finally {
+        session.endSession();
+      }
+    }
+
     // Update allowed fields
     if (deliveryType !== undefined) order.deliveryType = deliveryType;
-    if (address !== undefined) order.address = address;
+
+    // Handle both 'address' and 'shippingAddress' for backward compatibility
+    if (shippingAddress !== undefined) {
+      order.address = shippingAddress;
+    } else if (address !== undefined) {
+      order.address = address;
+    }
+
     if (shippingFee !== undefined) order.shippingFee = shippingFee;
     if (status !== undefined) order.status = status;
     if (paymentStatus !== undefined) order.paymentStatus = paymentStatus;
+    if (notes !== undefined) order.notes = notes;
+
+    // Recalculate totalAmount with updated shippingFee
+    // This handles both cases: items updated (subtotal/discount already set) or just metadata updated
+    if (order.subtotal !== undefined) {
+      order.totalAmount = order.subtotal - (order.discount || 0) + (order.shippingFee || 0);
+      console.log('💰 Final total:', {
+        subtotal: order.subtotal,
+        discount: order.discount,
+        shippingFee: order.shippingFee,
+        total: order.totalAmount
+      });
+    }
 
     // Note: discountPercentage is auto-calculated from customer type and cannot be manually updated
 
+    console.log('💾 Saving order...');
     await order.save();
+    console.log('✅ Order saved successfully');
 
     // Populate before returning
     await order.populate([
@@ -567,7 +785,10 @@ ordersRouter.put('/:id', async (request, response) => {
       message: 'Order updated successfully'
     });
   } catch (error) {
-    console.error('Error in update order:', error);
+    console.error('❌ Error in update order:', error);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Error message:', error.message);
 
     // Handle validation errors
     if (error.name === 'ValidationError') {
@@ -581,11 +802,24 @@ ordersRouter.put('/:id', async (request, response) => {
       });
     }
 
+    // Handle MongoDB errors
+    if (error.name === 'CastError') {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Invalid ID format',
+          code: 'INVALID_ID',
+          details: error.message
+        }
+      });
+    }
+
     response.status(500).json({
       success: false,
       error: {
         message: 'Failed to update order',
-        details: error.message
+        details: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       }
     });
   }

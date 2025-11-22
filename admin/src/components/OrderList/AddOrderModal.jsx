@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import orderService from '../../services/orderService';
 import customerService from '../../services/customerService';
 import productService from '../../services/productService';
+import authService from '../../services/authService';
+import employeeService from '../../services/employeeService';
 
 /**
  * AddOrderModal Component
@@ -33,6 +35,10 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
+  // Employee tracking for createdBy field
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentEmployee, setCurrentEmployee] = useState(null);
+
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -47,6 +53,7 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
       setErrors({});
       loadCustomers();
       loadProducts();
+      loadCurrentEmployee();
     }
   }, [isOpen]);
 
@@ -63,6 +70,46 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
     } catch (error) {
       console.error('❌ Failed to load customers:', error);
       setErrors(prev => ({ ...prev, loadCustomers: 'Failed to load customers' }));
+    }
+  };
+
+  // Load current employee for createdBy field
+  const loadCurrentEmployee = async () => {
+    try {
+      // Get current user from authService
+      const user = authService.getUser();
+      console.log('📥 Current user from authService:', user);
+      setCurrentUser(user);
+
+      // If user has employeeId, fetch full employee details
+      if (user?.employeeId) {
+        const employeeResponse = await employeeService.getEmployeeById(user.employeeId);
+        console.log('👤 Employee response:', employeeResponse);
+
+        if (employeeResponse.success && employeeResponse.data) {
+          const employee = employeeResponse.data.employee;
+          console.log('✅ Current employee loaded:', employee);
+          setCurrentEmployee(employee);
+        } else {
+          console.warn('⚠️ Employee not found for user:', user);
+          setErrors(prev => ({
+            ...prev,
+            employee: 'No active employee found. Please create an employee first.'
+          }));
+        }
+      } else {
+        console.warn('⚠️ User has no employeeId:', user);
+        setErrors(prev => ({
+          ...prev,
+          employee: 'No active employee found. Please create an employee first.'
+        }));
+      }
+    } catch (error) {
+      console.error('❌ Failed to load employee:', error);
+      setErrors(prev => ({
+        ...prev,
+        employee: 'Failed to load employee information'
+      }));
     }
   };
 
@@ -326,6 +373,14 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Validate employee first
+    if (!currentEmployee) {
+      setErrors({
+        submit: 'Cannot create order without employee information. Please ensure you are logged in as an employee.'
+      });
+      return;
+    }
+
     if (!validateForm()) {
       return;
     }
@@ -342,6 +397,7 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
         shippingFee: Number(formData.shippingFee),
         notes: formData.notes || undefined,
         status: 'draft', // Default status when creating new order
+        createdBy: currentEmployee._id || currentEmployee.id, // Add createdBy field
         items: formData.items.map(item => ({
           product: item.productId,
           quantity: Number(item.quantity),
@@ -411,6 +467,48 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
           {errors.submit && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-[13px]">
               {errors.submit}
+            </div>
+          )}
+
+          {/* Employee Error */}
+          {errors.employee && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-[13px]">
+              {errors.employee}
+            </div>
+          )}
+
+          {/* Employee Info Display */}
+          {currentEmployee && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" className="text-blue-600">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+                <h3 className="text-[13px] font-semibold text-blue-900">Order Created By</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-blue-700 mb-1">Employee Name</label>
+                  <input
+                    type="text"
+                    value={currentEmployee.fullName || 'N/A'}
+                    disabled
+                    className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-[13px] bg-blue-100 text-blue-900 cursor-not-allowed font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-blue-700 mb-1">User Code</label>
+                  <input
+                    type="text"
+                    value={currentUser?.userCode || 'N/A'}
+                    disabled
+                    className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-[13px] bg-blue-100 text-blue-900 cursor-not-allowed font-semibold"
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-blue-700 mt-2">
+                Current logged in employee
+              </p>
             </div>
           )}
 
@@ -534,19 +632,19 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                 const availableQty = getAvailableQuantity(product);
 
                 return (
-                  <div key={index} className="flex gap-2 items-start p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1 grid grid-cols-3 gap-2">
-                      {/* Product Dropdown */}
+                  <div key={index} className="flex gap-2 items-start p-3 bg-white rounded-lg border-2 border-blue-200">
+                    <div className="flex-1 grid grid-cols-3 gap-3">
+                      {/* Product Selection */}
                       <div>
-                        <label className="block text-[11px] text-gray-600 mb-1">
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">
                           Product <span className="text-red-500">*</span>
                         </label>
                         <select
                           value={item.productId}
                           onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
-                          className={`w-full px-2 py-1.5 text-[12px] border ${errors[`item_${index}_product`] ? 'border-red-500' : 'border-gray-300'} rounded focus:outline-none focus:ring-1 focus:ring-emerald-500`}
+                          className={`w-full px-3 py-2 border ${errors[`item_${index}_product`] ? 'border-red-500' : 'border-gray-300'} rounded-lg text-[12px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         >
-                          <option value="">Select product</option>
+                          <option value="">-- Select Product --</option>
                           {products.map((prod) => {
                             const onShelf = getAvailableQuantity(prod);
                             const productId = prod.id || prod._id;
@@ -558,15 +656,18 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                           })}
                         </select>
                         {errors[`item_${index}_product`] && (
-                          <p className="text-[10px] text-red-500 mt-0.5">
-                            {errors[`item_${index}_product`]}
+                          <p className="mt-1 text-[10px] text-red-500">{errors[`item_${index}_product`]}</p>
+                        )}
+                        {product && (
+                          <p className="mt-1 text-[10px] text-emerald-600">
+                            Available: {availableQty} units
                           </p>
                         )}
                       </div>
 
-                      {/* Quantity Input */}
+                      {/* Quantity */}
                       <div>
-                        <label className="block text-[11px] text-gray-600 mb-1">
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">
                           Quantity <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -574,31 +675,25 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                           value={item.quantity}
                           onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                           min="1"
-                          className={`w-full px-2 py-1.5 text-[12px] border ${errors[`item_${index}_quantity`] ? 'border-red-500' : 'border-gray-300'} rounded focus:outline-none focus:ring-1 focus:ring-emerald-500`}
+                          className={`w-full px-3 py-2 border ${errors[`item_${index}_quantity`] ? 'border-red-500' : 'border-gray-300'} rounded-lg text-[12px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
-                        {product && (
-                          <p className="text-[10px] mt-0.5 text-gray-500">
-                            {availableQty} available on shelf
-                          </p>
-                        )}
                         {errors[`item_${index}_quantity`] && (
-                          <p className="text-[10px] text-red-500 mt-0.5">
-                            {errors[`item_${index}_quantity`]}
-                          </p>
+                          <p className="mt-1 text-[10px] text-red-500">{errors[`item_${index}_quantity`]}</p>
                         )}
                       </div>
 
                       {/* Unit Price (Read-only) */}
                       <div>
-                        <label className="block text-[11px] text-gray-600 mb-1">Unit Price</label>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">Unit Price</label>
                         <input
                           type="text"
                           value={formatCurrency(item.unitPrice)}
-                          readOnly
-                          className="w-full px-2 py-1.5 text-[12px] border border-gray-300 rounded bg-gray-100 cursor-not-allowed"
-                          title="Price from product master data"
+                          disabled
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[12px] bg-gray-50 cursor-not-allowed"
                         />
-                        <p className="text-[10px] text-gray-500 mt-0.5">Auto FEFO batch</p>
+                        <p className="mt-1 text-[10px] text-gray-600">
+                          Total: {formatCurrency(item.quantity * item.unitPrice)}
+                        </p>
                       </div>
                     </div>
 
@@ -606,12 +701,11 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                     <button
                       type="button"
                       onClick={() => handleRemoveItem(index)}
-                      className="mt-6 p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                      className="mt-7 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       title="Remove item"
                     >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <path d="M2 4H3.33333H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M5.33301 4.00004V2.66671C5.33301 2.31309 5.47348 1.97395 5.72353 1.7239C5.97358 1.47385 6.31272 1.33337 6.66634 1.33337H9.33301C9.68663 1.33337 10.0258 1.47385 10.2758 1.7239C10.5259 1.97395 10.6663 2.31309 10.6663 2.66671V4.00004M12.6663 4.00004V13.3334C12.6663 13.687 12.5259 14.0261 12.2758 14.2762C12.0258 14.5262 11.6866 14.6667 11.333 14.6667H4.66634C4.31272 14.6667 3.97358 14.5262 3.72353 14.2762C3.47348 14.0261 3.33301 13.687 3.33301 13.3334V4.00004H12.6663Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
                     </button>
                   </div>
@@ -620,9 +714,7 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
 
             {errors.items && (
-              <p className="mt-2 text-[11px] text-red-500 font-['Poppins',sans-serif]">
-                {errors.items}
-              </p>
+              <p className="text-[11px] text-red-500">{errors.items}</p>
             )}
           </div>
 

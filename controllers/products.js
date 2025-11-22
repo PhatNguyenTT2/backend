@@ -95,14 +95,22 @@ productsRouter.get('/', async (request, response) => {
     if (withBatches === 'true') {
       query = query.populate({
         path: 'batches',
-        select: 'batchCode quantity expiryDate manufacturingDate costPrice unitPrice',
+        select: 'batchCode quantity expiryDate manufacturingDate costPrice unitPrice quantityOnShelf',
         options: { sort: { expiryDate: 1 } }
       });
     }
 
     // Populate inventory if requested
+    // Also populate batches to calculate totalQuantityOnShelf virtual
     if (withInventory === 'true') {
       query = query.populate('inventory', 'quantityOnHand quantityOnShelf quantityReserved reorderPoint warehouseLocation');
+
+      // Also populate batches with quantityOnShelf to calculate totalQuantityOnShelf
+      query = query.populate({
+        path: 'batches',
+        select: 'quantityOnShelf',
+        match: { quantityOnShelf: { $gt: 0 } } // Only batches with stock on shelf
+      });
     }
 
     const products = await query;

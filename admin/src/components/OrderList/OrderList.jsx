@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, onEdit, onDelete, onUpdateStatus, onUpdatePayment }) => {
+export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, onEdit, onDelete, onUpdateStatus, onUpdatePayment, onViewInvoice }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
@@ -422,16 +422,16 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
             >
               <button
                 onClick={() => {
-                  onView && onView(order);
+                  onViewInvoice && onViewInvoice(order);
                   setActiveDropdown(null);
                 }}
-                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center gap-2"
               >
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M1 8C1 8 3.5 3 8 3C12.5 3 15 8 15 8C15 8 12.5 13 8 13C3.5 13 1 8 1 8Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M8 10C9.10457 10 10 9.10457 10 8C10 6.89543 9.10457 6 8 6C6.89543 6 6 6.89543 6 8C6 9.10457 6.89543 10 8 10Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <rect x="3" y="2" width="10" height="12" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M5 5H11M5 8H11M5 11H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
-                View Details
+                View Invoice
               </button>
 
               <button

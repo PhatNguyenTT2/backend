@@ -177,7 +177,7 @@ purchaseOrdersRouter.get('/:id', async (request, response) => {
   try {
     const purchaseOrder = await PurchaseOrder.findById(request.params.id)
       .populate('supplier', 'supplierCode companyName phone address accountNumber paymentTerms creditLimit currentDebt')
-      .populate('createdBy', 'employeeCode firstName lastName email phone')
+      .populate('createdBy', 'employeeCode fullName email phone')
       .populate({
         path: 'details',
         populate: {
@@ -317,6 +317,34 @@ purchaseOrdersRouter.post('/', userExtractor, async (request, response) => {
       });
     }
 
+    // Get employee from authenticated user
+    let employeeId = null;
+    if (request.user && request.user.employeeId) {
+      // User has employeeId field (from userAccount)
+      employeeId = request.user.employeeId;
+    } else if (request.user && request.user.id) {
+      // Try to find employee by userAccount
+      const employee = await Employee.findOne({ userAccount: request.user.id });
+      if (employee) {
+        employeeId = employee._id;
+      }
+    }
+
+    // If no employee found, find a system/admin employee as fallback
+    if (!employeeId) {
+      const systemEmployee = await Employee.findOne({ isActive: true }).sort({ createdAt: 1 });
+      if (!systemEmployee) {
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'No active employee found. Please create an employee first.',
+            code: 'NO_EMPLOYEE_FOUND'
+          }
+        });
+      }
+      employeeId = systemEmployee._id;
+    }
+
     // Validate expected delivery date
     if (expectedDeliveryDate) {
       const deliveryDate = new Date(expectedDeliveryDate);
@@ -344,7 +372,7 @@ purchaseOrdersRouter.post('/', userExtractor, async (request, response) => {
       status: status || 'pending',
       paymentStatus: paymentStatus || 'unpaid',
       notes: notes || null,
-      createdBy: request.user.id
+      createdBy: employeeId
     });
 
     const savedPurchaseOrder = await purchaseOrder.save();
@@ -540,6 +568,9 @@ purchaseOrdersRouter.put('/:id', userExtractor, async (request, response) => {
       }
     }
 
+    // Track old status for message generation
+    const oldStatus = purchaseOrder.status;
+
     // Update fields
     if (supplier !== undefined) purchaseOrder.supplier = supplier;
     if (orderDate !== undefined) purchaseOrder.orderDate = orderDate;
@@ -584,10 +615,22 @@ purchaseOrdersRouter.put('/:id', userExtractor, async (request, response) => {
       }
     });
 
+    // Generate appropriate success message based on what was updated
+    let message = 'Purchase order updated successfully';
+    if (status !== undefined && status !== oldStatus) {
+      const statusMessages = {
+        approved: 'Purchase order approved successfully',
+        received: 'Purchase order marked as received successfully',
+        cancelled: 'Purchase order cancelled successfully',
+        pending: 'Purchase order status updated to pending'
+      };
+      message = statusMessages[status] || `Purchase order status updated to ${status}`;
+    }
+
     response.json({
       success: true,
       data: updatedPurchaseOrder,
-      message: 'Purchase order updated successfully'
+      message
     });
   } catch (error) {
     console.error('Update purchase order error:', error);
@@ -619,7 +662,8 @@ purchaseOrdersRouter.put('/:id', userExtractor, async (request, response) => {
  * Delete purchase order
  * Requires authentication
  * 
- * Note: Can only delete pending or cancelled purchase orders
+ * Note: Can delete pending, cancelled, or received purchase orders
+ * Cannot delete approved orders (they must be cancelled first or received)
  * All related DetailPurchaseOrder records will be deleted automatically
  */
 purchaseOrdersRouter.delete('/:id', userExtractor, async (request, response) => {
@@ -636,16 +680,17 @@ purchaseOrdersRouter.delete('/:id', userExtractor, async (request, response) => 
       });
     }
 
-    // Only allow deletion of pending or cancelled orders
-    if (purchaseOrder.status !== 'pending' && purchaseOrder.status !== 'cancelled') {
+    // Only allow deletion of pending, cancelled, or received orders
+    // Note: Approved orders should not be deleted as they may have active processes
+    if (purchaseOrder.status === 'approved') {
       return response.status(400).json({
         success: false,
         error: {
-          message: 'Can only delete pending or cancelled purchase orders',
+          message: 'Cannot delete approved purchase orders',
           code: 'INVALID_STATUS_FOR_DELETION',
           details: {
             currentStatus: purchaseOrder.status,
-            message: 'Only pending or cancelled purchase orders can be deleted'
+            message: 'Approved purchase orders cannot be deleted. Please cancel the order first or wait until goods are received.'
           }
         }
       });

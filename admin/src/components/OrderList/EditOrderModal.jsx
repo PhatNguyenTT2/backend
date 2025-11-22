@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import orderService from '../../services/orderService';
+import orderDetailService from '../../services/orderDetailService';
 import customerService from '../../services/customerService';
 import productService from '../../services/productService';
 
@@ -30,11 +31,24 @@ export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
 
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [orderDetails, setOrderDetails] = useState([]);
+  const [loadingDetails, setLoadingDetails] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [fullOrder, setFullOrder] = useState(null);
+
+  // For editing draft order items
+  const [editedItems, setEditedItems] = useState([]);
+  const [itemsChanged, setItemsChanged] = useState(false);
 
   // Check if order can be edited
   const canEdit = order && order.status !== 'delivered' && order.status !== 'cancelled';
+
+  // Only draft orders can edit items (add/remove/modify products)
+  const canEditItems = order && order.status === 'draft';
+
+  // Pending/shipping can only edit metadata (delivery info, fees, notes)
+  const canEditMetadata = canEdit && !canEditItems;
 
   // Load form data when modal opens or order changes
   useEffect(() => {
@@ -49,10 +63,31 @@ export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
         paymentStatus: order.paymentStatus || 'pending'
       });
       setErrors({});
+      setOrderDetails([]);
+      setFullOrder(null);
+      setEditedItems([]);
+      setItemsChanged(false);
       loadCustomers();
       loadProducts();
+      loadFullOrder();
+      loadOrderDetails();
     }
   }, [isOpen, order]);
+
+  // Load full order data
+  const loadFullOrder = async () => {
+    const orderId = order?._id || order?.id;
+    if (!orderId) return;
+
+    try {
+      const response = await orderService.getOrderById(orderId);
+      const orderData = response.data?.order || response.order || null;
+      console.log('✅ Loaded full order:', orderData);
+      setFullOrder(orderData);
+    } catch (error) {
+      console.error('❌ Failed to load full order:', error);
+    }
+  };
 
   // Load customers
   const loadCustomers = async () => {
@@ -77,9 +112,81 @@ export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
         withInventory: true
       });
       const productsList = data.data?.products || data.products || [];
+      console.log('📦 Loaded products for EditOrderModal:', {
+        count: productsList.length,
+        firstProduct: productsList[0] ? {
+          _id: productsList[0]._id,
+          id: productsList[0].id,
+          name: productsList[0].name,
+          inventory: productsList[0].inventory // CHECK THIS!
+        } : 'No products',
+        // Find Toonies specifically
+        toonies: productsList.find(p => p.name === 'Toonies') ? {
+          name: 'Toonies',
+          inventory: productsList.find(p => p.name === 'Toonies').inventory,
+          fullProduct: productsList.find(p => p.name === 'Toonies')
+        } : 'Toonies not found'
+      });
       setProducts(productsList);
     } catch (error) {
       console.error('❌ Failed to load products:', error);
+    }
+  };
+
+  // Load order details
+  const loadOrderDetails = async () => {
+    const orderId = order?._id || order?.id;
+    if (!orderId) {
+      console.warn('⚠️ No order ID found:', order);
+      return;
+    }
+
+    console.log('📥 Loading order details for order:', orderId);
+    setLoadingDetails(true);
+    try {
+      const response = await orderDetailService.getDetailsByOrder(orderId);
+      console.log('📦 Raw response:', response);
+
+      // Try multiple possible response structures
+      const details = response.data?.orderDetails ||
+        response.data?.data?.orderDetails ||
+        response.orderDetails ||
+        response.data ||
+        [];
+
+      console.log('✅ Loaded order details:', details);
+      setOrderDetails(details);
+
+      // If draft order, convert to editable items
+      if (order?.status === 'draft' && details.length > 0) {
+        const items = details.map(detail => {
+          // Handle both populated product object and product ID
+          const productId = detail.product?._id || detail.product?.id || detail.product;
+          console.log('🔄 Converting detail to editable item:', {
+            detailId: detail._id,
+            productRaw: detail.product,
+            productId: productId,
+            quantity: detail.quantity,
+            unitPrice: detail.unitPrice
+          });
+
+          return {
+            _id: detail._id,
+            productId: productId,
+            quantity: detail.quantity,
+            unitPrice: detail.unitPrice,
+            batch: detail.batch
+          };
+        });
+        console.log('✅ Converted to editedItems:', items);
+        setEditedItems(items);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load order details:', error);
+      console.error('❌ Error details:', error.response?.data || error.message);
+      setOrderDetails([]);
+    } finally {
+      setLoadingDetails(false);
     }
   };
 
@@ -88,12 +195,133 @@ export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
     return products.find(p => p._id === productId);
   };
 
-  // Helper: Format currency
+  // Helper: Get product price
+  const getProductPrice = (product) => {
+    if (!product) return 0;
+    const price = product.unitPrice;
+    if (price === null || price === undefined) return 0;
+    if (typeof price === 'object' && price !== null) {
+      if (price.$numberDecimal) return parseFloat(price.$numberDecimal);
+      return parseFloat(price.toString());
+    }
+    const parsed = parseFloat(price);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  // Helper: Get available quantity (from inventory.quantityOnShelf)
+  // quantityOnShelf = quantity currently on shelf available for sale
+  const getAvailableQuantity = (product) => {
+    if (!product) {
+      console.log('🔍 getAvailableQuantity: product is null/undefined');
+      return 0;
+    }
+
+    if (!product.inventory) {
+      console.log('🔍 getAvailableQuantity: inventory missing for', product.name);
+      return 0;
+    }
+
+    // Use quantityOnShelf (actual quantity on shelf ready for sale)
+    const qty = product.inventory.quantityOnShelf ?? 0;
+
+    console.log('🔍 getAvailableQuantity:', {
+      productName: product.name,
+      quantityOnHand: product.inventory.quantityOnHand,
+      quantityOnShelf: product.inventory.quantityOnShelf,
+      quantityReserved: product.inventory.quantityReserved,
+      returned: qty
+    });
+    return qty;
+  };  // Helper: Format currency
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND'
     }).format(amount || 0);
+  };
+
+  // Helper: Get available products for dropdown (on shelf + not already selected)
+  const getAvailableProducts = (currentItemIndex = null) => {
+    // Filter products with quantityOnShelf > 0
+    const onShelfProducts = products.filter(product => {
+      const qtyOnShelf = getAvailableQuantity(product);
+      return qtyOnShelf > 0;
+    });
+
+    // Get list of already selected product IDs (excluding current item being edited)
+    const selectedProductIds = editedItems
+      .map((item, index) => {
+        // Exclude current item being edited to allow changing its product
+        if (currentItemIndex !== null && index === currentItemIndex) {
+          return null;
+        }
+        return item.productId;
+      })
+      .filter(id => id); // Remove null/undefined
+
+    // Filter out already selected products
+    const availableProducts = onShelfProducts.filter(product => {
+      const productId = product._id || product.id;
+      return !selectedProductIds.includes(productId);
+    });
+
+    return availableProducts;
+  };
+
+  // === DRAFT ORDER ITEMS HANDLERS ===
+
+  // Add new item to draft order
+  const handleAddItem = () => {
+    if (!canEditItems) return;
+
+    setEditedItems([
+      ...editedItems,
+      { productId: '', quantity: 1, unitPrice: 0 }
+    ]);
+    setItemsChanged(true);
+  };
+
+  // Remove item from draft order
+  const handleRemoveItem = (index) => {
+    if (!canEditItems) return;
+
+    const newItems = editedItems.filter((_, i) => i !== index);
+    setEditedItems(newItems);
+    setItemsChanged(true);
+
+    // Clear related errors
+    const newErrors = { ...errors };
+    delete newErrors[`item_${index}_product`];
+    delete newErrors[`item_${index}_quantity`];
+    setErrors(newErrors);
+  };
+
+  // Update item in draft order
+  const handleItemChange = (index, field, value) => {
+    if (!canEditItems) return;
+
+    const newItems = [...editedItems];
+    newItems[index] = { ...newItems[index], [field]: value };
+
+    // Auto-fill price when product is selected
+    if (field === 'productId' && value) {
+      const product = products.find(p => (p.id || p._id) === value);
+      if (product) {
+        const price = getProductPrice(product);
+        newItems[index].unitPrice = price;
+      }
+    }
+
+    setEditedItems(newItems);
+    setItemsChanged(true);
+
+    // Clear error
+    const errorKey = `item_${index}_${field === 'productId' ? 'product' : field}`;
+    if (errors[errorKey]) {
+      const newErrors = { ...errors };
+      delete newErrors[errorKey];
+      setErrors(newErrors);
+    }
   };
 
   // Handle form field changes
@@ -120,22 +348,86 @@ export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
       newErrors.shippingAddress = 'Shipping address is required for delivery orders';
     }
 
+    // Validate items for draft orders with changes
+    if (canEditItems && itemsChanged) {
+      if (editedItems.length === 0) {
+        newErrors.items = 'Please add at least one item';
+      }
+
+      editedItems.forEach((item, index) => {
+        if (!item.productId) {
+          newErrors[`item_${index}_product`] = 'Please select a product';
+        }
+        if (item.quantity <= 0) {
+          newErrors[`item_${index}_quantity`] = 'Quantity must be greater than 0';
+        }
+
+        // Check for duplicate products
+        if (item.productId) {
+          const duplicateIndex = editedItems.findIndex((otherItem, otherIndex) =>
+            otherIndex !== index && otherItem.productId === item.productId
+          );
+          if (duplicateIndex !== -1) {
+            newErrors[`item_${index}_product`] = 'Product already selected';
+          }
+        }
+
+        // Check stock availability
+        if (item.productId) {
+          const product = products.find(p => (p.id || p._id) === item.productId);
+          const available = getAvailableQuantity(product);
+          if (item.quantity > available) {
+            newErrors[`item_${index}_quantity`] = `Only ${available} available`;
+          }
+        }
+      });
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   // Calculate subtotal from order details
   const calculateSubtotal = () => {
-    if (!order || !order.details) return 0;
-    return order.details.reduce((sum, detail) => {
+    // For draft orders with changes, use editedItems
+    if (canEditItems && itemsChanged && editedItems.length > 0) {
+      return editedItems.reduce((sum, item) => {
+        return sum + (item.quantity * item.unitPrice);
+      }, 0);
+    }
+
+    // For confirmed orders or unchanged draft, use orderDetails
+    if (!orderDetails || orderDetails.length === 0) return 0;
+    return orderDetails.reduce((sum, detail) => {
       return sum + (detail.quantity * detail.unitPrice);
     }, 0);
+  };
+
+  // Get discount percentage based on customer type
+  const discountPercentage = useMemo(() => {
+    if (!fullOrder?.customer) return 0;
+
+    const discountMap = {
+      'guest': 0,
+      'retail': 10,
+      'wholesale': 15,
+      'vip': 20
+    };
+
+    return discountMap[fullOrder.customer.customerType?.toLowerCase()] || 0;
+  }, [fullOrder]);
+
+  // Calculate discount amount
+  const calculateDiscount = () => {
+    const subtotal = calculateSubtotal();
+    return subtotal * (discountPercentage / 100);
   };
 
   // Calculate total
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
-    return subtotal + Number(formData.shippingFee) - Number(formData.discount);
+    const discount = calculateDiscount();
+    return subtotal + Number(formData.shippingFee) - discount;
   };
 
   // Handle form submission
@@ -148,6 +440,7 @@ export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
     }
 
     if (!validateForm()) {
+      console.log('❌ Validation failed:', errors);
       return;
     }
 
@@ -160,13 +453,42 @@ export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
           ? formData.shippingAddress
           : undefined,
         shippingFee: Number(formData.shippingFee),
-        discount: Number(formData.discount),
         notes: formData.notes || undefined,
         status: formData.status,
         paymentStatus: formData.paymentStatus
       };
 
-      console.log('📤 Updating order:', order._id || order.id, updateData);
+      // Include items if draft order and items changed
+      if (canEditItems && itemsChanged && editedItems.length > 0) {
+        // Filter out invalid items and create clean array
+        const validItems = editedItems.filter(item =>
+          item.productId &&
+          item.quantity > 0 &&
+          item.unitPrice >= 0
+        );
+
+        if (validItems.length === 0) {
+          setErrors({ submit: 'No valid items to update' });
+          setLoading(false);
+          return;
+        }
+
+        // Create clean items array without prototype pollution
+        updateData.items = validItems.map(item => {
+          const cleanItem = {
+            product: String(item.productId),
+            quantity: Number(item.quantity),
+            unitPrice: Number(item.unitPrice)
+          };
+          console.log('🔄 Mapping item:', cleanItem);
+          return cleanItem;
+        });
+
+        console.log('📦 Items to update:', updateData.items.length, 'items');
+      }
+
+      console.log('📤 Sending update data:', JSON.stringify(updateData, null, 2));
+      console.log('🆔 Order ID:', order._id || order.id);
 
       await orderService.updateOrder(order._id || order.id, updateData);
 
@@ -175,6 +497,7 @@ export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
       handleClose();
     } catch (error) {
       console.error('❌ Failed to update order:', error);
+      console.error('📋 Error response:', error.response?.data);
       setErrors({
         submit: error.response?.data?.error?.message ||
           error.response?.data?.message ||
@@ -240,12 +563,48 @@ export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
               Customer
             </label>
             <div className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] bg-gray-50 cursor-not-allowed">
-              {order.customer?.fullName || 'N/A'} {order.customer?.phone ? `- ${order.customer.phone}` : ''}
+              {fullOrder?.customer?.fullName || order.customer?.fullName || 'N/A'}
+              {(fullOrder?.customer?.phone || order.customer?.phone) ? `- ${fullOrder?.customer?.phone || order.customer?.phone}` : ''}
+              {fullOrder?.customer?.customerType && (
+                <span className="ml-2 text-emerald-600 font-medium">({fullOrder.customer.customerType})</span>
+              )}
             </div>
             <p className="mt-1 text-[11px] text-gray-500 font-['Poppins',sans-serif]">
               Customer cannot be changed after order creation
             </p>
           </div>
+
+          {/* Created By Info Display */}
+          {fullOrder?.createdBy && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" className="text-blue-600">
+                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                </svg>
+                <h3 className="text-[13px] font-semibold text-blue-900">Order Created By</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] text-blue-700 mb-1">Employee Name</label>
+                  <input
+                    type="text"
+                    value={fullOrder.createdBy.fullName || 'N/A'}
+                    disabled
+                    className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-[13px] bg-blue-100 text-blue-900 cursor-not-allowed font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-blue-700 mb-1">User Code</label>
+                  <input
+                    type="text"
+                    value={fullOrder.createdBy.userAccount?.userCode || 'N/A'}
+                    disabled
+                    className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-[13px] bg-blue-100 text-blue-900 cursor-not-allowed font-semibold"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Status Selection */}
           <div className="grid grid-cols-2 gap-4">
@@ -351,79 +710,246 @@ export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
             </label>
 
             {/* Info Banner */}
-            <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-[11px] text-amber-700 flex items-center gap-1">
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-                <span>Order items cannot be modified after order creation</span>
-              </p>
-            </div>
+            {canEditItems ? (
+              <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-[11px] text-blue-700 flex items-center gap-1">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <span>✏️ Draft order - You can add, remove, or modify items</span>
+                </p>
+              </div>
+            ) : (
+              <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-[11px] text-amber-700 flex items-center gap-1">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <span>🔒 Confirmed order - Items are locked. Only delivery info and fees can be changed.</span>
+                </p>
+              </div>
+            )}
 
-            {/* Items List (Read-only) */}
-            <div className="space-y-3">
-              {order.details && order.details.length > 0 ? (
-                order.details.map((detail, index) => {
-                  const product = detail.product;
-                  const batch = detail.batch;
+            {/* Items List */}
+            {loadingDetails ? (
+              <div className="text-center py-8">
+                <svg className="animate-spin h-8 w-8 text-emerald-600 mx-auto" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <p className="text-[12px] text-gray-500 mt-2">Loading order items...</p>
+              </div>
+            ) : canEditItems ? (
+              // Editable items for draft orders
+              <div className="space-y-3">
+                {editedItems.map((item, index) => {
+                  const selectedProduct = products.find(p => (p.id || p._id) === item.productId);
+                  const availableQty = getAvailableQuantity(selectedProduct);
+                  const availableProducts = getAvailableProducts(index);
+
+                  // Debug: Log product matching
+                  if (index === 0) {
+                    console.log('🔍 Product matching debug:', {
+                      itemProductId: item.productId,
+                      totalProducts: products.length,
+                      availableProducts: availableProducts.length,
+                      firstProduct: products[0] ? {
+                        id: products[0].id,
+                        _id: products[0]._id,
+                        name: products[0].name
+                      } : 'No products',
+                      selectedProduct: selectedProduct ? selectedProduct.name : 'NOT FOUND'
+                    });
+                  }
 
                   return (
-                    <div key={index} className="flex gap-2 items-start p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex-1 grid grid-cols-4 gap-2">
-                        {/* Product Name */}
+                    <div key={index} className="flex gap-2 items-start p-3 bg-white rounded-lg border-2 border-blue-200">
+                      <div className="flex-1 grid grid-cols-3 gap-3">
+                        {/* Product Selection */}
                         <div>
-                          <label className="block text-[11px] text-gray-600 mb-1">Product</label>
-                          <div className="text-[12px] font-medium text-gray-900">
-                            {product?.name || 'N/A'}
-                          </div>
-                          {product?.productCode && (
-                            <div className="text-[10px] text-gray-500 mt-0.5">
-                              Code: {product.productCode}
-                            </div>
+                          <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                            Product <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={item.productId || ''}
+                            onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
+                            className={`w-full px-3 py-2 border ${errors[`item_${index}_product`] ? 'border-red-500' : 'border-gray-300'} rounded-lg text-[12px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          >
+                            <option value="">-- Select Product --</option>
+                            {/* Show currently selected product even if not in available list */}
+                            {item.productId && selectedProduct && !availableProducts.find(p => (p._id || p.id) === item.productId) && (
+                              <option value={item.productId}>
+                                {selectedProduct.name} ({selectedProduct.productCode}) - Selected
+                              </option>
+                            )}
+                            {/* Show available products with stock info */}
+                            {availableProducts.map(product => {
+                              const productId = product._id || product.id;
+                              const qtyOnShelf = getAvailableQuantity(product);
+                              return (
+                                <option key={productId} value={productId}>
+                                  {product.name} ({product.productCode}) - {qtyOnShelf} in stock
+                                </option>
+                              );
+                            })}
+                          </select>
+                          {errors[`item_${index}_product`] && (
+                            <p className="mt-1 text-[10px] text-red-500">{errors[`item_${index}_product`]}</p>
                           )}
-                        </div>
-
-                        {/* Batch Info */}
-                        <div>
-                          <label className="block text-[11px] text-gray-600 mb-1">Batch</label>
-                          <div className="text-[12px] text-gray-900">
-                            {batch?.batchNumber || 'N/A'}
-                          </div>
-                          {batch?.expiryDate && (
-                            <div className="text-[10px] text-gray-500 mt-0.5">
-                              Exp: {new Date(batch.expiryDate).toLocaleDateString('en-US')}
-                            </div>
+                          {selectedProduct && (
+                            <p className="mt-1 text-[10px] text-emerald-600">
+                              Available: {availableQty} units
+                            </p>
                           )}
                         </div>
 
                         {/* Quantity */}
                         <div>
-                          <label className="block text-[11px] text-gray-600 mb-1">Quantity</label>
-                          <div className="text-[12px] font-medium text-gray-900">
-                            {detail.quantity}
-                          </div>
+                          <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                            Quantity <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                            className={`w-full px-3 py-2 border ${errors[`item_${index}_quantity`] ? 'border-red-500' : 'border-gray-300'} rounded-lg text-[12px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          />
+                          {errors[`item_${index}_quantity`] && (
+                            <p className="mt-1 text-[10px] text-red-500">{errors[`item_${index}_quantity`]}</p>
+                          )}
                         </div>
 
-                        {/* Unit Price */}
+                        {/* Unit Price (Read-only) */}
                         <div>
-                          <label className="block text-[11px] text-gray-600 mb-1">Unit Price</label>
-                          <div className="text-[12px] font-medium text-gray-900">
-                            {formatCurrency(detail.unitPrice)}
+                          <label className="block text-[11px] font-medium text-gray-700 mb-1">Unit Price</label>
+                          <input
+                            type="text"
+                            value={formatCurrency(item.unitPrice)}
+                            disabled
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[12px] bg-gray-50 cursor-not-allowed"
+                          />
+                          <p className="mt-1 text-[10px] text-gray-600">
+                            Total: {formatCurrency(item.quantity * item.unitPrice)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Remove Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(index)}
+                        className="mt-7 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Remove item"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* Add Item Button */}
+                {(() => {
+                  const availableProducts = getAvailableProducts();
+                  const hasAvailableProducts = availableProducts.length > 0;
+
+                  return (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleAddItem}
+                        disabled={!hasAvailableProducts}
+                        className={`w-full py-3 border-2 border-dashed rounded-lg text-[13px] flex items-center justify-center gap-2 transition-colors ${hasAvailableProducts
+                          ? 'border-blue-300 text-blue-600 hover:bg-blue-50 cursor-pointer'
+                          : 'border-gray-300 text-gray-400 cursor-not-allowed bg-gray-50'
+                          }`}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                        </svg>
+                        Add Item
+                      </button>
+                      {!hasAvailableProducts && (
+                        <p className="text-[11px] text-amber-600 text-center">
+                          ⚠️ No more products available to add (all products either out of stock or already selected)
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
+
+                {errors.items && (
+                  <p className="text-[11px] text-red-500">{errors.items}</p>
+                )}
+              </div>
+            ) : (
+              // Read-only items for confirmed orders
+              <div className="space-y-3">
+                {orderDetails && orderDetails.length > 0 ? (
+                  orderDetails.map((detail, index) => {
+                    const product = detail.product;
+                    const batch = detail.batch;
+
+                    return (
+                      <div key={index} className="flex gap-2 items-start p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex-1 grid grid-cols-4 gap-2">
+                          {/* Product Name */}
+                          <div>
+                            <label className="block text-[11px] text-gray-600 mb-1">Product</label>
+                            <div className="text-[12px] font-medium text-gray-900">
+                              {product?.name || 'N/A'}
+                            </div>
+                            {product?.productCode && (
+                              <div className="text-[10px] text-gray-500 mt-0.5">
+                                Code: {product.productCode}
+                              </div>
+                            )}
                           </div>
-                          <div className="text-[10px] text-gray-500 mt-0.5">
-                            Total: {formatCurrency(detail.quantity * detail.unitPrice)}
+
+                          {/* Batch Info */}
+                          <div>
+                            <label className="block text-[11px] text-gray-600 mb-1">Batch</label>
+                            <div className="text-[12px] text-gray-900">
+                              {batch?.batchCode || batch?.batchNumber || 'N/A'}
+                            </div>
+                            {batch?.expiryDate && (
+                              <div className="text-[10px] text-gray-500 mt-0.5">
+                                Exp: {new Date(batch.expiryDate).toLocaleDateString('en-US')}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Quantity */}
+                          <div>
+                            <label className="block text-[11px] text-gray-600 mb-1">Quantity</label>
+                            <div className="text-[12px] font-medium text-gray-900">
+                              {detail.quantity}
+                            </div>
+                          </div>
+
+                          {/* Unit Price */}
+                          <div>
+                            <label className="block text-[11px] text-gray-600 mb-1">Unit Price</label>
+                            <div className="text-[12px] font-medium text-gray-900">
+                              {formatCurrency(detail.unitPrice)}
+                            </div>
+                            <div className="text-[10px] text-gray-500 mt-0.5">
+                              Total: {formatCurrency(detail.quantity * detail.unitPrice)}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-4 text-gray-500 text-[12px]">
-                  No items found
-                </div>
-              )}
-            </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-4 text-gray-500 text-[12px]">
+                    No items found
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Fees & Discount */}
@@ -444,20 +970,22 @@ export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
               />
             </div>
 
-            {/* Discount */}
+            {/* Discount Info (Auto-calculated) */}
             <div>
               <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
-                Discount (Amount)
+                Discount (Auto)
               </label>
-              <input
-                type="number"
-                value={formData.discount}
-                onChange={(e) => handleChange('discount', e.target.value)}
-                min="0"
-                step="1000"
-                disabled={!canEdit || loading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              />
+              <div className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif]">
+                {discountPercentage}%
+                {fullOrder?.customer && (
+                  <span className="text-gray-500 ml-1">
+                    ({fullOrder.customer.customerType || 'N/A'})
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-[10px] text-gray-500 font-['Poppins',sans-serif]">
+                Guest: 0% | Retail: 10% | Wholesale: 15% | VIP: 20%
+              </p>
             </div>
           </div>
 
@@ -494,10 +1022,12 @@ export const EditOrderModal = ({ isOpen, onClose, onSuccess, order }) => {
                 <span className="text-gray-600">Shipping Fee:</span>
                 <span className="text-gray-900">{formatCurrency(formData.shippingFee)}</span>
               </div>
-              <div className="flex justify-between text-[13px] font-['Poppins',sans-serif]">
-                <span className="text-gray-600">Discount:</span>
-                <span className="text-red-600">- {formatCurrency(formData.discount)}</span>
-              </div>
+              {discountPercentage > 0 && (
+                <div className="flex justify-between text-[13px] font-['Poppins',sans-serif]">
+                  <span className="text-gray-600">Discount ({discountPercentage}%):</span>
+                  <span className="text-red-600">- {formatCurrency(calculateDiscount())}</span>
+                </div>
+              )}
               <div className="border-t border-emerald-300 pt-2 mt-2">
                 <div className="flex justify-between">
                   <span className="text-[16px] font-bold font-['Poppins',sans-serif] text-[#212529]">Total:</span>
