@@ -133,6 +133,14 @@ purchaseOrderSchema.virtual('details', {
   foreignField: 'purchaseOrder'
 });
 
+// Virtual: Payments relationship
+purchaseOrderSchema.virtual('payments', {
+  ref: 'Payment',
+  localField: '_id',
+  foreignField: 'referenceId',
+  match: { referenceType: 'PurchaseOrder' }
+});
+
 // Virtual: Calculate subtotal from details (when populated)
 purchaseOrderSchema.virtual('subtotal').get(function () {
   if (this.details && Array.isArray(this.details)) {
@@ -179,6 +187,49 @@ purchaseOrderSchema.virtual('isFullyReceived').get(function () {
   if (!this.details || this.details.length === 0) return false;
   return this.details.every(detail => detail.isReceived);
 });
+
+// ============ INSTANCE METHODS ============
+/**
+ * Create a payment for this purchase order
+ * @param {Object} paymentData - Payment details (amount, paymentMethod, etc.)
+ * @returns {Promise<Payment>} Created payment
+ */
+purchaseOrderSchema.methods.addPayment = async function (paymentData) {
+  const Payment = mongoose.model('Payment');
+  return await Payment.create({
+    ...paymentData,
+    referenceType: 'PurchaseOrder',
+    referenceId: this._id
+  });
+};
+
+/**
+ * Calculate total paid amount from all completed payments
+ * @returns {Promise<Number>} Total paid amount
+ */
+purchaseOrderSchema.methods.getTotalPaid = async function () {
+  const Payment = mongoose.model('Payment');
+  const payments = await Payment.find({
+    referenceType: 'PurchaseOrder',
+    referenceId: this._id,
+    status: 'completed'
+  });
+
+  return payments.reduce((sum, payment) => {
+    const amount = payment.amount || 0;
+    return sum + (typeof amount === 'object' ? parseFloat(amount.toString()) : amount);
+  }, 0);
+};
+
+/**
+ * Calculate remaining balance
+ * @returns {Promise<Number>} Remaining balance
+ */
+purchaseOrderSchema.methods.getRemainingBalance = async function () {
+  const totalPaid = await this.getTotalPaid();
+  const total = this.totalPrice || 0;
+  return Math.max(0, total - totalPaid);
+};
 
 // ============ MIDDLEWARE ============
 /**

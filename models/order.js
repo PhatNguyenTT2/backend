@@ -121,6 +121,14 @@ orderSchema.virtual('details', {
   foreignField: 'order'
 });
 
+// Virtual: Payments relationship
+orderSchema.virtual('payments', {
+  ref: 'Payment',
+  localField: '_id',
+  foreignField: 'referenceId',
+  match: { referenceType: 'Order' }
+});
+
 // Virtual: Calculate subtotal from details (when populated)
 orderSchema.virtual('subtotal').get(function () {
   if (this.details && Array.isArray(this.details)) {
@@ -155,6 +163,49 @@ orderSchema.virtual('canBeCancelled').get(function () {
   return ['draft', 'pending'].includes(this.status) &&
     this.paymentStatus !== 'paid';
 });
+
+// ============ INSTANCE METHODS ============
+/**
+ * Create a payment for this order
+ * @param {Object} paymentData - Payment details (amount, paymentMethod, etc.)
+ * @returns {Promise<Payment>} Created payment
+ */
+orderSchema.methods.addPayment = async function (paymentData) {
+  const Payment = mongoose.model('Payment');
+  return await Payment.create({
+    ...paymentData,
+    referenceType: 'Order',
+    referenceId: this._id
+  });
+};
+
+/**
+ * Calculate total paid amount from all completed payments
+ * @returns {Promise<Number>} Total paid amount
+ */
+orderSchema.methods.getTotalPaid = async function () {
+  const Payment = mongoose.model('Payment');
+  const payments = await Payment.find({
+    referenceType: 'Order',
+    referenceId: this._id,
+    status: 'completed'
+  });
+
+  return payments.reduce((sum, payment) => {
+    const amount = payment.amount || 0;
+    return sum + (typeof amount === 'object' ? parseFloat(amount.toString()) : amount);
+  }, 0);
+};
+
+/**
+ * Calculate remaining balance
+ * @returns {Promise<Number>} Remaining balance
+ */
+orderSchema.methods.getRemainingBalance = async function () {
+  const totalPaid = await this.getTotalPaid();
+  const total = this.total || 0;
+  return Math.max(0, total - totalPaid);
+};
 
 // ============ MIDDLEWARE ============
 /**

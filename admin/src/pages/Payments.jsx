@@ -1,106 +1,56 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { PaymentList, PaymentListHeader } from '../components/PaymentList';
-// import paymentService from '../services/paymentService';
+import { PaymentListHeader } from '../components/PaymentList/PaymentListHeader';
+import { PaymentList } from '../components/PaymentList/PaymentList';
+import paymentService from '../services/paymentService';
 
-const Payments = () => {
+export const Payments = () => {
   // Breadcrumb items
   const breadcrumbItems = [
     { label: 'Dashboard', href: '/dashboard' },
-    { label: 'Payments', href: null },
+    { label: 'Payments', href: '/payments' },
   ];
 
-  // State management
   const [payments, setPayments] = useState([]);
   const [filteredPayments, setFilteredPayments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [paginatedPayments, setPaginatedPayments] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [pagination, setPagination] = useState({
-    current_page: 1,
-    per_page: 20,
-    total: 0,
-    total_pages: 0
-  });
 
-  // Filters - Backend uses 'limit' not 'per_page'
-  const [filters, setFilters] = useState({
-    page: 1,
-    limit: 20,
-    sort: '-paymentDate' // Backend format: '-field' for desc, 'field' for asc
-  });
+  // Modal states (for future implementation)
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState(null);
 
-  // Search state
+  // Filters and sorting
+  const [itemsPerPage, setItemsPerPage] = useState(20);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Sort state
-  const [sortField, setSortField] = useState('date');
+  const [sortField, setSortField] = useState('paymentDate');
   const [sortOrder, setSortOrder] = useState('desc');
 
-  // Fetch payments from API
-  const fetchPayments = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    itemsPerPage: 20,
+  });
 
-      console.log('[Payments] Fetching with filters:', filters);
-      // const response = await paymentService.getPayments(filters);
-      console.log('[Payments] API Response:', response);
-
-      // Backend returns { payments, pagination } directly
-      if (response && response.payments) {
-        console.log('[Payments] Raw payments:', response.payments);
-        const formattedPayments = paymentService.formatPaymentsForDisplay(response.payments);
-        console.log('[Payments] Formatted payments:', formattedPayments);
-        setPayments(formattedPayments);
-
-        if (response.pagination) {
-          setPagination({
-            current_page: response.pagination.page || 1,
-            per_page: response.pagination.limit || 20,
-            total: response.pagination.total || 0,
-            total_pages: response.pagination.pages || 0
-          });
-        }
-      } else {
-        console.warn('[Payments] Unexpected response format:', response);
-        setPayments([]);
-      }
-    } catch (err) {
-      console.error('[Payments] Error fetching payments:', err);
-      setError(err.error || err.message || 'Failed to fetch payments. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch payments on component mount and when filters change
+  // Fetch payments on component mount
   useEffect(() => {
     fetchPayments();
-  }, [filters]);
+  }, []);
 
-  // Apply search and sorting when data or filters change (Auto-filter like Categories)
+  // Apply search and sorting when data or filters change
   useEffect(() => {
     let result = [...payments];
 
-    // Apply search filter - search by Payment Number, Payment ID, Order Number, Customer/Supplier
+    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      result = result.filter(payment => {
-        const paymentId = (payment.id || '').toString().toLowerCase();
-        const paymentNumber = (payment.paymentNumber || '').toLowerCase();
-        const relatedOrderNumber = (payment.relatedOrderNumber || '').toLowerCase();
-        const customer = (payment.customer || '').toLowerCase();
-        const supplier = (payment.supplier || '').toLowerCase();
-        const reference = (payment.reference || '').toLowerCase();
-
-        return paymentId.includes(query) ||
-          paymentNumber.includes(query) ||
-          relatedOrderNumber.includes(query) ||
-          customer.includes(query) ||
-          supplier.includes(query) ||
-          reference.includes(query);
-      });
+      result = result.filter(payment =>
+        payment.paymentNumber?.toLowerCase().includes(query)
+      );
     }
 
     // Apply sorting
@@ -114,132 +64,142 @@ const Payments = () => {
 
       // Handle different data types
       if (sortField === 'amount') {
-        aVal = parseFloat(aVal) || 0;
-        bVal = parseFloat(bVal) || 0;
-      } else if (sortField === 'date' || sortField === 'paymentDate' || sortField === 'createdAt') {
+        aVal = Number(aVal) || 0;
+        bVal = Number(bVal) || 0;
+      } else if (sortField === 'paymentDate') {
         aVal = new Date(aVal).getTime();
         bVal = new Date(bVal).getTime();
-      } else {
+      } else if (sortField === 'paymentNumber' || sortField === 'referenceType' || sortField === 'paymentMethod' || sortField === 'status') {
         aVal = String(aVal).toLowerCase();
         bVal = String(bVal).toLowerCase();
       }
 
-      if (sortOrder === 'asc') {
-        return aVal > bVal ? 1 : -1;
-      } else {
-        return aVal < bVal ? 1 : -1;
-      }
+      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
     });
 
     setFilteredPayments(result);
-  }, [payments, searchQuery, sortField, sortOrder]);
 
-  // Handle status change
-  const handleStatusChange = async (paymentId, newStatus) => {
-    try {
-      console.log('[Payments] Updating status:', paymentId, newStatus);
-      // Use the new status update endpoint with inventory management
-      // const response = await paymentService.updatePaymentStatus(paymentId, newStatus);
-      console.log('[Payments] Update response:', response);
-
-      if (response) {
-        await fetchPayments();
-        console.log('Payment status updated successfully');
-        // Show success message
-        alert(response.message || 'Payment status updated successfully');
-      }
-    } catch (err) {
-      console.error('Error updating payment status:', err);
-      alert(err.error || 'Failed to update status. Please try again.');
-    }
-  };
-
-  // Handle refund
-  const handleRefund = async (paymentId, amount, reason) => {
-    try {
-      console.log('[Payments] Processing refund:', paymentId, amount, reason);
-      // const response = await paymentService.processRefund(paymentId, amount, reason);
-      console.log('[Payments] Refund response:', response);
-
-      if (response) {
-        await fetchPayments();
-        console.log('Refund processed successfully');
-        alert(response.message || 'Refund processed successfully');
-      }
-    } catch (err) {
-      console.error('Error processing refund:', err);
-      alert(err.error || 'Failed to process refund. Please try again.');
-    }
-  };
-
-  // Handle items per page change
-  const handleItemsPerPageChange = (newLimit) => {
-    console.log('[Payments] Changing limit to:', newLimit);
-    setFilters(prev => ({
+    // Update pagination
+    const totalPages = Math.ceil(result.length / itemsPerPage);
+    setPagination(prev => ({
       ...prev,
-      limit: newLimit,
-      page: 1
+      currentPage: 1, // Reset to first page on filter change
+      totalPages,
+      itemsPerPage,
     }));
+  }, [payments, searchQuery, sortField, sortOrder, itemsPerPage]);
+
+  // Paginate filtered payments
+  useEffect(() => {
+    const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage;
+    const endIndex = startIndex + pagination.itemsPerPage;
+    setPaginatedPayments(filteredPayments.slice(startIndex, endIndex));
+  }, [filteredPayments, pagination.currentPage, pagination.itemsPerPage]);
+
+  const fetchPayments = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const response = await paymentService.getAllPayments({
+        limit: 1000, // Get all payments for client-side filtering
+        sortBy: 'paymentDate',
+        sortOrder: 'desc'
+      });
+
+      if (response.success && response.data && response.data.payments) {
+        setPayments(response.data.payments);
+      } else if (Array.isArray(response)) {
+        setPayments(response);
+      } else {
+        console.error('Unexpected response structure:', response);
+        setPayments([]);
+      }
+    } catch (err) {
+      console.error('Error fetching payments:', err);
+      setError(err.message || 'Failed to load payments');
+      setPayments([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Handle search change - auto-filter (no need to click search button)
-  const handleSearchChange = (query) => {
-    setSearchQuery(query);
+  const handleColumnSort = (field, order) => {
+    setSortField(field);
+    setSortOrder(order);
   };
 
-  // Handle search button click (optional - mainly for UX consistency)
   const handleSearch = (query) => {
     setSearchQuery(query);
   };
 
-  // Handle sort
-  const handleSort = (field) => {
-    const newSortOrder = sortField === field && sortOrder === 'asc' ? 'desc' : 'asc';
-    setSortField(field);
-    setSortOrder(newSortOrder);
+  const handleSearchChange = (query) => {
+    setSearchQuery(query);
   };
 
-  // Handle add payment
+  const handleItemsPerPageChange = (value) => {
+    setItemsPerPage(value);
+  };
+
+  const handlePageChange = (newPage) => {
+    setPagination(prev => ({
+      ...prev,
+      currentPage: newPage
+    }));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleAddPayment = () => {
-    console.log('Record new payment');
-    // TODO: Open record payment modal
+    setShowAddModal(true);
   };
 
-  if (loading && payments.length === 0) {
-    return (
-      <Layout>
-        <Breadcrumb items={breadcrumbItems} />
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
-        </div>
-      </Layout>
-    );
-  }
+  const handleEdit = (payment) => {
+    setSelectedPayment(payment);
+    setShowEditModal(true);
+  };
 
-  if (error) {
-    return (
-      <Layout>
-        <Breadcrumb items={breadcrumbItems} />
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-600">{error}</p>
-          <button
-            onClick={fetchPayments}
-            className="mt-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
-      </Layout>
-    );
-  }
+  const handleUpdateStatus = async (payment, newStatus) => {
+    try {
+      await paymentService.updatePaymentStatus(payment.id, newStatus);
+      fetchPayments(); // Refresh the list
+    } catch (err) {
+      console.error('Error updating payment status:', err);
+      alert(err.response?.data?.error?.message || err.message || 'Failed to update payment status');
+    }
+  };
+
+  const handleDelete = async (payment) => {
+    // Only allow deleting pending payments
+    if (payment.status !== 'pending') {
+      alert('Only pending payments can be deleted.');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete payment "${payment.paymentNumber}"?`)) {
+      return;
+    }
+
+    try {
+      await paymentService.deletePayment(payment.id);
+      alert('Payment deleted successfully!');
+      fetchPayments(); // Refresh the list
+    } catch (err) {
+      console.error('Error deleting payment:', err);
+      alert(err.response?.data?.error?.message || err.message || 'Failed to delete payment');
+    }
+  };
 
   return (
     <Layout>
-      <Breadcrumb items={breadcrumbItems} />
+      <div className="space-y-6">
+        {/* Breadcrumb */}
+        <Breadcrumb items={breadcrumbItems} />
 
-      <div className="space-y-4">
+        {/* Payment List Header */}
         <PaymentListHeader
-          itemsPerPage={filters.limit}
+          itemsPerPage={itemsPerPage}
           onItemsPerPageChange={handleItemsPerPageChange}
           searchQuery={searchQuery}
           onSearchChange={handleSearchChange}
@@ -247,36 +207,173 @@ const Payments = () => {
           onAddPayment={handleAddPayment}
         />
 
-        <PaymentList
-          payments={filteredPayments}
-          onStatusChange={handleStatusChange}
-          onRefund={handleRefund}
-          onSort={handleSort}
-          sortField={sortField}
-          sortOrder={sortOrder}
-        />
+        {/* Loading State */}
+        {isLoading && (
+          <div className="flex justify-center items-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+          </div>
+        )}
 
-        {/* Empty State - No Results from Search */}
-        {!loading && !error && filteredPayments.length === 0 && payments.length > 0 && (
-          <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
-            <p className="text-gray-500 text-sm">No payments found matching "{searchQuery}"</p>
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            <p className="font-medium">Error loading payments</p>
+            <p className="text-sm mt-1">{error}</p>
             <button
-              onClick={() => setSearchQuery('')}
-              className="mt-2 text-sm text-emerald-600 hover:underline"
+              onClick={fetchPayments}
+              className="mt-2 text-sm underline hover:no-underline"
             >
-              Clear search
+              Try again
             </button>
           </div>
         )}
 
-        {/* Results Summary */}
-        {filteredPayments.length > 0 && (
-          <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
-            Showing {filteredPayments.length} of {payments.length} payments
-            {searchQuery && ` (filtered)`}
+        {/* Payment List Table */}
+        {!isLoading && !error && (
+          <>
+            <PaymentList
+              payments={paginatedPayments}
+              onSort={handleColumnSort}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onUpdateStatus={handleUpdateStatus}
+            />
+
+            {/* Pagination */}
+            {pagination.totalPages > 1 && (
+              <div className="flex items-center justify-center mt-6">
+                <div className="flex items-center gap-2">
+                  {/* Previous button */}
+                  <button
+                    onClick={() => handlePageChange(pagination.currentPage - 1)}
+                    disabled={pagination.currentPage === 1}
+                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      }`}
+                  >
+                    ‹ Previous
+                  </button>
+
+                  {/* Page numbers */}
+                  {(() => {
+                    const maxPagesToShow = 5;
+                    const { totalPages, currentPage } = pagination;
+
+                    let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+                    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+                    if (endPage - startPage < maxPagesToShow - 1) {
+                      startPage = Math.max(1, endPage - maxPagesToShow + 1);
+                    }
+
+                    const pages = [];
+
+                    // First page + ellipsis
+                    if (startPage > 1) {
+                      pages.push(
+                        <button
+                          key={1}
+                          onClick={() => handlePageChange(1)}
+                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                        >
+                          1
+                        </button>
+                      );
+                      if (startPage > 2) {
+                        pages.push(
+                          <span key="ellipsis-start" className="px-2 text-gray-400">
+                            ...
+                          </span>
+                        );
+                      }
+                    }
+
+                    // Page numbers
+                    for (let page = startPage; page <= endPage; page++) {
+                      pages.push(
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${currentPage === page
+                              ? 'bg-[#3bb77e] text-white'
+                              : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                            }`}
+                        >
+                          {page}
+                        </button>
+                      );
+                    }
+
+                    // Ellipsis + last page
+                    if (endPage < totalPages) {
+                      if (endPage < totalPages - 1) {
+                        pages.push(
+                          <span key="ellipsis-end" className="px-2 text-gray-400">
+                            ...
+                          </span>
+                        );
+                      }
+                      pages.push(
+                        <button
+                          key={totalPages}
+                          onClick={() => handlePageChange(totalPages)}
+                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                        >
+                          {totalPages}
+                        </button>
+                      );
+                    }
+
+                    return pages;
+                  })()}
+
+                  {/* Next button */}
+                  <button
+                    onClick={() => handlePageChange(pagination.currentPage + 1)}
+                    disabled={pagination.currentPage === pagination.totalPages}
+                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      }`}
+                  >
+                    Next ›
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Results Summary */}
+            {paginatedPayments.length > 0 && (
+              <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
+                Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
+                {Math.min(pagination.currentPage * pagination.itemsPerPage, filteredPayments.length)} of{' '}
+                {filteredPayments.length} payments
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && filteredPayments.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
+            <p className="text-gray-500 text-sm">No payments found</p>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="mt-2 text-sm text-emerald-600 hover:underline"
+              >
+                Clear search
+              </button>
+            )}
           </div>
         )}
       </div>
+
+      {/* TODO: Add Payment Modal - to be implemented */}
+      {/* TODO: Edit Payment Modal - to be implemented */}
     </Layout>
   );
 };

@@ -1,30 +1,13 @@
 const mongoose = require('mongoose');
 
-/**
- * SalesPayment Model
- * Manages payments received from customers for orders
- * References: Order (many-to-one), Customer (many-to-one), Employee (many-to-one)
- */
-const salesPaymentSchema = new mongoose.Schema({
+const paymentSchema = new mongoose.Schema({
   paymentNumber: {
     type: String,
     unique: true,
     uppercase: true,
     trim: true,
-    match: [/^SPAY\d{10}$/, 'Payment number must follow format SPAY2025000001']
+    match: [/^PPAY\d{10}$/, 'Payment number must follow format PPAY2025000001']
     // Auto-generated in pre-save hook
-  },
-
-  order: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Order',
-    required: [true, 'Order is required']
-  },
-
-  customer: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Customer',
-    required: [true, 'Customer is required']
   },
 
   amount: {
@@ -42,7 +25,7 @@ const salesPaymentSchema = new mongoose.Schema({
   paymentMethod: {
     type: String,
     enum: {
-      values: ['cash', 'card', 'bank_transfer', 'e_wallet'],
+      values: ['bank_transfer', 'cash'],
       message: '{VALUE} is not a valid payment method'
     },
     required: [true, 'Payment method is required']
@@ -53,25 +36,34 @@ const salesPaymentSchema = new mongoose.Schema({
     default: Date.now,
     required: [true, 'Payment date is required']
   },
-
   status: {
     type: String,
     enum: {
-      values: ['pending', 'completed', 'failed', 'refunded'],
+      values: ['pending', 'completed', 'cancelled'],
       message: '{VALUE} is not a valid status'
     },
     default: 'pending'
   },
 
-  receivedBy: {
+  createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Employee'
   },
 
-  transactionId: {
+  // Polymorphic reference to Order or PurchaseOrder
+  referenceType: {
     type: String,
-    trim: true,
-    maxlength: [100, 'Transaction ID must be at most 100 characters']
+    enum: {
+      values: ['Order', 'PurchaseOrder'],
+      message: '{VALUE} is not a valid reference type'
+    },
+    required: [true, 'Reference type is required']
+  },
+
+  referenceId: {
+    type: mongoose.Schema.Types.ObjectId,
+    refPath: 'referenceType',
+    required: [true, 'Reference ID is required']
   },
 
   notes: {
@@ -87,34 +79,56 @@ const salesPaymentSchema = new mongoose.Schema({
 });
 
 // ============ INDEXES ============
-salesPaymentSchema.index({ paymentNumber: 1 });
-salesPaymentSchema.index({ order: 1 });
-salesPaymentSchema.index({ customer: 1, paymentDate: -1 });
-salesPaymentSchema.index({ paymentDate: -1 });
-salesPaymentSchema.index({ status: 1 });
-salesPaymentSchema.index({ receivedBy: 1, paymentDate: -1 });
+paymentSchema.index({ paymentNumber: 1 });
+paymentSchema.index({ paymentDate: -1 });
+paymentSchema.index({ status: 1 });
+paymentSchema.index({ createdBy: 1, paymentDate: -1 });
+paymentSchema.index({ referenceType: 1, referenceId: 1 });
+paymentSchema.index({ referenceId: 1 });
 
 // ============ VIRTUALS ============
 // Virtual: Check if payment is successful
-salesPaymentSchema.virtual('isSuccessful').get(function () {
+paymentSchema.virtual('isCompleted').get(function () {
   return this.status === 'completed';
 });
 
-// Virtual: Check if payment is refundable
-salesPaymentSchema.virtual('isRefundable').get(function () {
-  return this.status === 'completed' && this.paymentMethod !== 'cash';
+// Virtual: Check if payment is overdue
+paymentSchema.virtual('isOverdue').get(function () {
+  if (!this.dueDate || this.status === 'completed' || this.status === 'cancelled') {
+    return false;
+  }
+  return new Date() > this.dueDate;
 });
 
 // ============ MIDDLEWARE ============
+// Validate reference exists before saving
+paymentSchema.pre('save', async function (next) {
+  // Validate that the referenced Order or PurchaseOrder exists
+  if (this.isNew || this.isModified('referenceId') || this.isModified('referenceType')) {
+    try {
+      const Model = mongoose.model(this.referenceType);
+      const exists = await Model.exists({ _id: this.referenceId });
+      if (!exists) {
+        const error = new Error(`${this.referenceType} with ID ${this.referenceId} not found`);
+        error.name = 'ValidationError';
+        return next(error);
+      }
+    } catch (error) {
+      return next(error);
+    }
+  }
+  next();
+});
+
 // Auto-generate payment number before saving
-salesPaymentSchema.pre('save', async function (next) {
+paymentSchema.pre('save', async function (next) {
   if (!this.paymentNumber) {
     try {
       const currentYear = new Date().getFullYear();
 
       // Find the last payment number for the current year
       const lastPayment = await this.constructor
-        .findOne({ paymentNumber: new RegExp(`^SPAY${currentYear}`) })
+        .findOne({ paymentNumber: new RegExp(`^PPAY${currentYear}`) })
         .sort({ paymentNumber: -1 })
         .select('paymentNumber')
         .lean();
@@ -130,7 +144,7 @@ salesPaymentSchema.pre('save', async function (next) {
       }
 
       // Generate new payment number with 6-digit padding
-      this.paymentNumber = `SPAY${currentYear}${String(sequenceNumber).padStart(6, '0')}`;
+      this.paymentNumber = `PPAY${currentYear}${String(sequenceNumber).padStart(6, '0')}`;
     } catch (error) {
       return next(error);
     }
@@ -139,7 +153,7 @@ salesPaymentSchema.pre('save', async function (next) {
 });
 
 // ============ JSON TRANSFORMATION ============
-salesPaymentSchema.set('toJSON', {
+paymentSchema.set('toJSON', {
   transform: (document, returnedObject) => {
     returnedObject.id = returnedObject._id.toString();
     delete returnedObject._id;
@@ -152,4 +166,4 @@ salesPaymentSchema.set('toJSON', {
   }
 });
 
-module.exports = mongoose.model('SalesPayment', salesPaymentSchema);
+module.exports = mongoose.model('Payment', paymentSchema);
