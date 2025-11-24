@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import orderService from '../../services/orderService';
 import customerService from '../../services/customerService';
 import productService from '../../services/productService';
+import productBatchService from '../../services/productBatchService';
 import authService from '../../services/authService';
 import employeeService from '../../services/employeeService';
 import settingsService from '../../services/settingsService';
@@ -33,6 +34,7 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
 
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [availableBatches, setAvailableBatches] = useState({}); // { productId: [batches] }
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
@@ -210,13 +212,66 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
       0;
   };
 
+  // Helper: Check if product is fresh (has 'fresh' category)
+  const isFreshProduct = (product) => {
+    if (!product || !product.category) return false;
+    const categoryName = typeof product.category === 'object'
+      ? product.category.name
+      : product.category;
+    return categoryName?.toLowerCase() === 'fresh';
+  };
+
+  // Load available batches for fresh product
+  const loadBatchesForProduct = async (productId) => {
+    try {
+      console.log('🔄 Loading batches for product:', productId);
+      const response = await productBatchService.getBatchesByProduct(productId, {
+        status: 'active',
+        withInventory: true
+      });
+
+      console.log('📦 Batch response:', response);
+
+      if (response.success && response.data) {
+        const batches = response.data.batches || [];
+        console.log('📋 Total batches received:', batches.length);
+        console.log('📋 Batch details:', batches.map(b => ({
+          batchCode: b.batchCode,
+          qtyOnShelf: b.detailInventory?.quantityOnShelf,
+          status: b.status
+        })));
+
+        // Filter batches with quantity on shelf > 0
+        const availableBatchesForProduct = batches.filter(batch => {
+          const qtyOnShelf = batch.detailInventory?.quantityOnShelf || 0;
+          return qtyOnShelf > 0;
+        });
+
+        console.log('✅ Available batches (qtyOnShelf > 0):', availableBatchesForProduct.length);
+        console.log('✅ Available batch codes:', availableBatchesForProduct.map(b => b.batchCode));
+
+        setAvailableBatches(prev => ({
+          ...prev,
+          [productId]: availableBatchesForProduct
+        }));
+      }
+    } catch (error) {
+      console.error('❌ Error loading batches for product:', error);
+    }
+  };
+
   // Add new item to order
   const handleAddItem = () => {
     setFormData({
       ...formData,
       items: [
         ...formData.items,
-        { productId: '', quantity: 1, unitPrice: 0 }
+        {
+          productId: '',
+          quantity: 1, // For non-fresh products
+          unitPrice: 0,
+          batchSelections: [] // For fresh products: [{ batchId, quantity }]
+        }
       ]
     });
   };
@@ -232,6 +287,30 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
     delete newErrors[`item_${index}_quantity`];
     delete newErrors[`item_${index}_price`];
     setErrors(newErrors);
+  };
+
+  // Add batch selection for fresh product
+  const handleAddBatchSelection = (itemIndex) => {
+    const newItems = [...formData.items];
+    if (!newItems[itemIndex].batchSelections) {
+      newItems[itemIndex].batchSelections = [];
+    }
+    newItems[itemIndex].batchSelections.push({ batchId: '', quantity: 1 });
+    setFormData({ ...formData, items: newItems });
+  };
+
+  // Remove batch selection
+  const handleRemoveBatchSelection = (itemIndex, batchIndex) => {
+    const newItems = [...formData.items];
+    newItems[itemIndex].batchSelections = newItems[itemIndex].batchSelections.filter((_, i) => i !== batchIndex);
+    setFormData({ ...formData, items: newItems });
+  };
+
+  // Update batch selection
+  const handleBatchSelectionChange = (itemIndex, batchIndex, field, value) => {
+    const newItems = [...formData.items];
+    newItems[itemIndex].batchSelections[batchIndex][field] = value;
+    setFormData({ ...formData, items: newItems });
   };
 
   // Update item (product selection or quantity change)
@@ -253,18 +332,34 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
         found: !!product,
         productName: product?.name,
         rawUnitPrice: product?.unitPrice,
-        typeOfPrice: typeof product?.unitPrice
+        typeOfPrice: typeof product?.unitPrice,
+        isFresh: product ? isFreshProduct(product) : false
       });
 
       if (product) {
         const price = getProductPrice(product);
         newItems[index].unitPrice = price;
         console.log('💰 Auto-filled price for', product.name, ':', price);
+
+        // Load batches if product is fresh
+        if (isFreshProduct(product)) {
+          console.log('🌿 Fresh product detected - loading batches for selection');
+          loadBatchesForProduct(value);
+          // Initialize batchSelections array for fresh products
+          newItems[index].batchSelections = [];
+          newItems[index].quantity = 0; // Will be calculated from batch selections
+        } else {
+          // Clear batchSelections for non-fresh products (auto FEFO)
+          newItems[index].batchSelections = [];
+          newItems[index].quantity = 1; // Default quantity for non-fresh
+        }
       } else {
         console.warn('⚠️ Product not found in products array!');
         console.warn('Available product IDs:', products.map(p => p.id || p._id).slice(0, 5));
       }
-    } setFormData({ ...formData, items: newItems });
+    }
+
+    setFormData({ ...formData, items: newItems });
 
     // Clear error for this field
     const errorKey = `item_${index}_${field === 'productId' ? 'product' : field}`;
@@ -315,24 +410,50 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
         newErrors[`item_${index}_product`] = 'Please select a product';
       }
 
-      // Validate quantity
-      if (item.quantity <= 0) {
-        newErrors[`item_${index}_quantity`] = 'Quantity must be greater than 0';
+      const product = products.find(p => (p.id || p._id) === item.productId);
+
+      // Validate batch selections for fresh products
+      if (item.productId && product && isFreshProduct(product)) {
+        if (!item.batchSelections || item.batchSelections.length === 0) {
+          newErrors[`item_${index}_batches`] = 'Please add at least one batch for fresh products';
+        } else {
+          // Validate each batch selection
+          item.batchSelections.forEach((batchSel, batchIdx) => {
+            if (!batchSel.batchId) {
+              newErrors[`item_${index}_batch_${batchIdx}_id`] = 'Please select a batch';
+            }
+            if (!batchSel.quantity || batchSel.quantity <= 0) {
+              newErrors[`item_${index}_batch_${batchIdx}_qty`] = 'Quantity must be greater than 0';
+            }
+
+            // Check batch availability
+            if (batchSel.batchId) {
+              const productBatches = availableBatches[item.productId] || [];
+              const selectedBatch = productBatches.find(b => (b.id || b._id) === batchSel.batchId);
+              const batchQty = selectedBatch?.detailInventory?.quantityOnShelf || 0;
+
+              if (batchQty > 0 && batchSel.quantity > batchQty) {
+                newErrors[`item_${index}_batch_${batchIdx}_qty`] = `Only ${batchQty} available`;
+              }
+            }
+          });
+        }
+      } else if (item.productId && product && !isFreshProduct(product)) {
+        // For non-fresh products, validate quantity
+        if (item.quantity <= 0) {
+          newErrors[`item_${index}_quantity`] = 'Quantity must be greater than 0';
+        }
+
+        // Check total availability (FEFO auto-allocation)
+        const availableQty = getAvailableQuantity(product);
+        if (availableQty > 0 && item.quantity > availableQty) {
+          newErrors[`item_${index}_quantity`] = `Only ${availableQty} available`;
+        }
       }
 
       // Validate price
       if (item.unitPrice < 0) {
         newErrors[`item_${index}_price`] = 'Price cannot be negative';
-      }
-
-      // Validate stock availability
-      if (item.productId) {
-        const product = products.find(p => p._id === item.productId);
-        const availableQty = getAvailableQuantity(product);
-
-        if (availableQty > 0 && item.quantity > availableQty) {
-          newErrors[`item_${index}_quantity`] = `Only ${availableQty} available`;
-        }
       }
     });
 
@@ -343,7 +464,18 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
   // Calculate subtotal
   const calculateSubtotal = () => {
     return formData.items.reduce((sum, item) => {
-      return sum + (item.quantity * item.unitPrice);
+      const product = products.find(p => (p.id || p._id) === item.productId);
+
+      // For fresh products with batch selections, sum all batch quantities
+      if (product && isFreshProduct(product) && item.batchSelections && item.batchSelections.length > 0) {
+        const batchTotal = item.batchSelections.reduce((batchSum, batchSel) => {
+          return batchSum + ((Number(batchSel.quantity) || 0) * item.unitPrice);
+        }, 0);
+        return sum + batchTotal;
+      }
+
+      // For non-fresh products, use the single quantity
+      return sum + ((Number(item.quantity) || 0) * item.unitPrice);
     }, 0);
   };
 
@@ -422,12 +554,26 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
         notes: formData.notes || undefined,
         status: 'draft', // Default status when creating new order
         createdBy: currentEmployee._id || currentEmployee.id, // Add createdBy field
-        items: formData.items.map(item => ({
-          product: item.productId,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.unitPrice)
-          // Backend will auto-select batch using FEFO and calculate discountPercentage from customer type
-        }))
+        items: formData.items.flatMap(item => {
+          const product = products.find(p => (p.id || p._id) === item.productId);
+
+          // For fresh products with batch selections, create multiple items (one per batch)
+          if (product && isFreshProduct(product) && item.batchSelections && item.batchSelections.length > 0) {
+            return item.batchSelections.map(batchSel => ({
+              product: item.productId,
+              batch: batchSel.batchId,
+              quantity: Number(batchSel.quantity),
+              unitPrice: Number(item.unitPrice)
+            }));
+          }
+
+          // For non-fresh products, send as single item (FEFO auto-allocation)
+          return [{
+            product: item.productId,
+            quantity: Number(item.quantity),
+            unitPrice: Number(item.unitPrice)
+          }];
+        })
       };
 
       console.log('📤 Sending order data:', orderData);
@@ -640,26 +786,47 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
 
             {/* FEFO Info Banner */}
-            <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-[11px] text-blue-700 flex items-center gap-1">
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-                <span>System will automatically select batch using FEFO (First Expired First Out)</span>
-              </p>
+            <div className="mb-3 space-y-2">
+              <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-[11px] text-blue-700 flex items-center gap-1">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <span>System will automatically select batch using FEFO (First Expired First Out) for regular products</span>
+                </p>
+              </div>
+              <div className="p-2 bg-orange-50 border border-orange-200 rounded-lg">
+                <p className="text-[11px] text-orange-700 flex items-center gap-1">
+                  <span className="text-[14px]">🌿</span>
+                  <span><strong>Fresh products</strong> require manual batch selection (products with expiry promotions)</span>
+                </p>
+              </div>
             </div>
 
             {/* Items List */}
-            <div className="space-y-3">
+            <div className="space-y-4">
               {formData.items.map((item, index) => {
                 const product = products.find(p => (p.id || p._id) === item.productId);
                 const availableQty = getAvailableQuantity(product);
+                const isFresh = product && isFreshProduct(product);
+                const productBatches = item.productId ? (availableBatches[item.productId] || []) : [];
+
+                // Debug logging
+                if (item.productId && isFresh) {
+                  console.log('🔍 Rendering item #', index, ':', {
+                    productId: item.productId,
+                    productName: product?.name,
+                    isFresh,
+                    batchesAvailable: productBatches.length,
+                    batchCodes: productBatches.map(b => b.batchCode)
+                  });
+                }
 
                 return (
-                  <div key={index} className="flex gap-2 items-start p-3 bg-white rounded-lg border-2 border-blue-200">
-                    <div className="flex-1 grid grid-cols-3 gap-3">
-                      {/* Product Selection */}
-                      <div>
+                  <div key={index} className="p-4 bg-white rounded-lg border-2 border-blue-200 space-y-3">
+                    {/* Header with Product Selection and Remove Button */}
+                    <div className="flex gap-2 items-start">
+                      <div className="flex-1">
                         <label className="block text-[11px] font-medium text-gray-700 mb-1">
                           Product <span className="text-red-500">*</span>
                         </label>
@@ -672,9 +839,10 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                           {products.map((prod) => {
                             const onShelf = getAvailableQuantity(prod);
                             const productId = prod.id || prod._id;
+                            const categoryLabel = isFreshProduct(prod) ? ' 🌿' : '';
                             return (
                               <option key={productId} value={productId}>
-                                {prod.name} ({onShelf} in stock)
+                                {prod.name}{categoryLabel} ({onShelf} in stock)
                               </option>
                             );
                           })}
@@ -682,32 +850,15 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                         {errors[`item_${index}_product`] && (
                           <p className="mt-1 text-[10px] text-red-500">{errors[`item_${index}_product`]}</p>
                         )}
-                        {product && (
+                        {product && !isFresh && (
                           <p className="mt-1 text-[10px] text-emerald-600">
                             Available: {availableQty} units
                           </p>
                         )}
                       </div>
 
-                      {/* Quantity */}
-                      <div>
-                        <label className="block text-[11px] font-medium text-gray-700 mb-1">
-                          Quantity <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                          min="1"
-                          className={`w-full px-3 py-2 border ${errors[`item_${index}_quantity`] ? 'border-red-500' : 'border-gray-300'} rounded-lg text-[12px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-blue-500`}
-                        />
-                        {errors[`item_${index}_quantity`] && (
-                          <p className="mt-1 text-[10px] text-red-500">{errors[`item_${index}_quantity`]}</p>
-                        )}
-                      </div>
-
                       {/* Unit Price (Read-only) */}
-                      <div>
+                      <div className="w-40">
                         <label className="block text-[11px] font-medium text-gray-700 mb-1">Unit Price</label>
                         <input
                           type="text"
@@ -715,31 +866,178 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                           disabled
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[12px] bg-gray-50 cursor-not-allowed"
                         />
-                        <p className="mt-1 text-[10px] text-gray-600">
-                          Total: {formatCurrency(item.quantity * item.unitPrice)}
-                        </p>
                       </div>
+
+                      {/* Remove Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveItem(index)}
+                        className="mt-6 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Remove item"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
                     </div>
 
-                    {/* Remove Button */}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveItem(index)}
-                      className="mt-7 p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      title="Remove item"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </button>
+                    {/* Batch Selections for Fresh Products */}
+                    {isFresh && (
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[11px] font-semibold text-orange-700">
+                            🌿 Batch Selections <span className="text-red-500">*</span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handleAddBatchSelection(index)}
+                            className="px-2 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 text-[11px] font-medium flex items-center gap-1"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                              <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                            Add Batch
+                          </button>
+                        </div>
+
+                        {errors[`item_${index}_batches`] && (
+                          <p className="text-[10px] text-red-500">{errors[`item_${index}_batches`]}</p>
+                        )}
+
+                        {/* Batch Selections List */}
+                        <div className="space-y-2 ml-4 border-l-2 border-orange-200 pl-3">
+                          {(!item.batchSelections || item.batchSelections.length === 0) && (
+                            <p className="text-[11px] text-gray-500 italic">No batches selected. Click "Add Batch" to add.</p>
+                          )}
+
+                          {item.batchSelections && item.batchSelections.map((batchSel, batchIdx) => {
+                            const selectedBatch = productBatches.find(b => (b.id || b._id) === batchSel.batchId);
+                            return (
+                              <div key={batchIdx} className="flex gap-2 items-start p-2 bg-orange-50 rounded border border-orange-200">
+                                <div className="flex-1 grid grid-cols-2 gap-2">
+                                  {/* Batch Dropdown */}
+                                  <div>
+                                    <select
+                                      value={batchSel.batchId}
+                                      onChange={(e) => handleBatchSelectionChange(index, batchIdx, 'batchId', e.target.value)}
+                                      className={`w-full px-2 py-1.5 border ${errors[`item_${index}_batch_${batchIdx}_id`] ? 'border-red-500' : 'border-orange-300'} rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-orange-500`}
+                                    >
+                                      <option value="">-- Select Batch --</option>
+                                      {productBatches.map((batch) => {
+                                        const batchId = batch.id || batch._id;
+                                        const qtyOnShelf = batch.detailInventory?.quantityOnShelf || 0;
+                                        const expiryDate = new Date(batch.expiryDate);
+                                        const today = new Date();
+                                        const daysToExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+                                        const promotionLabel = batch.promotionApplied !== 'none' ? ` 🔥${batch.discountPercentage}%` : '';
+
+                                        return (
+                                          <option key={batchId} value={batchId}>
+                                            {batch.batchCode} ({daysToExpiry}d, {qtyOnShelf}u){promotionLabel}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                    {errors[`item_${index}_batch_${batchIdx}_id`] && (
+                                      <p className="mt-0.5 text-[9px] text-red-500">{errors[`item_${index}_batch_${batchIdx}_id`]}</p>
+                                    )}
+                                    {selectedBatch && (
+                                      <p className="mt-0.5 text-[9px] text-gray-600">
+                                        Exp: {new Date(selectedBatch.expiryDate).toLocaleDateString('vi-VN')} • {selectedBatch.detailInventory?.quantityOnShelf || 0} units
+                                      </p>
+                                    )}
+                                  </div>
+
+                                  {/* Quantity Input */}
+                                  <div>
+                                    <input
+                                      type="number"
+                                      value={batchSel.quantity}
+                                      onChange={(e) => handleBatchSelectionChange(index, batchIdx, 'quantity', e.target.value)}
+                                      min="1"
+                                      placeholder="Qty"
+                                      className={`w-full px-2 py-1.5 border ${errors[`item_${index}_batch_${batchIdx}_qty`] ? 'border-red-500' : 'border-orange-300'} rounded text-[11px] focus:outline-none focus:ring-1 focus:ring-orange-500`}
+                                    />
+                                    {errors[`item_${index}_batch_${batchIdx}_qty`] && (
+                                      <p className="mt-0.5 text-[9px] text-red-500">{errors[`item_${index}_batch_${batchIdx}_qty`]}</p>
+                                    )}
+                                    {selectedBatch && batchSel.quantity && (
+                                      <p className="mt-0.5 text-[9px] text-gray-600">
+                                        Total: {formatCurrency(batchSel.quantity * item.unitPrice)}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Remove Batch Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveBatchSelection(index, batchIdx)}
+                                  className="mt-0.5 p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
+                                  title="Remove batch"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                    <path d="M5.5 5.5A.5.5 0 016 6v6a.5.5 0 01-1 0V6a.5.5 0 01.5-.5zm2.5 0a.5.5 0 01.5.5v6a.5.5 0 01-1 0V6a.5.5 0 01.5-.5zm3 .5a.5.5 0 00-1 0v6a.5.5 0 001 0V6z" />
+                                    <path fillRule="evenodd" d="M14.5 3a1 1 0 01-1 1H13v9a2 2 0 01-2 2H5a2 2 0 01-2-2V4h-.5a1 1 0 01-1-1V2a1 1 0 011-1H6a1 1 0 011-1h2a1 1 0 011 1h3.5a1 1 0 011 1v1zM4.118 4L4 4.059V13a1 1 0 001 1h6a1 1 0 001-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z" />
+                                  </svg>
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Total Summary for Fresh Product */}
+                        {item.batchSelections && item.batchSelections.length > 0 && (
+                          <div className="mt-2 p-2 bg-orange-100 rounded border border-orange-300">
+                            <p className="text-[11px] font-semibold text-orange-900">
+                              Total Quantity: {item.batchSelections.reduce((sum, bs) => sum + (Number(bs.quantity) || 0), 0)} units
+                              {' • '}
+                              Total Amount: {formatCurrency(item.batchSelections.reduce((sum, bs) => sum + ((Number(bs.quantity) || 0) * item.unitPrice), 0))}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Quantity for Non-Fresh Products */}
+                    {!isFresh && item.productId && (
+                      <div className="flex gap-2">
+                        <div className="flex-1">
+                          <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                            Quantity <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                            min="1"
+                            className={`w-full px-3 py-2 border ${errors[`item_${index}_quantity`] ? 'border-red-500' : 'border-gray-300'} rounded-lg text-[12px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                          />
+                          {errors[`item_${index}_quantity`] && (
+                            <p className="mt-1 text-[10px] text-red-500">{errors[`item_${index}_quantity`]}</p>
+                          )}
+                        </div>
+                        <div className="w-40">
+                          <label className="block text-[11px] font-medium text-gray-700 mb-1">Total</label>
+                          <input
+                            type="text"
+                            value={formatCurrency(item.quantity * item.unitPrice)}
+                            disabled
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[12px] bg-gray-50 cursor-not-allowed font-semibold"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
 
-            {errors.items && (
-              <p className="text-[11px] text-red-500">{errors.items}</p>
-            )}
+            {
+              errors.items && (
+                <p className="text-[11px] text-red-500">{errors.items}</p>
+              )
+            }
           </div>
 
           {/* Fees */}

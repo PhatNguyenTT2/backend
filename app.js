@@ -29,6 +29,7 @@ const detailPurchaseOrdersRouter = require('./controllers/detailPurchaseOrders')
 // const detailSuppliersRouter = require('./controllers/detailSuppliers')
 const userAccountsRouter = require('./controllers/userAccounts')
 const settingsRouter = require('./controllers/settings')
+const promotionScheduler = require('./services/promotionScheduler')
 
 const app = express()
 
@@ -39,6 +40,9 @@ mongoose
   .then(async () => {
     logger.info('connected to MongoDB')
     // Auto-create default admin if none exists
+
+    // Initialize fresh product promotion scheduler
+    await promotionScheduler.init()
   })
   .catch(error => {
     logger.error('error connection to MongoDB:', error.message)

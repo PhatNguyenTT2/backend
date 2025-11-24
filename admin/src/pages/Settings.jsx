@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { Settings as SettingsIcon, Percent, Shield } from 'lucide-react';
+import { Settings as SettingsIcon, Percent, Shield, Leaf } from 'lucide-react';
 import settingsService from '../services/settingsService';
+import { FreshProductPromotionSettings } from '../components/Settings';
 
 export const Settings = () => {
   // Customer Discounts State
@@ -94,7 +95,7 @@ export const Settings = () => {
 
       if (response.success && response.data) {
         setDiscounts(response.data);
-        setDiscountsSuccess('✅ Settings reset to default values!');
+        setDiscountsSuccess('Settings reset to default values!');
         setTimeout(() => setDiscountsSuccess(null), 3000);
       } else {
         setDiscountsError('Failed to reset settings');
@@ -166,7 +167,7 @@ export const Settings = () => {
 
       if (response.success && response.data) {
         setSecurity(response.data);
-        setSecuritySuccess('✅ Settings reset to default values!');
+        setSecuritySuccess('Settings reset to default values!');
         setTimeout(() => setSecuritySuccess(null), 3000);
       } else {
         setSecurityError('Failed to reset settings');
@@ -511,6 +512,27 @@ export const Settings = () => {
               </div>
             </>
           )}
+        </div>
+
+        {/* Fresh Product Auto-Promotion Section */}
+        <div className="bg-white rounded-lg shadow-sm">
+          {/* Section Header */}
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center gap-2">
+              <Leaf className="w-5 h-5 text-orange-600" />
+              <h2 className="text-[16px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
+                Fresh Product Auto-Promotion
+              </h2>
+            </div>
+            <p className="text-[13px] text-gray-600 mt-1 font-['Poppins',sans-serif]">
+              Automatically apply promotions to fresh products (category='fresh') based on expiry date
+            </p>
+          </div>
+
+          {/* Component */}
+          <div className="p-6">
+            <FreshProductPromotionSettings />
+          </div>
         </div>
       </div>
     </Layout>

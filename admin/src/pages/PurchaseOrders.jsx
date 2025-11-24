@@ -36,8 +36,8 @@ export const PurchaseOrders = () => {
   // Filters and sorting
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState('orderDate');
-  const [sortOrder, setSortOrder] = useState('desc');
+  const [sortField, setSortField] = useState('poNumber');
+  const [sortOrder, setSortOrder] = useState('asc');
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
   const [supplierFilter, setSupplierFilter] = useState('all');
@@ -90,7 +90,7 @@ export const PurchaseOrders = () => {
       let bVal = b[sortField];
 
       // Handle nested fields
-      if (sortField === 'supplier.companyName') {
+      if (sortField === 'supplier') {
         aVal = a.supplier?.companyName;
         bVal = b.supplier?.companyName;
       }
@@ -177,9 +177,15 @@ export const PurchaseOrders = () => {
     }
   };
 
-  const handleColumnSort = (field, order) => {
-    setSortField(field);
-    setSortOrder(order);
+  const handleColumnSort = (field) => {
+    if (sortField === field) {
+      // Toggle sort order if same field
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Default to ascending for new field
+      setSortField(field);
+      setSortOrder('asc');
+    }
   };
 
   const handleSearch = (query) => {

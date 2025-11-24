@@ -372,7 +372,7 @@ ordersRouter.post('/', async (request, response) => {
       validatedCreatedBy = systemEmployee._id;
     }
 
-    // Validate items and auto-select batches using FEFO
+    // Validate items and select batches (manual for fresh, FEFO for others)
     const processedItems = [];
     for (const item of orderItems) {
       if (!item.product || !item.quantity || item.quantity <= 0) {
@@ -386,7 +386,7 @@ ordersRouter.post('/', async (request, response) => {
       }
 
       // Get product to check existence and get price if not provided
-      const product = await Product.findById(item.product);
+      const product = await Product.findById(item.product).populate('category');
       if (!product) {
         return response.status(404).json({
           success: false,
@@ -397,40 +397,89 @@ ordersRouter.post('/', async (request, response) => {
         });
       }
 
-      // Auto-allocate batches using FEFO (may use multiple batches if needed)
-      let batchAllocations;
-      try {
-        batchAllocations = await allocateQuantityFEFO(item.product, item.quantity);
-      } catch (error) {
-        return response.status(400).json({
-          success: false,
-          error: {
-            message: error.message || `Insufficient stock on shelf for product: ${product.name}`,
-            code: 'INSUFFICIENT_SHELF_STOCK',
-            details: {
-              product: product.name,
-              productCode: product.productCode,
-              requestedQuantity: item.quantity,
-              note: 'Stock may be in warehouse but not on shelf yet'
+      // Check if batch is manually provided (for fresh products)
+      if (item.batch) {
+        console.log(`🌿 Fresh product: Using manually selected batch for ${product.name}`);
+
+        // Validate batch exists and has sufficient quantity
+        const batch = await ProductBatch.findById(item.batch);
+        if (!batch) {
+          return response.status(404).json({
+            success: false,
+            error: {
+              message: `Batch not found: ${item.batch}`,
+              code: 'BATCH_NOT_FOUND'
             }
-          }
-        });
-      }
+          });
+        }
 
-      console.log(`✅ Allocated ${batchAllocations.length} batch(es) for ${product.name}:`,
-        batchAllocations.map(a => `${a.batchCode} (${a.quantity})`).join(', ')
-      );
+        // Get DetailInventory for this batch to check availability
+        const DetailInventory = require('../models/detailInventory');
+        const detailInventory = await DetailInventory.findOne({ batchId: item.batch });
 
-      // Create order detail for each batch allocation
-      // If multiple batches needed, create multiple order details
-      for (const allocation of batchAllocations) {
+        if (!detailInventory || detailInventory.quantityOnShelf < item.quantity) {
+          return response.status(400).json({
+            success: false,
+            error: {
+              message: `Insufficient stock in selected batch: ${batch.batchCode}`,
+              code: 'INSUFFICIENT_BATCH_STOCK',
+              details: {
+                batchCode: batch.batchCode,
+                available: detailInventory?.quantityOnShelf || 0,
+                requested: item.quantity
+              }
+            }
+          });
+        }
+
+        // Use manually selected batch
         processedItems.push({
           product: item.product,
-          batch: allocation.batchId,
-          quantity: allocation.quantity,
-          unitPrice: item.unitPrice || allocation.unitPrice,
+          batch: item.batch,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice || batch.unitPrice || product.unitPrice,
           notes: item.notes
         });
+
+        console.log(`✅ Manual batch selection: ${batch.batchCode} (${item.quantity} units)`);
+      } else {
+        // Auto-allocate batches using FEFO for non-fresh products
+        console.log(`📦 Regular product: Using FEFO auto-allocation for ${product.name}`);
+
+        let batchAllocations;
+        try {
+          batchAllocations = await allocateQuantityFEFO(item.product, item.quantity);
+        } catch (error) {
+          return response.status(400).json({
+            success: false,
+            error: {
+              message: error.message || `Insufficient stock on shelf for product: ${product.name}`,
+              code: 'INSUFFICIENT_SHELF_STOCK',
+              details: {
+                product: product.name,
+                productCode: product.productCode,
+                requestedQuantity: item.quantity,
+                note: 'Stock may be in warehouse but not on shelf yet'
+              }
+            }
+          });
+        }
+
+        console.log(`✅ Allocated ${batchAllocations.length} batch(es) for ${product.name}:`,
+          batchAllocations.map(a => `${a.batchCode} (${a.quantity})`).join(', ')
+        );
+
+        // Create order detail for each batch allocation
+        // If multiple batches needed, create multiple order details
+        for (const allocation of batchAllocations) {
+          processedItems.push({
+            product: item.product,
+            batch: allocation.batchId,
+            quantity: allocation.quantity,
+            unitPrice: item.unitPrice || allocation.unitPrice,
+            notes: item.notes
+          });
+        }
       }
     }
 

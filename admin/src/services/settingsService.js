@@ -23,6 +23,43 @@ const settingsService = {
     }
   },
 
+  /**
+   * Get system settings (shorthand for getAllSettings)
+   * @returns {Promise<Object>} Response with settings object
+   * @example
+   * const response = await settingsService.getSettings()
+   * // { success: true, data: { customerDiscounts: {...}, posSecurity: {...}, freshProductPromotion: {...} } }
+   */
+  getSettings: async () => {
+    try {
+      const response = await api.get('/settings')
+      return response.data
+    } catch (error) {
+      console.error('Error fetching settings:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Update system settings
+   * @param {Object} settings - Settings object to update
+   * @returns {Promise<Object>} Updated settings
+   * @example
+   * const response = await settingsService.updateSettings({
+   *   freshProductPromotion: { autoPromotionEnabled: true, discountPercentage: 20 }
+   * })
+   * // { success: true, data: {...}, message: 'Settings updated successfully' }
+   */
+  updateSettings: async (settings) => {
+    try {
+      const response = await api.put('/settings', settings)
+      return response.data
+    } catch (error) {
+      console.error('Error updating settings:', error)
+      throw error
+    }
+  },
+
   // ========== CUSTOMER DISCOUNTS ==========
 
   /**
@@ -362,6 +399,76 @@ const settingsService = {
     }
 
     return `${hours}h ${remainingMins}m`
+  },
+
+  // ========== FRESH PRODUCT PROMOTION ==========
+
+  /**
+   * Run fresh product promotion immediately (manual trigger)
+   * @returns {Promise<Object>} Result of promotion run
+   * @example
+   * const response = await settingsService.runPromotionNow()
+   * // { success: true, data: { applied: 5, removed: 2, timestamp: ... } }
+   */
+  runPromotionNow: async () => {
+    try {
+      const response = await api.post('/settings/fresh-promotion/run')
+      return response.data
+    } catch (error) {
+      console.error('Error running promotion:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Get promotion statistics
+   * @returns {Promise<Object>} Promotion stats
+   * @example
+   * const response = await settingsService.getPromotionStats()
+   * // { success: true, data: { totalFreshProducts: 10, activeBatchesWithPromotion: 5, ... } }
+   */
+  getPromotionStats: async () => {
+    try {
+      const response = await api.get('/settings/fresh-promotion/stats')
+      return response.data
+    } catch (error) {
+      console.error('Error getting promotion stats:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Get scheduler status
+   * @returns {Promise<Object>} Scheduler status
+   * @example
+   * const response = await settingsService.getSchedulerStatus()
+   * // { success: true, data: { isRunning: true, currentSchedule: "0 17 * * *", ... } }
+   */
+  getSchedulerStatus: async () => {
+    try {
+      const response = await api.get('/settings/fresh-promotion/scheduler-status')
+      return response.data
+    } catch (error) {
+      console.error('Error getting scheduler status:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Restart promotion scheduler with new settings
+   * @returns {Promise<Object>} Updated scheduler status
+   * @example
+   * const response = await settingsService.restartPromotionScheduler()
+   * // { success: true, message: '...', data: { isRunning: true, ... } }
+   */
+  restartPromotionScheduler: async () => {
+    try {
+      const response = await api.post('/settings/fresh-promotion/restart-scheduler')
+      return response.data
+    } catch (error) {
+      console.error('Error restarting scheduler:', error)
+      throw error
+    }
   }
 }
 

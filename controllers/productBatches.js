@@ -49,6 +49,7 @@ productBatchesRouter.get('/', async (request, response) => {
       minQuantity,
       maxQuantity,
       promotionApplied,
+      withInventory,
       page = 1,
       limit = 20
     } = request.query;
@@ -108,6 +109,19 @@ productBatchesRouter.get('/', async (request, response) => {
       .skip(skip)
       .limit(parseInt(limit))
       .sort({ expiryDate: 1, createdAt: -1 });
+
+    // If withInventory is requested, populate detailInventory for each batch
+    if (withInventory === 'true') {
+      console.log('📦 Fetching inventory details for', batches.length, 'batches');
+      for (const batch of batches) {
+        const detailInventory = await DetailInventory.findOne({ batchId: batch._id });
+        batch._doc.detailInventory = detailInventory;
+        console.log(`  Batch ${batch.batchCode}:`, {
+          quantityOnShelf: detailInventory?.quantityOnShelf,
+          quantityOnHand: detailInventory?.quantityOnHand
+        });
+      }
+    }
 
     // Get total count for pagination
     const total = await ProductBatch.countDocuments(filter);

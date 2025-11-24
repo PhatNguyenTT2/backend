@@ -23,7 +23,7 @@ const PurchaseOrderList = ({
   const [receivingPO, setReceivingPO] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
-  // Handle sort click
+  // Handle sort click - Toggle sort order
   const handleSortClick = (field) => {
     if (onSort) {
       onSort(field);

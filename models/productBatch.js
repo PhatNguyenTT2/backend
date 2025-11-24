@@ -27,7 +27,7 @@ const productBatchSchema = new mongoose.Schema({
   promotionApplied: {
     type: String,
     enum: {
-      values: ['none', 'discount', 'buy1get1'],
+      values: ['none', 'discount'],
       message: '{VALUE} is not a valid promotion type'
     },
     default: 'none'

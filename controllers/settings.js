@@ -386,4 +386,185 @@ settingsRouter.put('/pos-security', async (request, response) => {
   }
 });
 
+// ============ FRESH PRODUCT AUTO-PROMOTION ============
+
+/**
+ * PUT /api/settings
+ * Update system settings (supports updating freshProductPromotion and other sections)
+ * 
+ * Body: { 
+ *   freshProductPromotion?: { ... },
+ *   customerDiscounts?: { ... },
+ *   etc.
+ * }
+ */
+settingsRouter.put('/', async (request, response) => {
+  try {
+    const updateData = request.body;
+
+    // Get current settings
+    const settings = await SystemSettings.getSettings();
+
+    // Update fresh product promotion if provided
+    if (updateData.freshProductPromotion) {
+      const { autoPromotionEnabled, promotionStartTime, discountPercentage, applyToExpiringToday, applyToExpiringTomorrow } = updateData.freshProductPromotion;
+
+      // Validation
+      if (discountPercentage !== undefined) {
+        const discount = parseFloat(discountPercentage);
+        if (isNaN(discount) || discount < 0 || discount > 100) {
+          return response.status(400).json({
+            success: false,
+            error: {
+              message: 'Discount percentage must be between 0 and 100',
+              code: 'INVALID_DISCOUNT'
+            }
+          });
+        }
+      }
+
+      // Update fields
+      if (autoPromotionEnabled !== undefined) settings.freshProductPromotion.autoPromotionEnabled = autoPromotionEnabled;
+      if (promotionStartTime !== undefined) settings.freshProductPromotion.promotionStartTime = promotionStartTime;
+      if (discountPercentage !== undefined) settings.freshProductPromotion.discountPercentage = parseFloat(discountPercentage);
+      if (applyToExpiringToday !== undefined) settings.freshProductPromotion.applyToExpiringToday = applyToExpiringToday;
+      if (applyToExpiringTomorrow !== undefined) settings.freshProductPromotion.applyToExpiringTomorrow = applyToExpiringTomorrow;
+
+      console.log('✅ Fresh product promotion settings updated:', settings.freshProductPromotion);
+    }
+
+    await settings.save();
+
+    response.json({
+      success: true,
+      message: 'Settings updated successfully',
+      data: settings
+    });
+
+  } catch (error) {
+    console.error('❌ Error updating settings:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Failed to update settings',
+        code: 'INTERNAL_ERROR',
+        details: error.message
+      }
+    });
+  }
+});
+
+// ============ FRESH PRODUCT PROMOTION - MANUAL TRIGGER & STATS ============
+
+/**
+ * POST /api/settings/fresh-promotion/run
+ * Manually trigger fresh product auto-promotion
+ */
+settingsRouter.post('/fresh-promotion/run', async (request, response) => {
+  try {
+    const FreshProductPromotionService = require('../services/freshProductPromotionService');
+
+    console.log('🔧 Manual promotion trigger received');
+    const result = await FreshProductPromotionService.runManualPromotion();
+
+    response.json({
+      success: result.success,
+      message: result.message,
+      data: {
+        applied: result.applied,
+        removed: result.removed,
+        timestamp: result.timestamp
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error running manual promotion:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Failed to run promotion',
+        code: 'INTERNAL_ERROR'
+      }
+    });
+  }
+});
+
+/**
+ * GET /api/settings/fresh-promotion/stats
+ * Get promotion statistics
+ */
+settingsRouter.get('/fresh-promotion/stats', async (request, response) => {
+  try {
+    const FreshProductPromotionService = require('../services/freshProductPromotionService');
+
+    const stats = await FreshProductPromotionService.getPromotionStats();
+
+    response.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('❌ Error getting promotion stats:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Failed to get stats',
+        code: 'INTERNAL_ERROR'
+      }
+    });
+  }
+});
+
+/**
+ * GET /api/settings/fresh-promotion/scheduler-status
+ * Get scheduler status
+ */
+settingsRouter.get('/fresh-promotion/scheduler-status', async (request, response) => {
+  try {
+    const promotionScheduler = require('../services/promotionScheduler');
+
+    const status = promotionScheduler.getStatus();
+
+    response.json({
+      success: true,
+      data: status
+    });
+  } catch (error) {
+    console.error('❌ Error getting scheduler status:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Failed to get scheduler status',
+        code: 'INTERNAL_ERROR'
+      }
+    });
+  }
+});
+
+/**
+ * POST /api/settings/fresh-promotion/restart-scheduler
+ * Restart scheduler with new settings
+ */
+settingsRouter.post('/fresh-promotion/restart-scheduler', async (request, response) => {
+  try {
+    const promotionScheduler = require('../services/promotionScheduler');
+
+    await promotionScheduler.restart();
+
+    response.json({
+      success: true,
+      message: 'Scheduler restarted successfully',
+      data: promotionScheduler.getStatus()
+    });
+  } catch (error) {
+    console.error('❌ Error restarting scheduler:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: error.message || 'Failed to restart scheduler',
+        code: 'INTERNAL_ERROR'
+      }
+    });
+  }
+});
+
 module.exports = settingsRouter;

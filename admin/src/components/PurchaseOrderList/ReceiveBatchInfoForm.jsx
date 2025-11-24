@@ -51,15 +51,8 @@ export const ReceiveBatchInfoForm = ({
     // Manufacturing date validation
     if (!formData.mfgDate) {
       newErrors.mfgDate = 'Manufacturing date is required';
-    } else {
-      const mfg = new Date(formData.mfgDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      if (mfg > today) {
-        newErrors.mfgDate = 'Manufacturing date cannot be in the future';
-      }
     }
+    // ✅ REMOVED: mfgDate future check - Allow future dates for perishable goods ordered before production
 
     // Expiry date validation
     if (!formData.expiryDate) {
@@ -73,6 +66,7 @@ export const ReceiveBatchInfoForm = ({
       }
 
       const today = new Date();
+      today.setHours(0, 0, 0, 0);
       if (exp <= today) {
         newErrors.expiryDate = 'Expiry date must be in the future';
       }
@@ -212,7 +206,6 @@ export const ReceiveBatchInfoForm = ({
             name="mfgDate"
             value={formData.mfgDate}
             onChange={handleChange}
-            max={new Date().toISOString().split('T')[0]}
             className={`w-full px-3 py-2 border rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.mfgDate ? 'border-red-500' : 'border-gray-300'
               }`}
             disabled={loading}

@@ -64,6 +64,37 @@ const systemSettingsSchema = new mongoose.Schema({
     }
   },
 
+  // Fresh Product Auto-Promotion configuration
+  freshProductPromotion: {
+    autoPromotionEnabled: {
+      type: Boolean,
+      default: false,
+      description: 'Enable/disable automatic promotion for fresh products'
+    },
+    promotionStartTime: {
+      type: String,
+      default: '17:00',
+      description: 'Time to start promotion each day (HH:MM format, 24-hour)'
+    },
+    discountPercentage: {
+      type: Number,
+      default: 20,
+      min: [0, 'Discount cannot be negative'],
+      max: [100, 'Discount cannot exceed 100%'],
+      description: 'Discount percentage for fresh products'
+    },
+    applyToExpiringToday: {
+      type: Boolean,
+      default: true,
+      description: 'Apply promotion to batches expiring within 24 hours'
+    },
+    applyToExpiringTomorrow: {
+      type: Boolean,
+      default: false,
+      description: 'Apply promotion to batches expiring within 48 hours'
+    }
+  },
+
   // Future: Business info (currently not implemented)
   // businessInfo: {
   //   companyName: String,
@@ -184,6 +215,13 @@ systemSettingsSchema.statics.getDefaults = function () {
     posSecurity: {
       maxFailedAttempts: 5,
       lockDurationMinutes: 15
+    },
+    freshProductPromotion: {
+      autoPromotionEnabled: false,
+      promotionStartTime: '17:00',
+      discountPercentage: 20,
+      applyToExpiringToday: true,
+      applyToExpiringTomorrow: false
     }
   };
 };

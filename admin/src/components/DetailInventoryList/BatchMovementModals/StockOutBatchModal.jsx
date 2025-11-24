@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import inventoryMovementBatchService from '../../../services/inventoryMovementBatchService';
 import employeeService from '../../../services/employeeService';
+import authService from '../../../services/authService';
 
 export const StockOutBatchModal = ({ isOpen, onClose, onSuccess, detailInventory }) => {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentEmployee, setCurrentEmployee] = useState(null);
   const [formData, setFormData] = useState({
     quantity: '',
     reason: '',
@@ -11,13 +14,12 @@ export const StockOutBatchModal = ({ isOpen, onClose, onSuccess, detailInventory
     notes: ''
   });
 
-  const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (isOpen) {
-      fetchEmployees();
+      fetchEmployeeData();
       setFormData({
         quantity: '',
         reason: 'Sales/Distribution',
@@ -29,14 +31,33 @@ export const StockOutBatchModal = ({ isOpen, onClose, onSuccess, detailInventory
     }
   }, [isOpen]);
 
-  const fetchEmployees = async () => {
+  const fetchEmployeeData = async () => {
     try {
-      const response = await employeeService.getAllEmployees();
-      if (response.success && response.data) {
-        setEmployees(response.data.employees || []);
+      setLoading(true);
+
+      // Get current user from authService
+      const user = authService.getUser();
+      setCurrentUser(user);
+
+      // If user has employeeId, fetch employee details
+      if (user?.employeeId) {
+        const employeeResponse = await employeeService.getEmployeeById(user.employeeId);
+
+        if (employeeResponse.success && employeeResponse.data) {
+          const employee = employeeResponse.data.employee;
+          setCurrentEmployee(employee);
+
+          // Set employeeId to formData
+          setFormData(prev => ({
+            ...prev,
+            performedBy: user.employeeId
+          }));
+        }
       }
     } catch (err) {
-      console.error('Error fetching employees:', err);
+      console.error('Error fetching employee:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -171,20 +192,15 @@ export const StockOutBatchModal = ({ isOpen, onClose, onSuccess, detailInventory
 
           <div>
             <label className="block text-[13px] font-semibold text-[#212529] mb-2">
-              Performed By <span className="text-gray-400 font-normal">(Optional)</span>
+              Performed By
             </label>
-            <select
-              value={formData.performedBy}
-              onChange={(e) => setFormData({ ...formData, performedBy: e.target.value })}
-              className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-red-500"
-            >
-              <option value="">Select employee</option>
-              {employees.map(emp => (
-                <option key={emp._id || emp.id} value={emp._id || emp.id}>
-                  {emp.fullName || `${emp.firstName} ${emp.lastName}`}
-                </option>
-              ))}
-            </select>
+            <input
+              type="text"
+              value={currentEmployee?.fullName || currentUser?.username || 'N/A'}
+              disabled
+              className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] bg-gray-100 text-gray-600 cursor-not-allowed"
+            />
+            <p className="text-[11px] text-gray-500 mt-1">Current logged in employee</p>
           </div>
 
           <div>
