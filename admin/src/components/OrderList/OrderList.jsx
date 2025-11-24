@@ -43,7 +43,8 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
       pending: 'bg-yellow-100 text-yellow-800',
       shipping: 'bg-purple-100 text-purple-800',
       delivered: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800'
+      cancelled: 'bg-red-100 text-red-800',
+      refunded: 'bg-orange-100 text-orange-800'
     };
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
@@ -252,19 +253,16 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
                   </button>
                 </div>
 
-                {/* Payment Status - Dropdown */}
+                {/* Payment Status - Read Only (synced from Payment model) */}
                 <div className="w-[110px] px-3 flex items-center flex-shrink-0">
-                  <button
-                    onClick={(e) => toggleDropdown(order.id, 'payment', e)}
-                    className={`${getPaymentColor(order.paymentStatus)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
+                  <span
+                    className={`${getPaymentColor(order.paymentStatus)} px-2 py-1 rounded inline-flex items-center gap-1`}
+                    title="Payment status is automatically synced from payments. Cannot edit directly."
                   >
                     <span className="text-[9px] font-bold font-['Poppins',sans-serif] leading-[10px] uppercase truncate">
                       {order.paymentStatus || 'pending'}
                     </span>
-                    <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M1 1L4 4L7 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
+                  </span>
                 </div>
 
                 {/* Delivery Type */}
@@ -314,7 +312,6 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
         if (!order) return null;
 
         const isStatusDropdown = activeDropdown === `status-${order.id}`;
-        const isPaymentDropdown = activeDropdown === `payment-${order.id}`;
         const isActionDropdown = activeDropdown === `action-${order.id}`;
 
         // Render Status Dropdown
@@ -324,7 +321,8 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
             { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
             { value: 'shipping', label: 'Shipping', color: 'bg-purple-100 text-purple-800' },
             { value: 'delivered', label: 'Delivered', color: 'bg-green-100 text-green-800' },
-            { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' }
+            { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' },
+            { value: 'refunded', label: 'Refunded', color: 'bg-orange-100 text-orange-800' }
           ];
 
           return (
@@ -362,54 +360,11 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
           );
         }
 
-        // Render Payment Status Dropdown
-        if (isPaymentDropdown) {
-          const paymentOptions = [
-            { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
-            { value: 'paid', label: 'Paid', color: 'bg-green-100 text-green-800' },
-            { value: 'failed', label: 'Failed', color: 'bg-red-100 text-red-800' },
-            { value: 'refunded', label: 'Refunded', color: 'bg-gray-100 text-gray-800' }
-          ];
-
-          return (
-            <div
-              ref={dropdownRef}
-              className="fixed min-w-[140px] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
-              style={{
-                top: `${dropdownPosition.top}px`,
-                left: `${dropdownPosition.left}px`
-              }}
-            >
-              {paymentOptions.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => {
-                    if (onUpdatePayment) {
-                      onUpdatePayment(order, option.value);
-                    }
-                    setActiveDropdown(null);
-                  }}
-                  className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
-                  disabled={order.paymentStatus === option.value}
-                >
-                  <span className={`${option.color} px-2 py-0.5 rounded text-[10px] font-bold uppercase`}>
-                    {option.label}
-                  </span>
-                  {order.paymentStatus === option.value && (
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-auto">
-                      <path d="M10 3L4.5 8.5L2 6" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
-          );
-        }
-
         // Render Actions Dropdown
         if (isActionDropdown) {
-          const canEdit = order.status !== 'delivered' && order.status !== 'cancelled';
+          const canEdit = !['delivered', 'cancelled', 'refunded'].includes(order.status);
           const canDelete = order.status === 'pending' && order.paymentStatus === 'pending';
+          const canRefund = order.status === 'delivered' && order.paymentStatus === 'paid';
 
           return (
             <div
@@ -453,6 +408,31 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
               </button>
 
               <div className="border-t border-gray-200 my-1"></div>
+
+              <button
+                onClick={() => {
+                  if (onUpdateStatus) {
+                    onUpdateStatus(order, 'refunded');
+                  }
+                  setActiveDropdown(null);
+                }}
+                disabled={!canRefund}
+                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${!canRefund
+                  ? 'text-gray-400 cursor-not-allowed opacity-50'
+                  : 'text-gray-700 hover:bg-orange-50 hover:text-orange-600'
+                  }`}
+                title={
+                  !canRefund
+                    ? 'Can only refund delivered orders that are fully paid'
+                    : 'Refund order (returns stock to shelf)'
+                }
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 8H13M3 8L6 5M3 8L6 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M13 4V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+                Refund
+              </button>
 
               <button
                 onClick={() => {

@@ -298,17 +298,19 @@ export const AddPurchaseOrderModal = ({ isOpen, onClose, onSuccess }) => {
         })),
         shippingFee: parseFloat(formData.shippingFee) || 0,
         totalPrice: totals.total,
-        status: 'pending', // ✅ Trạng thái ban đầu
+        status: 'draft', // ✅ Always start as draft
         paymentStatus: 'unpaid',
         notes: formData.notes || undefined
       };
+
+      console.log('📝 Creating PO with status=\'draft\':', poData);
 
       console.log('Creating PO:', poData);
 
       const response = await purchaseOrderService.createPurchaseOrder(poData);
 
       if (response.success) {
-        alert('Purchase Order created successfully!\n\nStatus: Pending\nNext step: Approve the PO, then receive goods.');
+        console.log('✅ PO created successfully:', response.data);
         if (onSuccess) {
           onSuccess(response.data);
         }

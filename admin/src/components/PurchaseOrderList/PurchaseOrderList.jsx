@@ -112,6 +112,7 @@ const PurchaseOrderList = ({
   // PO status badge styles
   const getStatusStyles = (status) => {
     const map = {
+      draft: 'bg-[#6b7280]',           // Gray - Draft
       pending: 'bg-[#f59e0b]',         // Orange - Pending
       approved: 'bg-[#3b82f6]',        // Blue - Approved
       received: 'bg-[#10b981]',        // Green - Received
@@ -122,9 +123,9 @@ const PurchaseOrderList = ({
 
   // Action handlers
   const handleEdit = (po) => {
-    // Only allow edit when status is pending, approved, or received
-    if (po.status === 'cancelled') {
-      alert('Cannot edit purchase order. Cancelled purchase orders cannot be edited.');
+    // Only allow edit when status is draft, pending, or approved
+    if (po.status === 'cancelled' || po.status === 'received') {
+      alert('Cannot edit purchase order. Cancelled or received purchase orders cannot be edited.');
       return;
     }
 
@@ -371,16 +372,16 @@ const PurchaseOrderList = ({
                     </p>
                   </div>
 
-                  {/* PO Status - Dropdown (Only pending can change to cancelled via dropdown) */}
+                  {/* PO Status - Dropdown for draft, pending, and approved */}
                   <div className="w-[100px] px-3 flex items-center flex-shrink-0">
-                    {po.status === 'pending' ? (
+                    {(po.status === 'draft' || po.status === 'pending' || po.status === 'approved') ? (
                       <button
                         onClick={(e) => toggleDropdown(`status-${po.id}`, e)}
                         disabled={updatingStatus}
                         className={`${getStatusStyles(po.status)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
-                          {po.status ? po.status.replace('_', ' ') : 'pending'}
+                          {po.status ? po.status.replace('_', ' ') : 'draft'}
                         </span>
                         <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M1 1L4 4L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -389,7 +390,7 @@ const PurchaseOrderList = ({
                     ) : (
                       <div className={`${getStatusStyles(po.status)} px-2 py-1 rounded inline-flex items-center`}>
                         <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
-                          {po.status ? po.status.replace('_', ' ') : 'pending'}
+                          {po.status ? po.status.replace('_', ' ') : 'draft'}
                         </span>
                       </div>
                     )}
@@ -448,13 +449,28 @@ const PurchaseOrderList = ({
 
         // Status Dropdown
         if (isStatus) {
-          const statusOptions = [
-            { value: 'pending', label: 'Pending', color: 'bg-[#f59e0b]' },
-            { value: 'cancelled', label: 'Cancelled', color: 'bg-[#ef4444]' }
-          ];
+          // Define available status transitions based on current status
+          let statusOptions = [];
 
-          // Only allow pending -> cancelled transition from List UI
-          // (Other transitions like approve/receive are done via specific action buttons)
+          if (po.status === 'draft') {
+            statusOptions = [
+              { value: 'draft', label: 'Draft', color: 'bg-[#6b7280]' },
+              { value: 'pending', label: 'Pending', color: 'bg-[#f59e0b]' },
+              { value: 'cancelled', label: 'Cancelled', color: 'bg-[#ef4444]' }
+            ];
+          } else if (po.status === 'pending') {
+            statusOptions = [
+              { value: 'pending', label: 'Pending', color: 'bg-[#f59e0b]' },
+              { value: 'approved', label: 'Approved', color: 'bg-[#3b82f6]' },
+              { value: 'cancelled', label: 'Cancelled', color: 'bg-[#ef4444]' }
+            ];
+          } else if (po.status === 'approved') {
+            statusOptions = [
+              { value: 'approved', label: 'Approved', color: 'bg-[#3b82f6]' },
+              { value: 'cancelled', label: 'Cancelled', color: 'bg-[#ef4444]' }
+            ];
+          }
+
           const availableOptions = statusOptions;
 
           return (
@@ -540,12 +556,12 @@ const PurchaseOrderList = ({
                   handleEdit(po);
                   setActiveDropdown(null);
                 }}
-                disabled={po.status === 'cancelled'}
-                className={`w-full px-3 py-2 text-left transition-colors flex items-center gap-2 ${po.status === 'cancelled'
+                disabled={po.status === 'cancelled' || po.status === 'received'}
+                className={`w-full px-3 py-2 text-left transition-colors flex items-center gap-2 ${(po.status === 'cancelled' || po.status === 'received')
                   ? 'text-gray-400 cursor-not-allowed opacity-50'
                   : 'hover:bg-blue-50 hover:text-blue-600 text-gray-700'
                   }`}
-                title={po.status === 'cancelled' ? 'Cancelled purchase orders cannot be edited' : 'Edit purchase order'}
+                title={(po.status === 'cancelled' || po.status === 'received') ? 'Cancelled or received purchase orders cannot be edited' : 'Edit purchase order'}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M11 2L14 5L5 14H2V11L11 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />

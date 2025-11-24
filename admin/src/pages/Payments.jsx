@@ -3,6 +3,7 @@ import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { PaymentListHeader } from '../components/PaymentList/PaymentListHeader';
 import { PaymentList } from '../components/PaymentList/PaymentList';
+import { AddPaymentModal } from '../components/PaymentList/AddPaymentModal';
 import paymentService from '../services/paymentService';
 
 export const Payments = () => {
@@ -155,6 +156,12 @@ export const Payments = () => {
     setShowAddModal(true);
   };
 
+  const handleAddSuccess = (response) => {
+    console.log('Payment created:', response);
+    fetchPayments(); // Refresh the list
+    // Optional: Show success toast notification
+  };
+
   const handleEdit = (payment) => {
     setSelectedPayment(payment);
     setShowEditModal(true);
@@ -250,8 +257,8 @@ export const Payments = () => {
                     onClick={() => handlePageChange(pagination.currentPage - 1)}
                     disabled={pagination.currentPage === 1}
                     className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
-                        ? 'text-gray-400 cursor-not-allowed'
-                        : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
                       }`}
                   >
                     ‹ Previous
@@ -298,8 +305,8 @@ export const Payments = () => {
                           key={page}
                           onClick={() => handlePageChange(page)}
                           className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${currentPage === page
-                              ? 'bg-[#3bb77e] text-white'
-                              : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                            ? 'bg-[#3bb77e] text-white'
+                            : 'text-[#3bb77e] hover:bg-[#def9ec]'
                             }`}
                         >
                           {page}
@@ -335,8 +342,8 @@ export const Payments = () => {
                     onClick={() => handlePageChange(pagination.currentPage + 1)}
                     disabled={pagination.currentPage === pagination.totalPages}
                     className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
-                        ? 'text-gray-400 cursor-not-allowed'
-                        : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
                       }`}
                   >
                     Next ›
@@ -372,7 +379,13 @@ export const Payments = () => {
         )}
       </div>
 
-      {/* TODO: Add Payment Modal - to be implemented */}
+      {/* Add Payment Modal */}
+      <AddPaymentModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={handleAddSuccess}
+      />
+
       {/* TODO: Edit Payment Modal - to be implemented */}
     </Layout>
   );

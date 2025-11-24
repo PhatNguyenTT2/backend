@@ -101,6 +101,17 @@ paymentSchema.virtual('isOverdue').get(function () {
 });
 
 // ============ MIDDLEWARE ============
+/**
+ * Pre-save hook: Store original status for comparison
+ */
+paymentSchema.pre('save', async function (next) {
+  if (!this.isNew && this.isModified('status')) {
+    const original = await this.constructor.findById(this._id).lean();
+    this._originalStatus = original?.status;
+  }
+  next();
+});
+
 // Validate reference exists before saving
 paymentSchema.pre('save', async function (next) {
   // Validate that the referenced Order or PurchaseOrder exists
@@ -150,6 +161,101 @@ paymentSchema.pre('save', async function (next) {
     }
   }
   next();
+});
+
+/**
+ * Post-save hook: Sync paymentStatus with Order/PurchaseOrder
+ * Logic:
+ * - pending payment → Order.paymentStatus = 'pending'
+ * - completed payment → Check if all payments are completed → Order.paymentStatus = 'paid' or 'pending'
+ * - cancelled payment → Recalculate Order.paymentStatus based on remaining payments
+ */
+paymentSchema.post('save', async function (doc) {
+  try {
+    const Order = mongoose.model(doc.referenceType);
+    const Payment = mongoose.model('Payment');
+
+    // Get the order/purchase order
+    const order = await Order.findById(doc.referenceId);
+    if (!order) {
+      console.warn(`⚠️ ${doc.referenceType} not found:`, doc.referenceId);
+      return;
+    }
+
+    // Get all payments for this order
+    const allPayments = await Payment.find({
+      referenceType: doc.referenceType,
+      referenceId: doc.referenceId,
+      status: { $ne: 'cancelled' } // Exclude cancelled payments
+    });
+
+    if (allPayments.length === 0) {
+      // No active payments
+      order.paymentStatus = 'pending';
+      await order.save();
+      console.log(`✅ ${doc.referenceType} ${order.orderNumber || order.poNumber} paymentStatus updated to: pending (no payments)`);
+      return;
+    }
+
+    // Calculate total paid and total pending
+    let totalPaid = 0;
+    let totalPending = 0;
+
+    allPayments.forEach(payment => {
+      const amount = typeof payment.amount === 'object'
+        ? parseFloat(payment.amount.toString())
+        : payment.amount;
+
+      if (payment.status === 'completed') {
+        totalPaid += amount;
+      } else if (payment.status === 'pending') {
+        totalPending += amount;
+      }
+    });
+
+    const orderTotal = typeof order.total === 'object'
+      ? parseFloat(order.total.toString())
+      : order.total;
+
+    // Check if order is refunded
+    const isOrderRefunded = order.status === 'refunded';
+
+    // Determine payment status based on payment coverage
+    let newPaymentStatus = 'pending';
+
+    if (isOrderRefunded) {
+      // Order is refunded, set payment status to refunded
+      newPaymentStatus = 'refunded';
+    } else if (totalPaid >= orderTotal) {
+      // Fully paid
+      newPaymentStatus = 'paid';
+    } else if (totalPaid > 0) {
+      // Partially paid (we'll use 'pending' for now, or you can add 'partial' to enum)
+      newPaymentStatus = 'pending';
+    } else if (totalPending > 0) {
+      // Has pending payments but nothing completed yet
+      newPaymentStatus = 'pending';
+    }
+
+    // Update order payment status if changed
+    if (order.paymentStatus !== newPaymentStatus) {
+      const oldStatus = order.paymentStatus;
+      order.paymentStatus = newPaymentStatus;
+      await order.save();
+      console.log(
+        `✅ ${doc.referenceType} ${order.orderNumber || order.poNumber} paymentStatus updated: ${oldStatus} → ${newPaymentStatus}`,
+        `(Paid: ${totalPaid}/${orderTotal})`
+      );
+    } else {
+      console.log(
+        `ℹ️ ${doc.referenceType} ${order.orderNumber || order.poNumber} paymentStatus unchanged: ${newPaymentStatus}`,
+        `(Paid: ${totalPaid}/${orderTotal})`
+      );
+    }
+  } catch (error) {
+    console.error('❌ Error syncing payment status:', error);
+    // Don't throw error to avoid breaking the payment save operation
+  }
 });
 
 // ============ JSON TRANSFORMATION ============

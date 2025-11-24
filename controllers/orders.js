@@ -5,7 +5,7 @@ const Customer = require('../models/customer');
 const Employee = require('../models/employee');
 const Product = require('../models/product');
 const ProductBatch = require('../models/productBatch');
-const { selectBatchFEFO } = require('../utils/batchHelpers');
+const { selectBatchFEFO, allocateQuantityFEFO } = require('../utils/batchHelpers');
 const mongoose = require('mongoose');
 
 /**
@@ -80,11 +80,21 @@ ordersRouter.get('/', async (request, response) => {
     }
 
     if (status) {
-      filter.status = status;
+      // Support multiple statuses separated by comma
+      if (status.includes(',')) {
+        filter.status = { $in: status.split(',').map(s => s.trim()) };
+      } else {
+        filter.status = status;
+      }
     }
 
     if (paymentStatus) {
-      filter.paymentStatus = paymentStatus;
+      // Support multiple payment statuses separated by comma
+      if (paymentStatus.includes(',')) {
+        filter.paymentStatus = { $in: paymentStatus.split(',').map(s => s.trim()) };
+      } else {
+        filter.paymentStatus = paymentStatus;
+      }
     }
 
     if (deliveryType) {
@@ -387,38 +397,60 @@ ordersRouter.post('/', async (request, response) => {
         });
       }
 
-      // Auto-select batch using FEFO
-      const batchSelection = await selectBatchFEFO(item.product, item.quantity);
-
-      if (!batchSelection) {
+      // Auto-allocate batches using FEFO (may use multiple batches if needed)
+      let batchAllocations;
+      try {
+        batchAllocations = await allocateQuantityFEFO(item.product, item.quantity);
+      } catch (error) {
         return response.status(400).json({
           success: false,
           error: {
-            message: `Insufficient stock for product: ${product.name}`,
-            code: 'INSUFFICIENT_STOCK',
+            message: error.message || `Insufficient stock on shelf for product: ${product.name}`,
+            code: 'INSUFFICIENT_SHELF_STOCK',
             details: {
               product: product.name,
-              requestedQuantity: item.quantity
+              productCode: product.productCode,
+              requestedQuantity: item.quantity,
+              note: 'Stock may be in warehouse but not on shelf yet'
             }
           }
         });
       }
 
-      processedItems.push({
-        product: item.product,
-        batch: batchSelection.batch._id,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice || product.unitPrice,
-        notes: item.notes
-      });
+      console.log(`✅ Allocated ${batchAllocations.length} batch(es) for ${product.name}:`,
+        batchAllocations.map(a => `${a.batchCode} (${a.quantity})`).join(', ')
+      );
+
+      // Create order detail for each batch allocation
+      // If multiple batches needed, create multiple order details
+      for (const allocation of batchAllocations) {
+        processedItems.push({
+          product: item.product,
+          batch: allocation.batchId,
+          quantity: allocation.quantity,
+          unitPrice: item.unitPrice || allocation.unitPrice,
+          notes: item.notes
+        });
+      }
     }
+
+    // Calculate total from processedItems BEFORE creating order
+    const subtotal = processedItems.reduce((sum, item) => {
+      const itemTotal = item.quantity * parseFloat(item.unitPrice || 0);
+      return sum + itemTotal;
+    }, 0);
+
+    const discountAmount = subtotal * (autoDiscountPercentage / 100);
+    const calculatedTotal = subtotal - discountAmount + (shippingFee || 0);
+
+    console.log(`💰 Calculated order total: Subtotal=${subtotal}, Discount=${discountAmount} (${autoDiscountPercentage}%), Shipping=${shippingFee || 0}, Total=${calculatedTotal}`);
 
     // Start transaction
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      // Create order with auto-calculated discount percentage
+      // Create order with status='draft' (inventory will be reserved when moved to 'pending')
       const order = new Order({
         customer,
         createdBy: validatedCreatedBy,
@@ -427,10 +459,12 @@ ordersRouter.post('/', async (request, response) => {
         address: shippingAddress || address,
         shippingFee: shippingFee || 0,
         discountPercentage: autoDiscountPercentage,
-        status: status || 'draft',
+        status: 'draft', // Always start as draft, inventory reserved on pending
         paymentStatus: paymentStatus || 'pending',
-        total: 0 // Will be calculated from details
+        total: calculatedTotal // Pre-calculated from items
       });
+
+      console.log(`📝 Creating order with status 'draft' and total=${calculatedTotal} - inventory will be reserved when moved to 'pending'`);
 
       await order.save({ session });
 
@@ -465,10 +499,16 @@ ordersRouter.post('/', async (request, response) => {
         }
       ]);
 
+      // Count unique products and total detail lines
+      const uniqueProducts = new Set(processedItems.map(item => item.product.toString())).size;
+      const totalDetailLines = processedItems.length;
+
+      console.log(`✅ Order created: ${uniqueProducts} product(s), ${totalDetailLines} detail line(s) (multi-batch allocation)`);
+
       response.status(201).json({
         success: true,
         data: { order },
-        message: 'Order created successfully with FEFO batch allocation'
+        message: `Order created successfully with FEFO batch allocation (${uniqueProducts} product(s), ${totalDetailLines} detail line(s))`
       });
     } catch (error) {
       await session.abortTransaction();
@@ -699,10 +739,6 @@ ordersRouter.put('/:id', async (request, response) => {
         );
         console.log('✅ Created new details:', orderDetails.length);
 
-        // Recalculate order total
-        const subtotal = orderDetails.reduce((sum, detail) => sum + (detail.quantity * detail.unitPrice), 0);
-        console.log('💰 Calculated subtotal:', subtotal);
-
         // Get customer for discount calculation
         const customer = await Customer.findById(order.customer);
         const discountPercentageMap = {
@@ -712,15 +748,11 @@ ordersRouter.put('/:id', async (request, response) => {
           'vip': 20
         };
         const discountPercentage = discountPercentageMap[customer?.customerType?.toLowerCase()] || 0;
-        const discountAmount = (subtotal * discountPercentage) / 100;
 
-        console.log('🎁 Discount:', { percentage: discountPercentage, amount: discountAmount });
+        console.log('🎁 Discount percentage:', discountPercentage);
 
-        // Update order totals (will save later with other fields)
-        order.subtotal = subtotal;
-        order.discount = discountAmount;
+        // Update order discount percentage (total will be auto-calculated in pre-save hook)
         order.discountPercentage = discountPercentage;
-        // Don't calculate totalAmount here - will do after updating shippingFee
 
         await session.commitTransaction();
         console.log('✅ Transaction committed successfully');
@@ -748,23 +780,12 @@ ordersRouter.put('/:id', async (request, response) => {
     if (paymentStatus !== undefined) order.paymentStatus = paymentStatus;
     if (notes !== undefined) order.notes = notes;
 
-    // Recalculate totalAmount with updated shippingFee
-    // This handles both cases: items updated (subtotal/discount already set) or just metadata updated
-    if (order.subtotal !== undefined) {
-      order.totalAmount = order.subtotal - (order.discount || 0) + (order.shippingFee || 0);
-      console.log('💰 Final total:', {
-        subtotal: order.subtotal,
-        discount: order.discount,
-        shippingFee: order.shippingFee,
-        total: order.totalAmount
-      });
-    }
-
     // Note: discountPercentage is auto-calculated from customer type and cannot be manually updated
+    // Note: total will be auto-calculated in pre-save hook from order details, discount, and shipping fee
 
-    console.log('💾 Saving order...');
+    console.log('💾 Saving order (total will be auto-calculated)...');
     await order.save();
-    console.log('✅ Order saved successfully');
+    console.log('✅ Order saved successfully with total:', order.total);
 
     // Populate before returning
     await order.populate([

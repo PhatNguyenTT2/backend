@@ -92,7 +92,7 @@ const orderSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: {
-      values: ['draft', 'pending', 'shipping', 'delivered', 'cancelled'],
+      values: ['draft', 'pending', 'shipping', 'delivered', 'cancelled', 'refunded'],
       message: '{VALUE} is not a valid status'
     },
     default: 'draft'
@@ -209,6 +209,18 @@ orderSchema.methods.getRemainingBalance = async function () {
 
 // ============ MIDDLEWARE ============
 /**
+ * Pre-save hook: Store original status for comparison in inventory middleware
+ */
+orderSchema.pre('save', async function (next) {
+  if (!this.isNew && this.isModified('status')) {
+    // Fetch original document to compare status change
+    const original = await this.constructor.findById(this._id).lean();
+    this._originalStatus = original?.status;
+  }
+  next();
+});
+
+/**
  * Pre-save hook: Auto-generate orderNumber
  * Format: ORD[YYMM][SEQUENCE]
  * Example: ORD2501000001
@@ -247,7 +259,256 @@ orderSchema.pre('save', async function (next) {
       return next(error);
     }
   }
+
+  // Auto-calculate total from order details
+  // Only recalculate if total is not explicitly modified or is 0
+  if (!this.isModified('total') || this.total === 0) {
+    try {
+      const OrderDetail = mongoose.model('OrderDetail');
+      const details = await OrderDetail.find({ order: this._id });
+
+      if (details && details.length > 0) {
+        // Calculate subtotal from order details
+        const subtotal = details.reduce((sum, detail) => {
+          const itemTotal = detail.quantity * parseFloat(detail.unitPrice || 0);
+          return sum + itemTotal;
+        }, 0);
+
+        // Apply discount percentage
+        const discountPercent = parseFloat(this.discountPercentage || 0);
+        const discountAmount = subtotal * (discountPercent / 100);
+
+        // Add shipping fee
+        const shippingFee = parseFloat(this.shippingFee || 0);
+
+        // Calculate total: subtotal - discount + shipping
+        this.total = subtotal - discountAmount + shippingFee;
+      }
+    } catch (error) {
+      // If calculation fails, continue without setting total
+      console.error('Error calculating order total:', error);
+    }
+  }
+
   next();
+});
+
+/**
+ * Pre-save hook: Handle inventory changes when order status changes
+ * - draft → pending: Reserve stock (subtract from shelf, add to reserved)
+ * - pending → shipping: Keep reserved (no change)
+ * - shipping → delivered: Complete sale (subtract from reserved)
+ * - shipping → pending: Rollback to reserved (no change needed)
+ * - pending/shipping → cancelled: Return stock (add to shelf, subtract from reserved)
+ */
+orderSchema.pre('save', async function (next) {
+  // Only process if status is modified and not a new document
+  if (!this.isModified('status') || this.isNew) {
+    return next();
+  }
+
+  const oldStatus = this._originalStatus;
+  const newStatus = this.status;
+
+  // No change in status
+  if (oldStatus === newStatus) {
+    return next();
+  }
+
+  console.log(`📦 Order ${this.orderNumber || this._id}: ${oldStatus} → ${newStatus}`);
+
+  try {
+    const OrderDetail = mongoose.model('OrderDetail');
+    const DetailInventory = mongoose.model('DetailInventory');
+    const InventoryMovementBatch = mongoose.model('InventoryMovementBatch');
+    const Employee = mongoose.model('Employee');
+
+    // Get order details with batches
+    const details = await OrderDetail.find({ order: this._id })
+      .populate('batch')
+      .populate('product');
+
+    if (!details || details.length === 0) {
+      console.warn('⚠️ No order details found for order:', this._id);
+      return next();
+    }
+
+    // Get employee for movement logging
+    const employee = this.createdBy;
+
+    // CASE 1: DRAFT → PENDING (Reserve stock from shelf)
+    if (oldStatus === 'draft' && newStatus === 'pending') {
+      console.log('✅ Reserving stock from shelf...');
+
+      for (const detail of details) {
+        const detailInv = await DetailInventory.findOne({ batchId: detail.batch._id });
+
+        if (!detailInv) {
+          throw new Error(`DetailInventory not found for batch ${detail.batch.batchCode}`);
+        }
+
+        // Check sufficient stock on shelf
+        if (detailInv.quantityOnShelf < detail.quantity) {
+          throw new Error(
+            `Insufficient stock on shelf for batch ${detail.batch.batchCode}. ` +
+            `Available: ${detailInv.quantityOnShelf}, Needed: ${detail.quantity}`
+          );
+        }
+
+        // Move from shelf to reserved
+        detailInv.quantityOnShelf -= detail.quantity;
+        detailInv.quantityReserved += detail.quantity;
+        await detailInv.save();
+
+        // Log movement
+        await InventoryMovementBatch.create({
+          batchId: detail.batch._id,
+          inventoryDetail: detailInv._id,
+          movementType: 'out',
+          quantity: -detail.quantity,
+          reason: `Reserved for order ${this.orderNumber || this._id}`,
+          date: new Date(),
+          performedBy: employee,
+          notes: `Order status changed: ${oldStatus} → ${newStatus}. Stock moved from shelf to reserved.`
+        });
+
+        console.log(`✅ Reserved ${detail.quantity} units of ${detail.product.name} from batch ${detail.batch.batchCode}`);
+      }
+    }
+
+    // CASE 2: PENDING/SHIPPING → DELIVERED (Complete sale - remove from reserved)
+    else if ((oldStatus === 'pending' || oldStatus === 'shipping') && newStatus === 'delivered') {
+      console.log('✅ Completing sale and removing from reserved...');
+
+      for (const detail of details) {
+        const detailInv = await DetailInventory.findOne({ batchId: detail.batch._id });
+
+        if (!detailInv) {
+          throw new Error(`DetailInventory not found for batch ${detail.batch.batchCode}`);
+        }
+
+        // Check sufficient reserved stock
+        if (detailInv.quantityReserved < detail.quantity) {
+          console.warn(
+            `⚠️ Reserved quantity mismatch for batch ${detail.batch.batchCode}. ` +
+            `Reserved: ${detailInv.quantityReserved}, Expected: ${detail.quantity}`
+          );
+        }
+
+        // Remove from reserved (stock is now sold)
+        detailInv.quantityReserved -= detail.quantity;
+        await detailInv.save();
+
+        // Log movement
+        await InventoryMovementBatch.create({
+          batchId: detail.batch._id,
+          inventoryDetail: detailInv._id,
+          movementType: 'out',
+          quantity: -detail.quantity,
+          reason: `Sold via order ${this.orderNumber || this._id}`,
+          date: new Date(),
+          performedBy: employee,
+          notes: `Order delivered. Stock removed from reserved.`
+        });
+
+        console.log(`✅ Completed sale of ${detail.quantity} units of ${detail.product.name} from batch ${detail.batch.batchCode}`);
+      }
+    }
+
+    // CASE 3: PENDING → SHIPPING (Move to shipping - keep reserved)
+    else if (oldStatus === 'pending' && newStatus === 'shipping') {
+      console.log('📦 Order moved to shipping - stock remains reserved');
+      // No inventory change needed, stock stays reserved
+    }
+
+    // CASE 4: SHIPPING → PENDING (Rollback shipping)
+    else if (oldStatus === 'shipping' && newStatus === 'pending') {
+      console.log('🔄 Rolling back shipping - stock remains reserved');
+      // No inventory change needed, stock stays reserved
+    }
+
+    // CASE 5: (PENDING or SHIPPING) → CANCELLED (Return stock to shelf)
+    else if ((oldStatus === 'pending' || oldStatus === 'shipping') && newStatus === 'cancelled') {
+      console.log('❌ Cancelling order - returning stock to shelf...');
+
+      for (const detail of details) {
+        const detailInv = await DetailInventory.findOne({ batchId: detail.batch._id });
+
+        if (!detailInv) {
+          throw new Error(`DetailInventory not found for batch ${detail.batch.batchCode}`);
+        }
+
+        // Check sufficient reserved stock
+        if (detailInv.quantityReserved < detail.quantity) {
+          console.warn(
+            `⚠️ Reserved quantity mismatch for batch ${detail.batch.batchCode}. ` +
+            `Reserved: ${detailInv.quantityReserved}, Expected: ${detail.quantity}`
+          );
+        }
+
+        // Return from reserved to shelf
+        detailInv.quantityOnShelf += detail.quantity;
+        detailInv.quantityReserved -= detail.quantity;
+        await detailInv.save();
+
+        // Log movement
+        await InventoryMovementBatch.create({
+          batchId: detail.batch._id,
+          inventoryDetail: detailInv._id,
+          movementType: 'in',
+          quantity: detail.quantity,
+          reason: `Order cancelled ${this.orderNumber || this._id}`,
+          date: new Date(),
+          performedBy: employee,
+          notes: `Order cancelled. Stock returned from reserved to shelf.`
+        });
+
+        console.log(`✅ Returned ${detail.quantity} units of ${detail.product.name} to shelf for batch ${detail.batch.batchCode}`);
+      }
+    }
+
+    // CASE 6: DRAFT → CANCELLED (No inventory change needed)
+    else if (oldStatus === 'draft' && newStatus === 'cancelled') {
+      console.log('❌ Cancelling draft order - no inventory change needed');
+      // No inventory reserved yet, so no need to return anything
+    }
+
+    // CASE 7: DELIVERED → REFUNDED (Return sold stock to shelf)
+    else if (oldStatus === 'delivered' && newStatus === 'refunded') {
+      console.log('🔄 Refunding order - returning stock to shelf...');
+
+      for (const detail of details) {
+        const detailInv = await DetailInventory.findOne({ batchId: detail.batch._id });
+
+        if (!detailInv) {
+          throw new Error(`DetailInventory not found for batch ${detail.batch.batchCode}`);
+        }
+
+        // Return stock to shelf (refund means customer returned the items)
+        detailInv.quantityOnShelf += detail.quantity;
+        await detailInv.save();
+
+        // Log movement
+        await InventoryMovementBatch.create({
+          batchId: detail.batch._id,
+          inventoryDetail: detailInv._id,
+          movementType: 'in',
+          quantity: detail.quantity,
+          reason: `Refunded from order ${this.orderNumber || this._id}`,
+          date: new Date(),
+          performedBy: employee,
+          notes: `Order refunded. Stock returned to shelf.`
+        });
+
+        console.log(`✅ Refunded ${detail.quantity} units of ${detail.product.name} to shelf for batch ${detail.batch.batchCode}`);
+      }
+    }
+
+    next();
+  } catch (error) {
+    console.error('❌ Error in order status change middleware:', error);
+    next(error);
+  }
 });
 
 // ============ JSON TRANSFORMATION ============

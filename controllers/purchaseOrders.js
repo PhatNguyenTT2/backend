@@ -72,11 +72,21 @@ purchaseOrdersRouter.get('/', async (request, response) => {
     const filter = {};
 
     if (status) {
-      filter.status = status;
+      // Support multiple statuses separated by comma
+      if (status.includes(',')) {
+        filter.status = { $in: status.split(',').map(s => s.trim()) };
+      } else {
+        filter.status = status;
+      }
     }
 
     if (paymentStatus) {
-      filter.paymentStatus = paymentStatus;
+      // Support multiple payment statuses separated by comma
+      if (paymentStatus.includes(',')) {
+        filter.paymentStatus = { $in: paymentStatus.split(',').map(s => s.trim()) };
+      } else {
+        filter.paymentStatus = paymentStatus;
+      }
     }
 
     if (supplier) {
@@ -547,6 +557,7 @@ purchaseOrdersRouter.put('/:id', userExtractor, async (request, response) => {
     // Validate status transition
     if (status && status !== purchaseOrder.status) {
       const validTransitions = {
+        draft: ['pending', 'cancelled'],
         pending: ['approved', 'cancelled'],
         approved: ['received', 'cancelled'],
         received: [], // Cannot transition from received

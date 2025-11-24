@@ -7,21 +7,27 @@ const DetailInventory = require('../models/detailInventory');
  */
 
 /**
- * Get available batches for a product sorted by FEFO
+ * Get available batches for a product sorted by FEFO (First Expired First Out)
+ * Only returns batches that:
+ * - Are active
+ * - Not expired yet
+ * - Have stock on shelf (quantityOnShelf > 0)
  * @param {ObjectId} productId - Product ID
  * @returns {Array} Available batches sorted by expiry date (earliest first)
  */
 const getAvailableBatchesFEFO = async (productId) => {
   try {
-    // Get all batches for this product that are active
+    // Get all batches for this product that are active and not expired
     const batches = await ProductBatch.find({
       product: productId,
-      status: 'active'
+      status: 'active',
+      expiryDate: { $gt: new Date() } // Only non-expired batches
     })
       .sort({ expiryDate: 1 }) // Sort by expiry date (earliest first - FEFO)
       .lean();
 
     if (batches.length === 0) {
+      console.log(`ℹ️ No active batches found for product ${productId}`);
       return [];
     }
 
@@ -47,13 +53,18 @@ const getAvailableBatchesFEFO = async (productId) => {
           return null;
         }
 
+        // quantityAvailable = stock on shelf that's not reserved
+        // This is the actual quantity we can sell
+        const quantityAvailable = Math.max(0, inventory.quantityOnShelf - (inventory.quantityReserved || 0));
+
         return {
           ...batch,
           quantityOnShelf: inventory.quantityOnShelf,
-          quantityAvailable: Math.max(0, inventory.quantityOnShelf - (inventory.quantityReserved || 0))
+          quantityReserved: inventory.quantityReserved || 0,
+          quantityAvailable: quantityAvailable
         };
       })
-      .filter(batch => batch !== null && batch.quantityAvailable > 0);
+      .filter(batch => batch !== null && batch.quantityOnShelf > 0); // Check onShelf, not available
 
     return batchesWithQuantity;
   } catch (error) {
@@ -64,6 +75,7 @@ const getAvailableBatchesFEFO = async (productId) => {
 
 /**
  * Select batch for a product with requested quantity using FEFO
+ * Only selects batches with sufficient stock ON SHELF (not reserved)
  * @param {ObjectId} productId - Product ID
  * @param {Number} requestedQuantity - Requested quantity
  * @returns {Object} { batch: BatchObject, availableQuantity: Number } or null if not enough stock
@@ -73,6 +85,7 @@ const selectBatchFEFO = async (productId, requestedQuantity) => {
     const availableBatches = await getAvailableBatchesFEFO(productId);
 
     if (availableBatches.length === 0) {
+      console.log(`❌ No available batches found for product ${productId}`);
       return null;
     }
 
@@ -80,11 +93,22 @@ const selectBatchFEFO = async (productId, requestedQuantity) => {
     // If needed, we can extend this to support multi-batch allocation
     const firstBatch = availableBatches[0];
 
+    console.log(`🔍 Checking batch ${firstBatch.batchCode}:`, {
+      quantityOnShelf: firstBatch.quantityOnShelf,
+      quantityAvailable: firstBatch.quantityAvailable,
+      requestedQuantity
+    });
+
     if (firstBatch.quantityAvailable < requestedQuantity) {
       // Not enough stock in the first (nearest expiry) batch
-      // You could extend this to allocate from multiple batches if needed
+      console.log(
+        `❌ Insufficient stock in batch ${firstBatch.batchCode}. ` +
+        `Available: ${firstBatch.quantityAvailable}, Needed: ${requestedQuantity}`
+      );
       return null;
     }
+
+    console.log(`✅ Selected batch ${firstBatch.batchCode} via FEFO with ${firstBatch.quantityAvailable} available`);
 
     return {
       batch: firstBatch,
@@ -114,25 +138,35 @@ const allocateQuantityFEFO = async (productId, requestedQuantity) => {
     const allocations = [];
     let remainingQuantity = requestedQuantity;
 
+    console.log(`📦 Allocating ${requestedQuantity} units across ${availableBatches.length} batch(es) using FEFO:`);
+
     for (const batch of availableBatches) {
       if (remainingQuantity <= 0) break;
 
       const allocateFromThisBatch = Math.min(batch.quantityAvailable, remainingQuantity);
 
-      allocations.push({
-        batchId: batch._id,
-        batchCode: batch.batchCode,
-        quantity: allocateFromThisBatch,
-        unitPrice: batch.unitPrice,
-        expiryDate: batch.expiryDate
-      });
+      if (allocateFromThisBatch > 0) {
+        console.log(`  ✓ Batch ${batch.batchCode}: ${allocateFromThisBatch} units (Available: ${batch.quantityAvailable}, Reserved: ${batch.quantityReserved})`);
 
-      remainingQuantity -= allocateFromThisBatch;
+        allocations.push({
+          batchId: batch._id,
+          batchCode: batch.batchCode,
+          quantity: allocateFromThisBatch,
+          unitPrice: batch.unitPrice,
+          expiryDate: batch.expiryDate
+        });
+
+        remainingQuantity -= allocateFromThisBatch;
+      }
     }
 
     if (remainingQuantity > 0) {
-      throw new Error(`Insufficient stock. Requested: ${requestedQuantity}, Available: ${requestedQuantity - remainingQuantity}`);
+      const totalAvailable = availableBatches.reduce((sum, b) => sum + b.quantityAvailable, 0);
+      throw new Error(`Insufficient stock on shelf for product. Requested: ${requestedQuantity}, Available: ${totalAvailable}`);
     }
+
+    console.log(`✅ Successfully allocated ${requestedQuantity} units across ${allocations.length} batch(es)`);
+
 
     return allocations;
   } catch (error) {

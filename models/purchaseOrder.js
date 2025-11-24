@@ -85,10 +85,10 @@ const purchaseOrderSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: {
-      values: ['pending', 'approved', 'received', 'cancelled'],
+      values: ['draft', 'pending', 'approved', 'received', 'cancelled'],
       message: '{VALUE} is not a valid status'
     },
-    default: 'pending'
+    default: 'draft'
   },
 
   paymentStatus: {
@@ -304,6 +304,13 @@ purchaseOrderSchema.pre('save', async function (next) {
 
 // ============ METHODS ============
 /**
+ * Check if PO can be submitted (move from draft to pending)
+ */
+purchaseOrderSchema.methods.canSubmit = function () {
+  return this.status === 'draft';
+};
+
+/**
  * Check if PO can be approved
  */
 purchaseOrderSchema.methods.canApprove = function () {
@@ -311,7 +318,7 @@ purchaseOrderSchema.methods.canApprove = function () {
 };
 
 /**
- * Check if PO can be received
+ * Check if PO can be received (only from approved status)
  */
 purchaseOrderSchema.methods.canReceive = function () {
   return this.status === 'approved';
@@ -321,21 +328,28 @@ purchaseOrderSchema.methods.canReceive = function () {
  * Check if PO can be cancelled
  */
 purchaseOrderSchema.methods.canCancel = function () {
-  return ['pending', 'approved'].includes(this.status);
+  return ['draft', 'pending', 'approved'].includes(this.status);
 };
 
 /**
  * Check if PO can be edited
  */
 purchaseOrderSchema.methods.canEdit = function () {
-  return ['pending', 'approved'].includes(this.status);
+  return ['draft', 'pending', 'approved'].includes(this.status);
 };
 
 /**
  * Check if PO can be deleted
  */
 purchaseOrderSchema.methods.canDelete = function () {
-  return this.status === 'pending';
+  return ['draft', 'pending'].includes(this.status);
+};
+
+/**
+ * Check if PO can create payments
+ */
+purchaseOrderSchema.methods.canCreatePayment = function () {
+  return ['pending', 'approved', 'received'].includes(this.status);
 };
 
 // ============ JSON TRANSFORMATION ============
