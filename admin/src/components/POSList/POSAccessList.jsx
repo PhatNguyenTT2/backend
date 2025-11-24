@@ -9,7 +9,8 @@ export const POSAccessList = ({
   onRevoke,
   onSort,
   sortField,
-  sortOrder
+  sortOrder,
+  maxFailedAttempts = 5
 }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
@@ -241,9 +242,9 @@ export const POSAccessList = ({
 
                   {/* Failed Attempts */}
                   <div className="w-[130px] px-3 flex items-center flex-shrink-0">
-                    <span className={`text-[13px] font-medium font-['Poppins',sans-serif] ${access.pinFailedAttempts >= 3 ? 'text-red-600' : 'text-gray-600'
+                    <span className={`text-[13px] font-medium font-['Poppins',sans-serif] ${access.pinFailedAttempts >= Math.floor(maxFailedAttempts * 0.6) ? 'text-red-600' : 'text-gray-600'
                       }`}>
-                      {access.pinFailedAttempts} / 5
+                      {access.pinFailedAttempts} / {maxFailedAttempts}
                     </span>
                   </div>
 
@@ -374,8 +375,8 @@ export const POSAccessList = ({
               }}
               disabled={!access.canAccessPOS || access.isPinLocked}
               className={`w-full px-4 py-2 text-left transition-colors flex items-center gap-2 ${!access.canAccessPOS || access.isPinLocked
-                  ? 'opacity-50 cursor-not-allowed bg-gray-50'
-                  : 'hover:bg-red-50 cursor-pointer'
+                ? 'opacity-50 cursor-not-allowed bg-gray-50'
+                : 'hover:bg-red-50 cursor-pointer'
                 }`}
               title={!access.canAccessPOS || access.isPinLocked ? 'Can only revoke access for active POS accounts' : 'Revoke POS access'}
             >

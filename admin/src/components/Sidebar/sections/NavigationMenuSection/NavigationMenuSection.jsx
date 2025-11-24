@@ -162,6 +162,12 @@ export const NavigationMenuSection = () => {
               permission: PERMISSIONS.MANAGE_POS
             }
           ]
+        },
+        {
+          name: 'Settings',
+          icon: Settings,
+          href: '/settings',
+          permission: PERMISSIONS.MANAGE_SETTINGS
         }
       ],
     },

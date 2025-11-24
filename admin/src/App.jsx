@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { Dashboard, ViewProduct, Products, ProductBatches, LoginSignup, Orders, Categories, Employees, Customers, Suppliers, Inventories, DetailInventories, SalesReports, PurchaseReports, Roles, POSManagement } from "./pages";
+import { Dashboard, ViewProduct, Products, ProductBatches, LoginSignup, Orders, Categories, Employees, Customers, Suppliers, Inventories, DetailInventories, SalesReports, PurchaseReports, Roles, POSManagement, Settings } from "./pages";
 import { POSLogin, POSMain } from "./pages/pos";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import Payments from "./pages/Payments";
@@ -164,6 +164,16 @@ function App() {
           element={
             <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_POS}>
               <POSManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Settings Route - Admin only */}
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_SETTINGS}>
+              <Settings />
             </ProtectedRoute>
           }
         />

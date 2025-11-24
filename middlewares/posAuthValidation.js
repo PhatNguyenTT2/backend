@@ -37,7 +37,7 @@ const validatePIN = (req, res, next) => {
     return res.status(400).json({
       success: false,
       error: {
-        message: 'PIN must be 4-6 digits only',
+        message: 'PIN must be 4-6 digits',
         code: 'INVALID_PIN_FORMAT'
       }
     })

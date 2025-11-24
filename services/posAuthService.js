@@ -2,8 +2,7 @@ const bcrypt = require('bcrypt')
 const EmployeePOSAuth = require('../models/employeePOSAuth')
 const Employee = require('../models/employee')
 const {
-  MAX_FAILED_ATTEMPTS,
-  LOCK_DURATION_MINUTES,
+  getPOSSecuritySettings,
   isAccountLocked,
   formatPOSAuthRecord
 } = require('../utils/posAuthHelpers')
@@ -399,6 +398,11 @@ const verifyPIN = async (employeeId, pin) => {
       minutesLeft
     }
   }
+
+  // Get security settings
+  const securitySettings = await getPOSSecuritySettings();
+  const MAX_FAILED_ATTEMPTS = securitySettings.maxFailedAttempts;
+  const LOCK_DURATION_MINUTES = securitySettings.lockDurationMinutes;
 
   // Verify PIN
   const isValid = await bcrypt.compare(pin, posAuth.posPinHash)

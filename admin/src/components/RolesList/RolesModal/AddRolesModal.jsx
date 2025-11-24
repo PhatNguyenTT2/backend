@@ -24,7 +24,8 @@ export const AddRolesModal = ({ isOpen, onClose, onSuccess }) => {
     'manage_roles',
     'manage_inventory',
     'view_reports',
-    'manage_payments'
+    'manage_payments',
+    'manage_settings'
   ];
 
   // Reset form when modal opens

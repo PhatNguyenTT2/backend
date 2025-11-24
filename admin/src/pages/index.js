@@ -13,6 +13,7 @@ export { default as PurchaseOrders } from "./PurchaseOrders";
 export { default as Inventories } from "./Inventories";
 export { default as DetailInventories } from "./DetailInventories";
 export { default as POSManagement } from "./POSManagement";
+export { default as Settings } from "./Settings";
 
 // Reports
 export { default as SalesReports } from "./reports/Sales";

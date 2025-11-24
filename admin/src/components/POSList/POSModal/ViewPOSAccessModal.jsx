@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-export const ViewPOSAccessModal = ({ isOpen, onClose, employee }) => {
+export const ViewPOSAccessModal = ({ isOpen, onClose, employee, maxFailedAttempts = 5 }) => {
   // Close modal on Escape key
   useEffect(() => {
     const handleEscape = (e) => {
@@ -172,7 +172,7 @@ export const ViewPOSAccessModal = ({ isOpen, onClose, employee }) => {
                   Failed Attempts
                 </p>
                 <p className="text-[14px] font-['Poppins',sans-serif] text-gray-900">
-                  {employee?.pinFailedAttempts || 0} / 5
+                  {employee?.pinFailedAttempts || 0} / {maxFailedAttempts}
                 </p>
               </div>
 
@@ -219,7 +219,7 @@ export const ViewPOSAccessModal = ({ isOpen, onClose, employee }) => {
                     PIN Locked
                   </p>
                   <p className="text-[12px] font-['Poppins',sans-serif] text-red-700">
-                    This employee's PIN is locked due to {employee.pinFailedAttempts} failed login attempts.
+                    This employee's PIN is locked due to {employee.pinFailedAttempts} failed login attempts (max: {maxFailedAttempts}).
                     {employee.minutesUntilUnlock > 0 && ` Unlocks in ${employee.minutesUntilUnlock} minute${employee.minutesUntilUnlock !== 1 ? 's' : ''}.`}
                   </p>
                 </div>
@@ -239,7 +239,7 @@ export const ViewPOSAccessModal = ({ isOpen, onClose, employee }) => {
                   </p>
                   <p className="text-[12px] font-['Poppins',sans-serif] text-yellow-700">
                     This employee has {employee.pinFailedAttempts} failed PIN attempt{employee.pinFailedAttempts !== 1 ? 's' : ''}.
-                    The account will be locked after 5 failed attempts.
+                    The account will be locked after {maxFailedAttempts} failed attempts.
                   </p>
                 </div>
               </div>

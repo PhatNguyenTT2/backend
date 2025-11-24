@@ -4,6 +4,7 @@ import { Breadcrumb } from '../components/Breadcrumb';
 import { POSAccessList, POSListHeader } from '../components/POSList';
 import { EditPOSAccessModal, GrantPOSAccessModal, ViewPOSAccessModal } from '../components/POSList/POSModal';
 import posAuthService from '../services/posAuthService';
+import settingsService from '../services/settingsService';
 
 export const POSManagement = () => {
   // Breadcrumb items
@@ -36,15 +37,36 @@ export const POSManagement = () => {
     denied: 0
   });
 
-  // Fetch POS access on mount
+  // POS Security Settings
+  const [posSecuritySettings, setPosSecuritySettings] = useState({
+    maxFailedAttempts: 5,
+    lockDurationMinutes: 15,
+    pinLength: 6
+  });
+
+  // Fetch POS access and security settings on mount
   useEffect(() => {
     fetchPOSAccess();
+    fetchPOSSecuritySettings();
   }, []);
 
   // Update filtered data when search, filter, or data changes
   useEffect(() => {
     applyFilters();
   }, [searchQuery, statusFilter, posAccess]);
+
+  // Fetch POS security settings
+  const fetchPOSSecuritySettings = async () => {
+    try {
+      const response = await settingsService.getPOSSecurity();
+      if (response.success) {
+        setPosSecuritySettings(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching POS security settings:', err);
+      // Use defaults if fetch fails
+    }
+  };
 
   // Fetch POS access from API
   const fetchPOSAccess = async () => {
@@ -362,6 +384,7 @@ export const POSManagement = () => {
               onSort={handleSort}
               sortField={sortField}
               sortOrder={sortOrder}
+              maxFailedAttempts={posSecuritySettings.maxFailedAttempts}
             />
 
             {/* Results Summary */}
@@ -406,6 +429,7 @@ export const POSManagement = () => {
             setSelectedEmployee(null);
           }}
           employee={selectedEmployee}
+          maxFailedAttempts={posSecuritySettings.maxFailedAttempts}
         />
 
         {/* TODO: Add more modals

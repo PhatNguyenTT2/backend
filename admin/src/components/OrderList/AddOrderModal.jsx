@@ -4,6 +4,7 @@ import customerService from '../../services/customerService';
 import productService from '../../services/productService';
 import authService from '../../services/authService';
 import employeeService from '../../services/employeeService';
+import settingsService from '../../services/settingsService';
 
 /**
  * AddOrderModal Component
@@ -39,6 +40,13 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [currentEmployee, setCurrentEmployee] = useState(null);
 
+  // Customer discount settings from system configuration
+  const [customerDiscounts, setCustomerDiscounts] = useState({
+    retail: 10,
+    wholesale: 15,
+    vip: 20
+  });
+
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -54,6 +62,7 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
       loadCustomers();
       loadProducts();
       loadCurrentEmployee();
+      loadCustomerDiscounts();
     }
   }, [isOpen]);
 
@@ -70,6 +79,20 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
     } catch (error) {
       console.error('❌ Failed to load customers:', error);
       setErrors(prev => ({ ...prev, loadCustomers: 'Failed to load customers' }));
+    }
+  };
+
+  // Load customer discount settings from system configuration
+  const loadCustomerDiscounts = async () => {
+    try {
+      const response = await settingsService.getCustomerDiscounts();
+      if (response.success && response.data) {
+        setCustomerDiscounts(response.data);
+        console.log('💰 Loaded customer discounts:', response.data);
+      }
+    } catch (error) {
+      console.error('⚠️ Failed to load customer discounts, using defaults:', error);
+      // Keep default values if fetch fails
     }
   };
 
@@ -336,15 +359,16 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
 
     if (!customer) return 0;
 
-    const discountMap = {
-      'guest': 0,
-      'retail': 10,
-      'wholesale': 15,
-      'vip': 20
-    };
+    // Use dynamic discount rates from system configuration
+    const customerType = customer.customerType?.toLowerCase();
 
-    return discountMap[customer.customerType?.toLowerCase()] || 0;
-  }, [formData.customerId, customers]);
+    if (customerType === 'guest') return 0;
+    if (customerType === 'retail') return customerDiscounts.retail;
+    if (customerType === 'wholesale') return customerDiscounts.wholesale;
+    if (customerType === 'vip') return customerDiscounts.vip;
+
+    return 0;
+  }, [formData.customerId, customers, customerDiscounts]);
 
   // Get customer info for display (memoized)
   const selectedCustomerInfo = useMemo(() => {
@@ -749,7 +773,7 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                 )}
               </div>
               <p className="mt-1 text-[10px] text-gray-500 font-['Poppins',sans-serif]">
-                Guest: 0% | Retail: 10% | Wholesale: 15% | VIP: 20%
+                Guest: 0% | Retail: {customerDiscounts.retail}% | Wholesale: {customerDiscounts.wholesale}% | VIP: {customerDiscounts.vip}%
               </p>
             </div>
           </div>

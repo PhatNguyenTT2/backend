@@ -24,7 +24,8 @@ export const EditRolesModal = ({ isOpen, onClose, onSuccess, role }) => {
     'manage_roles',
     'manage_inventory',
     'view_reports',
-    'manage_payments'
+    'manage_payments',
+    'manage_settings'
   ];
 
   // Load role data when modal opens

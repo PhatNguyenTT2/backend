@@ -158,9 +158,29 @@ loginRouter.post('/register', async (request, response) => {
       adminRole = new Role({
         roleName: 'Admin',
         description: 'Administrator with full access to the system',
-        permissions: ['all']
+        permissions: [
+          'view_dashboard',
+          'manage_products',
+          'manage_categories',
+          'manage_orders',
+          'manage_customers',
+          'manage_suppliers',
+          'manage_employees',
+          'manage_POS',
+          'manage_roles',
+          'manage_inventory',
+          'view_reports',
+          'manage_payments',
+          'manage_settings'
+        ]
       })
       await adminRole.save()
+    } else {
+      // Update existing admin role to include manage_settings if missing
+      if (!adminRole.permissions.includes('manage_settings')) {
+        adminRole.permissions.push('manage_settings')
+        await adminRole.save()
+      }
     }
 
     // Start transaction
