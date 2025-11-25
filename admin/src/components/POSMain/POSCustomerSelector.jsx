@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, User, UserPlus, X } from 'lucide-react';
 import customerService from '../../services/customerService';
+import { POSAddCustomerModal } from './POSAddCustomerModal';
 
 /**
  * POSCustomerSelector Component
@@ -104,6 +105,18 @@ export const POSCustomerSelector = ({ selectedCustomer, onCustomerChange, custom
     }
   };
 
+  // Handle customer creation success
+  const handleCustomerCreated = async () => {
+    // Reload guest customer to refresh state
+    try {
+      const response = await customerService.getDefaultGuest();
+      const guest = response.data.customer;
+      setGuestCustomer(guest);
+    } catch (error) {
+      console.error('Error reloading guest customer:', error);
+    }
+  };
+
   const getDiscountPercentage = (customerType) => {
     if (!customerDiscounts) {
       const defaultDiscounts = {
@@ -140,15 +153,15 @@ export const POSCustomerSelector = ({ selectedCustomer, onCustomerChange, custom
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-[13px] font-semibold font-['Poppins',sans-serif] text-gray-700">Khách hàng</h3>
+        <h3 className="text-[13px] font-semibold font-['Poppins',sans-serif] text-gray-700">Customer</h3>
         {selectedCustomer && selectedCustomer.customerType !== 'guest' && (
           <button
             onClick={handleClearCustomer}
             className="text-xs text-gray-500 hover:text-red-600 flex items-center gap-1"
-            title="Chuyển sang khách vãng lai"
+            title="Switch to guest customer"
           >
             <X className="h-3 w-3" />
-            Xóa
+            Clear
           </button>
         )}
       </div>
@@ -161,15 +174,15 @@ export const POSCustomerSelector = ({ selectedCustomer, onCustomerChange, custom
           className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-300 rounded text-[12px] font-medium font-['Poppins',sans-serif] text-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <User className="h-3.5 w-3.5" />
-          Khách vãng lai
+          Guest
         </button>
         <button
           onClick={() => setShowNewCustomerModal(true)}
           className="flex items-center justify-center gap-1.5 px-2 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded text-[12px] font-medium font-['Poppins',sans-serif] text-blue-700 transition-colors"
-          title="Tạo khách hàng mới"
+          title="Create new customer"
         >
           <UserPlus className="h-3.5 w-3.5" />
-          <span>Khách mới</span>
+          <span>New</span>
         </button>
       </div>
 
@@ -179,7 +192,7 @@ export const POSCustomerSelector = ({ selectedCustomer, onCustomerChange, custom
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
           <input
             type="text"
-            placeholder="Tìm theo tên, SĐT..."
+            placeholder="Search by name, phone..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             onFocus={() => searchResults.length > 0 && setShowSearchDropdown(true)}
@@ -207,7 +220,7 @@ export const POSCustomerSelector = ({ selectedCustomer, onCustomerChange, custom
                       {customer.fullName}
                     </p>
                     <p className="text-xs text-gray-500 truncate">
-                      {customer.phone || 'Không có SĐT'}
+                      {customer.phone || 'No phone'}
                     </p>
                   </div>
                   <span className={`ml-2 px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap ${getCustomerTypeBadgeColor(customer.customerType)}`}>
@@ -222,12 +235,12 @@ export const POSCustomerSelector = ({ selectedCustomer, onCustomerChange, custom
         {/* No Results */}
         {showSearchDropdown && searchTerm && !loading && searchResults.length === 0 && (
           <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center">
-            <p className="text-sm text-gray-500">Không tìm thấy khách hàng</p>
+            <p className="text-sm text-gray-500">Customer not found</p>
             <button
               onClick={() => setShowNewCustomerModal(true)}
               className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
             >
-              Tạo khách hàng mới
+              Create new customer
             </button>
           </div>
         )}
@@ -247,7 +260,7 @@ export const POSCustomerSelector = ({ selectedCustomer, onCustomerChange, custom
                 </span>
               </div>
               <p className="text-[10px] font-['Poppins',sans-serif] text-gray-600 truncate">
-                {selectedCustomer.phone || 'Không có SĐT'}
+                {selectedCustomer.phone || 'No phone'}
               </p>
               {selectedCustomer.customerCode && !selectedCustomer.isVirtual && (
                 <p className="text-[10px] font-['Poppins',sans-serif] text-gray-500 mt-0.5">
@@ -267,23 +280,12 @@ export const POSCustomerSelector = ({ selectedCustomer, onCustomerChange, custom
         </div>
       )}
 
-      {/* New Customer Modal - Placeholder */}
-      {showNewCustomerModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Tạo khách hàng mới</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Tính năng tạo khách hàng nhanh sẽ được triển khai sau.
-            </p>
-            <button
-              onClick={() => setShowNewCustomerModal(false)}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Đóng
-            </button>
-          </div>
-        </div>
-      )}
+      {/* POS Add Customer Modal */}
+      <POSAddCustomerModal
+        isOpen={showNewCustomerModal}
+        onClose={() => setShowNewCustomerModal(false)}
+        onSuccess={handleCustomerCreated}
+      />
     </div>
   );
 };

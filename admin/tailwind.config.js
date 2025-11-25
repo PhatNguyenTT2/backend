@@ -28,6 +28,15 @@ module.exports = {
         "header-1": "var(--header-1-font-family)",
         "header-2": "var(--header-2-font-family)",
       },
+      keyframes: {
+        'slide-in-right': {
+          '0%': { transform: 'translateX(100%)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+      },
+      animation: {
+        'slide-in-right': 'slide-in-right 0.3s ease-out',
+      },
     },
   },
   plugins: [],

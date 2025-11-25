@@ -76,10 +76,8 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
         isActive: true
       });
       const customersList = data.data?.customers || data.customers || [];
-      console.log('📥 Loaded customers:', customersList.length);
       setCustomers(customersList);
     } catch (error) {
-      console.error('❌ Failed to load customers:', error);
       setErrors(prev => ({ ...prev, loadCustomers: 'Failed to load customers' }));
     }
   };
@@ -90,10 +88,8 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
       const response = await settingsService.getCustomerDiscounts();
       if (response.success && response.data) {
         setCustomerDiscounts(response.data);
-        console.log('💰 Loaded customer discounts:', response.data);
       }
     } catch (error) {
-      console.error('⚠️ Failed to load customer discounts, using defaults:', error);
       // Keep default values if fetch fails
     }
   };
@@ -103,17 +99,14 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       // Get current user from authService
       const user = authService.getUser();
-      console.log('📥 Current user from authService:', user);
       setCurrentUser(user);
 
       // If user has employeeId, fetch full employee details
       if (user?.employeeId) {
         const employeeResponse = await employeeService.getEmployeeById(user.employeeId);
-        console.log('👤 Employee response:', employeeResponse);
 
         if (employeeResponse.success && employeeResponse.data) {
           const employee = employeeResponse.data.employee;
-          console.log('✅ Current employee loaded:', employee);
           setCurrentEmployee(employee);
         } else {
           console.warn('⚠️ Employee not found for user:', user);

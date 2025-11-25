@@ -11,7 +11,15 @@ export const POSBatchSelectModal = ({
 
   if (!isOpen || !productData) return null;
 
-  const { product, batches } = productData;
+  const { product, batches: allBatches } = productData;
+
+  // Safety filter: Only show batches with quantity > 0
+  // Note: POS endpoint returns batch.quantity field (from ProductBatch model)
+  // AddOrderModal uses detailInventory.quantityOnShelf (different data source)
+  const batches = (allBatches || []).filter(batch => {
+    const qty = batch.detailInventory?.quantityOnShelf || batch.quantityOnShelf || batch.quantity || 0;
+    return qty > 0;
+  });
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -28,7 +36,9 @@ export const POSBatchSelectModal = ({
   };
 
   const handleQuantityChange = (value) => {
-    const maxQty = selectedBatch ? selectedBatch.quantity : 1;
+    const maxQty = selectedBatch
+      ? (selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 1)
+      : 1;
     const newQty = Math.max(1, Math.min(value, maxQty));
     setQuantity(newQty);
   };
@@ -45,14 +55,17 @@ export const POSBatchSelectModal = ({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
       <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 bg-emerald-50">
+        <div className="px-6 py-4 border-b border-gray-200 bg-orange-50">
           <div className="flex justify-between items-start">
             <div>
               <h2 className="text-xl font-bold text-gray-900 font-['Poppins']">
-                Select Batch
+                🌿 Select Batch - Fresh Product
               </h2>
               <p className="text-sm text-gray-600 mt-1">
                 {product.name} - {product.productCode}
+              </p>
+              <p className="text-xs text-orange-700 mt-1 font-semibold">
+                ℹ️ Manual batch selection required for fresh products
               </p>
             </div>
             <button
@@ -90,6 +103,18 @@ export const POSBatchSelectModal = ({
             </div>
           </div>
 
+          {/* Info Box */}
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs text-blue-800 flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+              <span>
+                <strong>Fresh products</strong> require manual batch selection. Prices may vary between batches based on expiry date promotions.
+              </span>
+            </p>
+          </div>
+
           {/* Batch List */}
           <div className="space-y-3">
             <h3 className="font-semibold text-gray-700 mb-3">
@@ -123,16 +148,26 @@ export const POSBatchSelectModal = ({
                           {batch.batchCode}
                         </span>
 
-                        {isRecommended && (
-                          <span className="px-2 py-1 bg-blue-500 text-white rounded text-xs font-semibold">
-                            ⭐ Recommended (FEFO)
-                          </span>
-                        )}
-
                         {isSelected && (
                           <span className="px-2 py-1 bg-emerald-500 text-white rounded text-xs font-semibold">
                             ✓ Selected
                           </span>
+                        )}
+
+                        {/* Show urgency badge based on days until expiry */}
+                        {batch.daysUntilExpiry !== undefined && batch.daysUntilExpiry !== null && (
+                          <>
+                            {batch.daysUntilExpiry <= 3 && (
+                              <span className="px-2 py-1 bg-red-500 text-white rounded text-xs font-semibold">
+                                🔥 Urgent - {batch.daysUntilExpiry}d left
+                              </span>
+                            )}
+                            {batch.daysUntilExpiry > 3 && batch.daysUntilExpiry <= 7 && (
+                              <span className="px-2 py-1 bg-orange-500 text-white rounded text-xs font-semibold">
+                                ⚠️ {batch.daysUntilExpiry}d left
+                              </span>
+                            )}
+                          </>
                         )}
                       </div>
 
@@ -140,8 +175,8 @@ export const POSBatchSelectModal = ({
                         <p className="text-sm">
                           <span className="text-gray-600">Expiry Date:</span>{' '}
                           <span className={`font-semibold ${batch.daysUntilExpiry !== undefined && batch.daysUntilExpiry < 5
-                              ? 'text-orange-600'
-                              : 'text-gray-900'
+                            ? 'text-orange-600'
+                            : 'text-gray-900'
                             }`}>
                             {formatDate(batch.expiryDate)}
                             {batch.daysUntilExpiry !== undefined && batch.daysUntilExpiry !== null && (
@@ -151,18 +186,20 @@ export const POSBatchSelectModal = ({
                         </p>
 
                         <p className="text-sm">
-                          <span className="text-gray-600">Available Stock:</span>{' '}
+                          <span className="text-gray-600">Available On Shelf:</span>{' '}
                           <span className="font-semibold text-gray-900">
-                            {batch.quantity} units
+                            {batch.detailInventory?.quantityOnShelf || batch.quantityOnShelf || 0} units
                           </span>
                         </p>
 
-                        <p className="text-sm">
-                          <span className="text-gray-600">Supplier:</span>{' '}
-                          <span className="font-semibold text-gray-900">
-                            {batch.supplier?.name || 'N/A'}
-                          </span>
-                        </p>
+                        {batch.mfgDate && (
+                          <p className="text-sm">
+                            <span className="text-gray-600">Mfg Date:</span>{' '}
+                            <span className="font-semibold text-gray-900">
+                              {formatDate(batch.mfgDate)}
+                            </span>
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -201,7 +238,7 @@ export const POSBatchSelectModal = ({
                   value={quantity}
                   onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
                   min="1"
-                  max={selectedBatch.quantity}
+                  max={selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 1}
                   className="w-28 h-12 text-center text-2xl font-bold border-2 border-emerald-300 rounded-lg focus:border-emerald-500 focus:outline-none"
                 />
 
@@ -213,7 +250,7 @@ export const POSBatchSelectModal = ({
                 </button>
 
                 <span className="text-sm text-gray-600">
-                  / {selectedBatch.quantity} units available
+                  / {selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 0} units on shelf
                 </span>
               </div>
 

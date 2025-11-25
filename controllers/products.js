@@ -593,32 +593,49 @@ productsRouter.get('/code/:productCode', async (request, response) => {
             { expiryDate: null }
           ]
         })
-          .populate('supplier', 'name supplierCode')
           .sort({ expiryDate: 1 }); // FEFO - First Expired First Out
+
+        // Get DetailInventory for each batch to include quantityOnShelf
+        const DetailInventory = require('../models/detailInventory');
 
         // Process batches - for now treat all as normal (auto-select first batch)
         // Can extend later for productType = 'fresh' with dynamic pricing
         if (batches.length > 0) {
-          result.batches = batches.map((batch, index) => {
-            const batchObj = batch.toJSON();
+          const batchesWithInventory = await Promise.all(
+            batches.map(async (batch, index) => {
+              const batchObj = batch.toJSON();
 
-            // Calculate days until expiry if expiryDate exists
-            if (batch.expiryDate) {
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              const expiry = new Date(batch.expiryDate);
-              expiry.setHours(0, 0, 0, 0);
-              const diffTime = expiry - today;
-              const daysUntilExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              // Get DetailInventory for this batch
+              const detailInventory = await DetailInventory.findOne({ batchId: batch._id });
+              if (detailInventory) {
+                batchObj.detailInventory = {
+                  quantityOnHand: detailInventory.quantityOnHand,
+                  quantityOnShelf: detailInventory.quantityOnShelf,
+                  quantityReserved: detailInventory.quantityReserved,
+                  quantityAvailable: detailInventory.quantityAvailable
+                };
+              }
 
-              batchObj.daysUntilExpiry = daysUntilExpiry;
-            }
+              // Calculate days until expiry if expiryDate exists
+              if (batch.expiryDate) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const expiry = new Date(batch.expiryDate);
+                expiry.setHours(0, 0, 0, 0);
+                const diffTime = expiry - today;
+                const daysUntilExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-            // First batch is auto-selected (FEFO)
-            batchObj.isAutoSelected = index === 0;
+                batchObj.daysUntilExpiry = daysUntilExpiry;
+              }
 
-            return batchObj;
-          });
+              // First batch is auto-selected (FEFO)
+              batchObj.isAutoSelected = index === 0;
+
+              return batchObj;
+            })
+          );
+
+          result.batches = batchesWithInventory;
         } else {
           result.batches = [];
           result.outOfStock = true;

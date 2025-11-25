@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import posLoginService from '../../services/posLoginService';
 import productService from '../../services/productService';
 import categoryService from '../../services/categoryService';
+import settingsService from '../../services/settingsService';
 import {
   POSHeader,
   POSSearchBar,
@@ -35,16 +36,19 @@ export const POSMain = () => {
   // When creating order, backend will handle guest customer creation if needed
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerDiscounts, setCustomerDiscounts] = useState({
-    guest: 0,      // Walk-in customers: 0% discount
-    retail: 10,    // Retail customers: 10% discount
-    wholesale: 15, // Wholesale customers: 15% discount
-    vip: 20        // VIP customers: 20% discount
+    guest: 0,      // Walk-in customers: 0% discount (loaded from backend)
+    retail: 10,    // Default: 10% (will be overwritten by backend config)
+    wholesale: 15, // Default: 15% (will be overwritten by backend config)
+    vip: 20        // Default: 20% (will be overwritten by backend config)
   });
 
   // Batch selection modal state
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [selectedProductData, setSelectedProductData] = useState(null);
   const [scanning, setScanning] = useState(false);
+
+  // Toast notification state
+  const [toast, setToast] = useState(null); // { type: 'success'|'error', message: string }
 
   // Load employee and verify session
   useEffect(() => {
@@ -78,7 +82,7 @@ export const POSMain = () => {
     checkAuth();
   }, [navigate]);
 
-  // Load categories from backend
+  // Load categories and discount configuration from backend
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -102,7 +106,26 @@ export const POSMain = () => {
       }
     };
 
+    const fetchDiscountConfig = async () => {
+      try {
+        const response = await settingsService.getCustomerDiscounts();
+        if (response.success && response.data) {
+          setCustomerDiscounts({
+            guest: 0, // Guest customers always 0% discount
+            retail: response.data.retail || 10,
+            wholesale: response.data.wholesale || 15,
+            vip: response.data.vip || 20
+          });
+          console.log('Loaded discount configuration:', response.data);
+        }
+      } catch (error) {
+        console.error('Error fetching discount configuration:', error);
+        // Keep default values if fetch fails
+      }
+    };
+
     fetchCategories();
+    fetchDiscountConfig();
   }, []);
 
   // Load products from backend (with filters)
@@ -212,28 +235,85 @@ export const POSMain = () => {
   }, [cart.length, showPaymentModal]);
 
   // Add to cart with stock validation
-  const addToCart = (product) => {
-    const existingItem = cart.find(item => item.id === product.id);
-    const currentQuantityInCart = existingItem ? existingItem.quantity : 0;
-    const availableStock = product.stock || product.inventory?.quantityAvailable || 0;
+  const addToCart = async (product) => {
+    // Check if product is FRESH (requires batch selection)
+    const isFresh = product.categoryName?.toLowerCase().includes('fresh') ||
+      product.category?.name?.toLowerCase().includes('fresh');
 
-    if (currentQuantityInCart >= availableStock) {
-      alert(`Not enough stock. Available: ${availableStock}`);
-      return;
-    }
+    if (isFresh) {
+      // FRESH PRODUCT: Fetch batches and show selection modal
+      setScanning(true);
+      try {
+        const response = await productService.getProductByCode(product.productCode, {
+          withInventory: true,
+          withBatches: true,
+          isActive: true
+        });
 
-    if (existingItem) {
-      setCart(cart.map(item =>
-        item.id === product.id
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      ));
+        if (!response.success) {
+          showToast('error', 'Failed to load product batches.');
+          return;
+        }
+
+        const { batches, outOfStock } = response.data;
+
+        if (outOfStock || !batches || batches.length === 0) {
+          showToast('error', `${product.name} is currently out of stock!`);
+          return;
+        }
+
+        // Filter batches with quantity > 0 (ProductBatch.quantity field)
+        // Note: /api/products/code/:productCode returns batches with quantity field, not detailInventory
+        const availableBatches = batches.filter(batch => {
+          const qty = batch.detailInventory?.quantityOnShelf || batch.quantityOnShelf || batch.quantity || 0;
+          return qty > 0;
+        });
+
+        console.log('📦 Total batches:', batches.length, '→ Available on shelf:', availableBatches.length);
+
+        if (availableBatches.length === 0) {
+          showToast('error', `${product.name} has no batches available on shelf!`);
+          return;
+        }
+
+        setSelectedProductData({
+          ...response.data,
+          batches: availableBatches // Only pass batches with stock on shelf
+        });
+        setShowBatchModal(true);
+      } catch (error) {
+        console.error('Error loading batches:', error);
+        showToast('error', 'Failed to load product batches.');
+      } finally {
+        setScanning(false);
+      }
     } else {
-      setCart([...cart, {
-        ...product,
-        quantity: 1,
-        price: product.unitPrice || product.price || 0
-      }]);
+      // REGULAR PRODUCT: Add directly to cart (simple increment logic)
+      // Backend will handle FEFO batch selection when creating order
+      const existingItem = cart.find(item => item.id === product.id);
+      const currentQuantityInCart = existingItem ? existingItem.quantity : 0;
+      const availableStock = product.stock || product.inventory?.quantityAvailable || 0;
+
+      if (currentQuantityInCart >= availableStock) {
+        showToast('error', `Not enough stock. Available: ${availableStock}`);
+        return;
+      }
+
+      if (existingItem) {
+        setCart(cart.map(item =>
+          item.id === product.id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        ));
+        showToast('success', `Updated ${product.name} quantity`);
+      } else {
+        setCart([...cart, {
+          ...product,
+          quantity: 1,
+          price: product.unitPrice || product.price || 0
+        }]);
+        showToast('success', `Added ${product.name} to cart`);
+      }
     }
   };
 
@@ -251,7 +331,7 @@ export const POSMain = () => {
       });
 
       if (!response.success) {
-        alert(`Product not found: ${productCode}`);
+        showToast('error', 'Failed to scan product. Please try again.');
         return;
       }
 
@@ -259,29 +339,65 @@ export const POSMain = () => {
 
       // Check if out of stock
       if (outOfStock || !batches || batches.length === 0) {
-        alert(`${product.name} is currently out of stock!`);
+        showToast('error', `${product.name} is currently out of stock!`);
         return;
       }
 
-      // If multiple batches available, show selection modal
-      if (batches.length > 1) {
-        setSelectedProductData(response.data);
+      // Check if product is FRESH (only category name contains 'fresh')
+      // Fresh products require manual batch selection at POS
+      const isFresh = product.category?.name?.toLowerCase().includes('fresh');
+
+      if (isFresh) {
+        // FRESH PRODUCT: Show batch selection modal for manual selection
+        // Staff can choose any batch and see different prices if there are promotions
+
+        // Filter batches with quantity > 0 (ProductBatch.quantity field)
+        // Note: /api/products/code/:productCode returns batches with quantity field, not detailInventory
+        const availableBatches = batches.filter(batch => {
+          const qty = batch.detailInventory?.quantityOnShelf || batch.quantityOnShelf || batch.quantity || 0;
+          return qty > 0;
+        });
+
+        console.log('📦 Scanned - Total batches:', batches.length, '→ Available on shelf:', availableBatches.length);
+
+        if (availableBatches.length === 0) {
+          showToast('error', `${product.name} has no batches available on shelf!`);
+          return;
+        }
+
+        setSelectedProductData({
+          ...response.data,
+          batches: availableBatches // Only pass batches with stock on shelf
+        });
         setShowBatchModal(true);
       } else {
-        // Auto-add with the only available batch (FEFO)
+        // REGULAR PRODUCT: Auto-add to cart immediately
+        // Backend will handle FEFO (First Expired First Out) batch selection when creating order
+        // Use first batch (FEFO sorted) for display price only
         handleAddProductWithBatch(response.data, batches[0], 1);
       }
+
+      // Reset search term after successful scan
+      setSearchTerm('');
 
     } catch (error) {
       console.error('Error scanning product:', error);
       if (error.response?.status === 404) {
-        alert(`Product not found: ${productCode}`);
+        showToast('error', `Product not found: ${productCode}`);
       } else {
-        alert('Failed to scan product. Please try again.');
+        showToast('error', 'Failed to scan product. Please try again.');
       }
     } finally {
       setScanning(false);
     }
+  };
+
+  // Show toast notification
+  const showToast = (type, message) => {
+    setToast({ type, message });
+    setTimeout(() => {
+      setToast(null);
+    }, 3000);
   };
 
   // Handle batch selected from modal
@@ -295,8 +411,11 @@ export const POSMain = () => {
   const handleAddProductWithBatch = (productData, batch, quantity) => {
     const { product, inventory } = productData;
 
-    // Create unique cart item ID combining product and batch
-    const cartItemId = `${product.id}-${batch.id}`;
+    // Determine cart item ID based on product type:
+    // - FRESH products: Use product-batch combo (staff manually selects batch)
+    // - REGULAR products: Use product.id only (backend auto-selects FEFO batch)
+    const isFresh = product.category?.name?.toLowerCase().includes('fresh');
+    const cartItemId = isFresh ? `${product.id}-${batch.id}` : product.id;
 
     const cartItem = {
       id: cartItemId,
@@ -309,14 +428,16 @@ export const POSMain = () => {
       stock: inventory.quantityAvailable,
       categoryName: product.category?.name || 'Uncategorized',
 
-      // Batch info
-      batch: {
-        id: batch.id,
-        batchCode: batch.batchCode,
-        expiryDate: batch.expiryDate,
-        availableQty: batch.quantity,
-        daysUntilExpiry: batch.daysUntilExpiry
-      }
+      // Batch info (only for FRESH products that require manual selection)
+      ...(isFresh && {
+        batch: {
+          id: batch.id,
+          batchCode: batch.batchCode,
+          expiryDate: batch.expiryDate,
+          availableQty: batch.quantity,
+          daysUntilExpiry: batch.daysUntilExpiry
+        }
+      })
     };
 
     // Check if this exact product+batch combo already exists in cart
@@ -325,10 +446,10 @@ export const POSMain = () => {
     if (existingItem) {
       // Update quantity
       const newQuantity = existingItem.quantity + quantity;
-      const maxQty = batch.quantity;
+      const maxQty = isFresh ? batch.quantity : inventory.quantityAvailable;
 
       if (newQuantity > maxQty) {
-        alert(`Not enough stock in this batch. Available: ${maxQty}`);
+        showToast('error', `Not enough stock. Available: ${maxQty}`);
         return;
       }
 
@@ -337,9 +458,12 @@ export const POSMain = () => {
           ? { ...item, quantity: newQuantity }
           : item
       ));
+
+      showToast('success', `Updated ${product.name} quantity to ${newQuantity}`);
     } else {
       // Add new item
       setCart([...cart, cartItem]);
+      showToast('success', `Added ${quantity}x ${product.name} to cart`);
     }
 
     console.log(`Added ${quantity}x ${product.name} (Batch: ${batch.batchCode})`);
@@ -358,7 +482,7 @@ export const POSMain = () => {
     const availableStock = cartItem.batch?.availableQty || cartItem.stock || cartItem.inventory?.quantityAvailable || 0;
 
     if (newQuantity > availableStock) {
-      alert(`Not enough stock. Available: ${availableStock}`);
+      showToast('error', `Not enough stock. Available: ${availableStock}`);
       return;
     }
 
@@ -453,6 +577,7 @@ export const POSMain = () => {
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
               onProductScanned={handleProductScanned}
+              scanning={scanning}
             />
 
             <POSCategoryFilter
@@ -502,6 +627,26 @@ export const POSMain = () => {
         }}
         onBatchSelected={handleBatchSelected}
       />
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-[10000] px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 animate-slide-in-right ${toast.type === 'success'
+          ? 'bg-green-500 text-white'
+          : 'bg-red-500 text-white'
+          }`}>
+          {toast.type === 'success' ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M20 6L9 17L4 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />
+              <path d="M12 8v4M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          )}
+          <span className="font-semibold text-[14px]">{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 };

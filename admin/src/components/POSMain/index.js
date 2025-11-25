@@ -6,3 +6,4 @@ export { POSCart } from './POSCart';
 export { POSPaymentModal } from './POSPaymentModal';
 export { POSLoadingScreen } from './POSLoadingScreen';
 export { POSCustomerSelector } from './POSCustomerSelector';
+export { POSAddCustomerModal } from './POSAddCustomerModal';

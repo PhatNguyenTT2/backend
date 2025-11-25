@@ -148,7 +148,7 @@ export const CustomerDiscountSettings = () => {
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div className="flex-1">
               <label className="block text-sm font-semibold text-gray-800 mb-1 font-['Poppins',sans-serif]">
-                🛒 Retail Customers
+                Retail Customers
               </label>
               <p className="text-xs text-gray-600 font-['Poppins',sans-serif]">
                 Default discount for individual/retail customers
@@ -172,7 +172,7 @@ export const CustomerDiscountSettings = () => {
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div className="flex-1">
               <label className="block text-sm font-semibold text-gray-800 mb-1 font-['Poppins',sans-serif]">
-                📦 Wholesale Customers
+                Wholesale Customers
               </label>
               <p className="text-xs text-gray-600 font-['Poppins',sans-serif]">
                 Default discount for wholesale/bulk buyers
@@ -196,7 +196,7 @@ export const CustomerDiscountSettings = () => {
           <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
             <div className="flex-1">
               <label className="block text-sm font-semibold text-gray-800 mb-1 font-['Poppins',sans-serif]">
-                ⭐ VIP Customers
+                VIP Customers
               </label>
               <p className="text-xs text-gray-600 font-['Poppins',sans-serif]">
                 Default discount for VIP/premium customers
@@ -250,24 +250,6 @@ export const CustomerDiscountSettings = () => {
               </>
             )}
           </button>
-        </div>
-      </div>
-
-      {/* Info Box */}
-      <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-start space-x-3">
-          <svg className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-          </svg>
-          <div className="flex-1">
-            <h4 className="text-sm font-semibold text-blue-900 font-['Poppins',sans-serif]">
-              How it works
-            </h4>
-            <p className="text-sm text-blue-700 mt-1 font-['Poppins',sans-serif]">
-              These discount rates will be automatically applied when creating new orders based on the customer type.
-              You can still override the discount for individual orders if needed.
-            </p>
-          </div>
         </div>
       </div>
     </div>

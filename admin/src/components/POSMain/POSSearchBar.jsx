@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-export const POSSearchBar = ({ onProductScanned, onSearchChange, searchTerm }) => {
+export const POSSearchBar = ({ onProductScanned, onSearchChange, searchTerm, scanning }) => {
   const [scanBuffer, setScanBuffer] = useState('');
   const [lastKeyTime, setLastKeyTime] = useState(0);
+  const [scanStatus, setScanStatus] = useState(null); // 'success' | 'error' | null
   const scanTimeoutRef = useRef(null);
+  const statusTimeoutRef = useRef(null);
   const inputRef = useRef(null);
 
   // Barcode scanner detection (simulated with productCode)
@@ -42,6 +44,15 @@ export const POSSearchBar = ({ onProductScanned, onSearchChange, searchTerm }) =
 
           if (onProductScanned) {
             onProductScanned(buffer.toUpperCase());
+
+            // Show success feedback
+            setScanStatus('success');
+            if (statusTimeoutRef.current) {
+              clearTimeout(statusTimeoutRef.current);
+            }
+            statusTimeoutRef.current = setTimeout(() => {
+              setScanStatus(null);
+            }, 2000);
           }
 
           // Clear buffer and input
@@ -64,6 +75,15 @@ export const POSSearchBar = ({ onProductScanned, onSearchChange, searchTerm }) =
 
           if (onProductScanned) {
             onProductScanned(value.toUpperCase());
+
+            // Show success feedback
+            setScanStatus('success');
+            if (statusTimeoutRef.current) {
+              clearTimeout(statusTimeoutRef.current);
+            }
+            statusTimeoutRef.current = setTimeout(() => {
+              setScanStatus(null);
+            }, 2000);
           }
 
           e.target.value = '';
@@ -81,6 +101,9 @@ export const POSSearchBar = ({ onProductScanned, onSearchChange, searchTerm }) =
 
       if (scanTimeoutRef.current) {
         clearTimeout(scanTimeoutRef.current);
+      }
+      if (statusTimeoutRef.current) {
+        clearTimeout(statusTimeoutRef.current);
       }
     };
   }, [scanBuffer, lastKeyTime, onProductScanned]);
@@ -117,17 +140,14 @@ export const POSSearchBar = ({ onProductScanned, onSearchChange, searchTerm }) =
         <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
       </svg>
 
-      {/* Scanning indicator */}
-      {scanBuffer.length > 0 && (
-        <div className="absolute right-3 top-3 flex items-center gap-2 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-semibold">
-          <svg className="animate-pulse" width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <rect x="2" y="4" width="1" height="8" fill="currentColor" />
-            <rect x="4" y="4" width="2" height="8" fill="currentColor" />
-            <rect x="7" y="4" width="1" height="8" fill="currentColor" />
-            <rect x="9" y="4" width="2" height="8" fill="currentColor" />
-            <rect x="12" y="4" width="1" height="8" fill="currentColor" />
+      {/* Scanning/Processing indicator */}
+      {(scanBuffer.length > 0 || scanning) && (
+        <div className="absolute right-3 top-3 flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold animate-pulse">
+          <svg className="animate-spin" width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" fill="none" opacity="0.25" />
+            <path d="M8 2 A6 6 0 0 1 14 8" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
           </svg>
-          Scanning...
+          {scanBuffer.length > 0 ? 'Scanning...' : 'Processing...'}
         </div>
       )}
     </div>

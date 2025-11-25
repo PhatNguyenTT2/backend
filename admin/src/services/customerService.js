@@ -463,6 +463,41 @@ const customerService = {
       console.error('Error searching customers for POS:', error)
       throw error
     }
+  },
+
+  /**
+   * Create customer from POS (uses POS authentication)
+   * @param {Object} customerData - Customer data
+   * @param {string} customerData.fullName - Full name (required)
+   * @param {string} customerData.email - Email (optional, must be unique)
+   * @param {string} customerData.phone - Phone number (required, 10-15 digits)
+   * @param {string} customerData.address - Address (optional)
+   * @param {string} customerData.dateOfBirth - Date of birth (optional, ISO date string)
+   * @param {string} customerData.gender - Gender (required: male/female/other)
+   * @param {string} customerData.customerType - Customer type (optional: guest/retail/wholesale/vip, default: retail)
+   * @returns {Promise<Object>} Created customer data
+   */
+  createCustomerFromPOS: async (customerData) => {
+    try {
+      // Get POS token from localStorage (not adminToken)
+      const posToken = localStorage.getItem('posToken')
+
+      if (!posToken) {
+        throw new Error('POS token not found. Please login to POS.')
+      }
+
+      // Send request with POS token in Authorization header
+      const response = await api.post('/pos-login/customer', customerData, {
+        headers: {
+          Authorization: `Bearer ${posToken}`
+        }
+      })
+
+      return response.data
+    } catch (error) {
+      console.error('Error creating customer from POS:', error)
+      throw error
+    }
   }
 }
 

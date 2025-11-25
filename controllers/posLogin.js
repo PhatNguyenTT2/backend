@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken')
 const posLoginRouter = require('express').Router()
 const Employee = require('../models/employee')
+const Customer = require('../models/customer')
 const posAuthService = require('../services/posAuthService')
 
 /**
@@ -349,6 +350,186 @@ posLoginRouter.get('/verify', async (request, response) => {
       success: false,
       error: {
         message: 'Failed to verify session',
+        code: 'SERVER_ERROR',
+        details: error.message
+      }
+    })
+  }
+})
+
+/**
+ * @route   POST /api/pos-login/customer
+ * @desc    Create new customer from POS (no admin auth required)
+ * @access  Private (POS)
+ */
+posLoginRouter.post('/customer', async (request, response) => {
+  try {
+    const authorization = request.get('authorization')
+
+    if (!authorization || !authorization.toLowerCase().startsWith('bearer ')) {
+      return response.status(401).json({
+        success: false,
+        error: {
+          message: 'Token missing or invalid',
+          code: 'MISSING_TOKEN'
+        }
+      })
+    }
+
+    const token = authorization.substring(7)
+
+    // Verify POS token
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET)
+
+    if (!decodedToken.isPOS) {
+      return response.status(403).json({
+        success: false,
+        error: {
+          message: 'Invalid POS token',
+          code: 'INVALID_TOKEN_TYPE'
+        }
+      })
+    }
+
+    // Get request body
+    const { fullName, email, phone, address, dateOfBirth, gender, customerType } = request.body
+
+    // Validation: Full name is required
+    if (!fullName || fullName.trim().length === 0) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Full name is required',
+          code: 'MISSING_FULLNAME'
+        }
+      })
+    }
+
+    // Validation: Phone is required
+    if (!phone || phone.trim().length === 0) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Phone number is required',
+          code: 'MISSING_PHONE'
+        }
+      })
+    }
+
+    // Validation: Gender is required
+    if (!gender || !['male', 'female', 'other'].includes(gender.toLowerCase())) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Valid gender is required (male/female/other)',
+          code: 'INVALID_GENDER'
+        }
+      })
+    }
+
+    // Check if email already exists (if provided)
+    if (email && email.trim().length > 0) {
+      const existingCustomerByEmail = await Customer.findOne({
+        email: email.trim().toLowerCase()
+      })
+
+      if (existingCustomerByEmail) {
+        return response.status(409).json({
+          success: false,
+          error: {
+            message: 'This email is already registered',
+            code: 'DUPLICATE_EMAIL'
+          }
+        })
+      }
+    }
+
+    // Generate customer code
+    const lastCustomer = await Customer.findOne()
+      .sort({ createdAt: -1 })
+      .select('customerCode')
+      .lean()
+
+    let newCustomerCode = 'CUST0000000001'
+    if (lastCustomer && lastCustomer.customerCode) {
+      const lastCodeNum = parseInt(lastCustomer.customerCode.replace('CUST', ''))
+      newCustomerCode = 'CUST' + String(lastCodeNum + 1).padStart(10, '0')
+    }
+
+    // Create customer
+    const newCustomer = new Customer({
+      customerCode: newCustomerCode,
+      fullName: fullName.trim(),
+      email: email ? email.trim().toLowerCase() : undefined,
+      phone: phone.trim().replace(/[\s\-()]/g, ''),
+      address: address ? address.trim() : undefined,
+      dateOfBirth: dateOfBirth || undefined,
+      gender: gender.toLowerCase(),
+      customerType: customerType ? customerType.toLowerCase() : 'retail',
+      totalSpent: 0,
+      isActive: true
+    })
+
+    await newCustomer.save()
+
+    // Return created customer
+    return response.status(201).json({
+      success: true,
+      data: {
+        customer: {
+          id: newCustomer._id,
+          customerCode: newCustomer.customerCode,
+          fullName: newCustomer.fullName,
+          email: newCustomer.email,
+          phone: newCustomer.phone,
+          address: newCustomer.address,
+          dateOfBirth: newCustomer.dateOfBirth,
+          gender: newCustomer.gender,
+          customerType: newCustomer.customerType,
+          totalSpent: newCustomer.totalSpent,
+          isActive: newCustomer.isActive,
+          createdAt: newCustomer.createdAt
+        }
+      },
+      message: 'Customer created successfully'
+    })
+  } catch (error) {
+    console.error('POS Create Customer error:', error)
+
+    if (error.name === 'JsonWebTokenError') {
+      return response.status(401).json({
+        success: false,
+        error: {
+          message: 'Invalid token',
+          code: 'INVALID_TOKEN'
+        }
+      })
+    }
+
+    if (error.name === 'TokenExpiredError') {
+      return response.status(401).json({
+        success: false,
+        error: {
+          message: 'Token has expired',
+          code: 'TOKEN_EXPIRED'
+        }
+      })
+    }
+
+    if (error.name === 'ValidationError') {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: error.message,
+          code: 'VALIDATION_ERROR'
+        }
+      })
+    }
+
+    return response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to create customer',
         code: 'SERVER_ERROR',
         details: error.message
       }
