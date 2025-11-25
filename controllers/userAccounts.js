@@ -213,6 +213,7 @@ userAccountsRouter.put('/:id', async (request, response) => {
     const { username, email, password, role, isActive } = request.body
 
     const user = await UserAccount.findById(request.params.id)
+      .populate('role', 'roleName permissions')
 
     if (!user) {
       return response.status(404).json({
@@ -222,6 +223,72 @@ userAccountsRouter.put('/:id', async (request, response) => {
           code: 'USER_NOT_FOUND'
         }
       })
+    }
+
+    // 🔒 Check if trying to modify protected account's critical fields
+    if (user.isProtected) {
+      // Check if trying to change role
+      if (role && role.toString() !== user.role._id.toString()) {
+        const Role = require('../models/role')
+        const newRole = await Role.findById(role)
+        const isChangingFromSuperAdmin = !(newRole && newRole.permissions && newRole.permissions.includes('all'))
+
+        if (isChangingFromSuperAdmin) {
+          return response.status(403).json({
+            success: false,
+            error: {
+              message: 'Cannot change role of protected super admin account',
+              code: 'PROTECTED_ACCOUNT'
+            }
+          })
+        }
+      }
+
+      // Check if trying to deactivate
+      if (isActive === false) {
+        return response.status(403).json({
+          success: false,
+          error: {
+            message: 'Cannot deactivate protected super admin account',
+            code: 'PROTECTED_ACCOUNT'
+          }
+        })
+      }
+    }
+
+    // 🔒 Check if trying to deactivate or change role of last super admin
+    const isSuperAdmin = user.role &&
+      user.role.permissions &&
+      user.role.permissions.includes('all')
+
+    if (isSuperAdmin) {
+      const willBeDeactivated = isActive === false
+
+      let willLoseSuperAdminRole = false
+      if (role && role.toString() !== user.role._id.toString()) {
+        const Role = require('../models/role')
+        const newRole = await Role.findById(role)
+        willLoseSuperAdminRole = !(newRole && newRole.permissions && newRole.permissions.includes('all'))
+      }
+
+      if (willBeDeactivated || willLoseSuperAdminRole) {
+        // Check if this is the last active super admin
+        const superAdminCount = await UserAccount.countDocuments({
+          role: user.role._id,
+          isActive: true,
+          _id: { $ne: user._id }
+        })
+
+        if (superAdminCount === 0) {
+          return response.status(403).json({
+            success: false,
+            error: {
+              message: 'Cannot modify the last active super admin account',
+              code: 'LAST_SUPERADMIN'
+            }
+          })
+        }
+      }
     }
 
     // Update fields if provided
@@ -292,6 +359,7 @@ userAccountsRouter.put('/:id', async (request, response) => {
 userAccountsRouter.delete('/:id', async (request, response) => {
   try {
     const user = await UserAccount.findById(request.params.id)
+      .populate('role', 'roleName permissions')
 
     if (!user) {
       return response.status(404).json({
@@ -301,6 +369,41 @@ userAccountsRouter.delete('/:id', async (request, response) => {
           code: 'USER_NOT_FOUND'
         }
       })
+    }
+
+    // 🔒 Check if protected
+    if (user.isProtected) {
+      return response.status(403).json({
+        success: false,
+        error: {
+          message: 'Cannot delete protected super admin account',
+          code: 'PROTECTED_ACCOUNT'
+        }
+      })
+    }
+
+    // 🔒 Check if this is a super admin
+    const isSuperAdmin = user.role &&
+      user.role.permissions &&
+      user.role.permissions.includes('all')
+
+    if (isSuperAdmin) {
+      // Check if this is the last active super admin
+      const superAdminCount = await UserAccount.countDocuments({
+        role: user.role._id,
+        isActive: true,
+        _id: { $ne: user._id }
+      })
+
+      if (superAdminCount === 0) {
+        return response.status(403).json({
+          success: false,
+          error: {
+            message: 'Cannot delete the last active super admin account',
+            code: 'LAST_SUPERADMIN'
+          }
+        })
+      }
     }
 
     // Soft delete: deactivate user and clear all tokens

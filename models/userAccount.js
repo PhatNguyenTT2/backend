@@ -45,6 +45,13 @@ const userAccountSchema = new mongoose.Schema({
     default: true
   },
 
+  // Protection flag for critical accounts (Super Admin)
+  isProtected: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+
   // Auth tokens for session management
   tokens: [{
     token: {
@@ -119,6 +126,151 @@ userAccountSchema.pre('save', async function (next) {
     }
   }
   next();
+});
+
+// 🔒 Pre-delete middleware: Prevent deletion of protected accounts
+userAccountSchema.pre('deleteOne', { document: true, query: false }, async function (next) {
+  try {
+    if (this.isProtected) {
+      throw new Error('Cannot delete protected super admin account');
+    }
+
+    // Check if this is a super admin by checking role permissions
+    const populatedUser = await this.populate('role');
+    const isSuperAdmin = populatedUser.role &&
+      populatedUser.role.permissions &&
+      populatedUser.role.permissions.includes('all');
+
+    if (isSuperAdmin) {
+      // Count remaining active super admins
+      const Role = mongoose.model('Role');
+      const superAdminRole = await Role.findOne({ permissions: 'all' });
+
+      if (superAdminRole) {
+        const superAdminCount = await this.constructor.countDocuments({
+          role: superAdminRole._id,
+          isActive: true,
+          _id: { $ne: this._id }
+        });
+
+        if (superAdminCount === 0) {
+          throw new Error('Cannot delete the last active super admin account. System must have at least one super admin.');
+        }
+      }
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 🔒 Pre-findOneAndDelete middleware
+userAccountSchema.pre('findOneAndDelete', async function (next) {
+  try {
+    const docToDelete = await this.model.findOne(this.getFilter()).populate('role');
+
+    if (!docToDelete) {
+      return next();
+    }
+
+    if (docToDelete.isProtected) {
+      throw new Error('Cannot delete protected super admin account');
+    }
+
+    const isSuperAdmin = docToDelete.role &&
+      docToDelete.role.permissions &&
+      docToDelete.role.permissions.includes('all');
+
+    if (isSuperAdmin) {
+      const Role = mongoose.model('Role');
+      const superAdminRole = await Role.findOne({ permissions: 'all' });
+
+      if (superAdminRole) {
+        const superAdminCount = await this.model.countDocuments({
+          role: superAdminRole._id,
+          isActive: true,
+          _id: { $ne: docToDelete._id }
+        });
+
+        if (superAdminCount === 0) {
+          throw new Error('Cannot delete the last active super admin account. System must have at least one super admin.');
+        }
+      }
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 🔒 Pre-update middleware: Prevent deactivating last super admin or removing protection
+userAccountSchema.pre('findOneAndUpdate', async function (next) {
+  try {
+    const update = this.getUpdate();
+    const docToUpdate = await this.model.findOne(this.getFilter()).populate('role');
+
+    if (!docToUpdate) {
+      return next();
+    }
+
+    // Prevent removing protection from protected accounts
+    if (docToUpdate.isProtected && update.$set && update.$set.isProtected === false) {
+      throw new Error('Cannot remove protection from super admin account');
+    }
+
+    const isSuperAdmin = docToUpdate.role &&
+      docToUpdate.role.permissions &&
+      docToUpdate.role.permissions.includes('all');
+
+    if (isSuperAdmin) {
+      // Check if trying to deactivate
+      if (update.$set && update.$set.isActive === false) {
+        const Role = mongoose.model('Role');
+        const superAdminRole = await Role.findOne({ permissions: 'all' });
+
+        if (superAdminRole) {
+          const activeSuperAdminCount = await this.model.countDocuments({
+            role: superAdminRole._id,
+            isActive: true,
+            _id: { $ne: docToUpdate._id }
+          });
+
+          if (activeSuperAdminCount === 0) {
+            throw new Error('Cannot deactivate the last active super admin account');
+          }
+        }
+      }
+
+      // Check if trying to change role
+      if (update.$set && update.$set.role) {
+        const Role = mongoose.model('Role');
+        const newRole = await Role.findById(update.$set.role);
+        const isChangingFromSuperAdmin = !(newRole && newRole.permissions && newRole.permissions.includes('all'));
+
+        if (isChangingFromSuperAdmin) {
+          const superAdminRole = await Role.findOne({ permissions: 'all' });
+
+          if (superAdminRole) {
+            const superAdminCount = await this.model.countDocuments({
+              role: superAdminRole._id,
+              isActive: true,
+              _id: { $ne: docToUpdate._id }
+            });
+
+            if (superAdminCount === 0) {
+              throw new Error('Cannot change role of the last super admin account');
+            }
+          }
+        }
+      }
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 userAccountSchema.set('toJSON', {

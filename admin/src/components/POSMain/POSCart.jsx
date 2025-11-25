@@ -1,4 +1,5 @@
 import React from 'react';
+import { POSCustomerSelector } from './POSCustomerSelector';
 
 export const POSCart = ({
   cart,
@@ -6,7 +7,11 @@ export const POSCart = ({
   onRemoveItem,
   onClearCart,
   onCheckout,
-  totals
+  totals,
+  // Customer selector props
+  selectedCustomer,
+  onCustomerChange,
+  customerDiscounts
 }) => {
   const formatVND = (amount) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -35,6 +40,15 @@ export const POSCart = ({
         <p className="text-[13px] font-['Poppins',sans-serif] text-gray-500">
           {cart.length} item{cart.length !== 1 ? 's' : ''}
         </p>
+      </div>
+
+      {/* Customer Selector */}
+      <div className="p-4 border-b border-gray-200">
+        <POSCustomerSelector
+          selectedCustomer={selectedCustomer}
+          onCustomerChange={onCustomerChange}
+          customerDiscounts={customerDiscounts}
+        />
       </div>
 
       {/* Cart Items */}
@@ -121,12 +135,24 @@ export const POSCart = ({
                 {formatVND(totals.subtotal)}
               </span>
             </div>
-            <div className="flex justify-between text-[13px] font-['Poppins',sans-serif]">
-              <span className="text-gray-600">Tax (10%):</span>
-              <span className="font-semibold">
-                {formatVND(totals.tax)}
-              </span>
-            </div>
+            {totals.discount > 0 && (
+              <div className="flex justify-between text-[13px] font-['Poppins',sans-serif]">
+                <span className="text-gray-600">
+                  Discount ({totals.discountPercentage}%):
+                </span>
+                <span className="font-semibold text-green-600">
+                  -{formatVND(totals.discount)}
+                </span>
+              </div>
+            )}
+            {totals.shippingFee > 0 && (
+              <div className="flex justify-between text-[13px] font-['Poppins',sans-serif]">
+                <span className="text-gray-600">Shipping:</span>
+                <span className="font-semibold">
+                  {formatVND(totals.shippingFee)}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between text-[18px] font-bold font-['Poppins',sans-serif] pt-2 border-t border-gray-200">
               <span className="text-gray-900">Total:</span>
               <span className="text-emerald-600">

@@ -261,10 +261,11 @@ ordersRouter.get('/:id', async (request, response) => {
 /**
  * POST /api/orders
  * Create new order with automatic FEFO batch selection
+ * Supports virtual guest customer (auto-creates guest customer)
  * 
  * Request body:
  * {
- *   customer: ObjectId (required),
+ *   customer: ObjectId | 'virtual-guest' | null (required - will auto-create guest if virtual/null),
  *   createdBy: ObjectId (optional, will use system if not provided),
  *   orderDate: Date (optional, defaults to now),
  *   deliveryType: 'delivery' | 'pickup' (optional, defaults to 'delivery'),
@@ -303,16 +304,6 @@ ordersRouter.post('/', async (request, response) => {
     const orderItems = items || details;
 
     // Validate required fields
-    if (!customer) {
-      return response.status(400).json({
-        success: false,
-        error: {
-          message: 'Customer is required',
-          code: 'MISSING_CUSTOMER'
-        }
-      });
-    }
-
     if (!orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
       return response.status(400).json({
         success: false,
@@ -323,16 +314,48 @@ ordersRouter.post('/', async (request, response) => {
       });
     }
 
-    // Validate customer exists and get discount percentage based on customer type
-    const customerDoc = await Customer.findById(customer);
-    if (!customerDoc) {
-      return response.status(404).json({
-        success: false,
-        error: {
-          message: 'Customer not found',
-          code: 'CUSTOMER_NOT_FOUND'
-        }
-      });
+    // ⭐ Handle virtual guest customer
+    let customerId = customer;
+    let customerDoc = null;
+
+    // If customer is virtual-guest or null, create new guest customer
+    if (!customer || customer === 'virtual-guest') {
+      console.log('[Order] Creating new guest customer for virtual guest order...');
+
+      try {
+        const guestCustomer = await Customer.create({
+          fullName: 'Khách vãng lai',
+          customerType: 'guest'
+          // Other fields will auto-generate (customerCode, etc.)
+        });
+
+        customerId = guestCustomer._id;
+        customerDoc = guestCustomer;
+
+        console.log(`[Order] ✅ Created guest customer ${guestCustomer.customerCode} for order`);
+      } catch (error) {
+        console.error('[Order] ❌ Failed to create guest customer:', error);
+        return response.status(500).json({
+          success: false,
+          error: {
+            message: 'Failed to create guest customer',
+            details: error.message,
+            code: 'GUEST_CUSTOMER_CREATION_FAILED'
+          }
+        });
+      }
+    } else {
+      // Validate customer exists and get discount percentage based on customer type
+      customerDoc = await Customer.findById(customer);
+      if (!customerDoc) {
+        return response.status(404).json({
+          success: false,
+          error: {
+            message: 'Customer not found',
+            code: 'CUSTOMER_NOT_FOUND'
+          }
+        });
+      }
     }
 
     // Auto-calculate discount percentage based on customer type
@@ -501,14 +524,14 @@ ordersRouter.post('/', async (request, response) => {
     try {
       // Create order with status='draft' (inventory will be reserved when moved to 'pending')
       const order = new Order({
-        customer,
+        customer: customerId, // ⭐ Use customerId (may be newly created guest)
         createdBy: validatedCreatedBy,
         orderDate: orderDate || Date.now(),
         deliveryType: deliveryType || 'delivery',
         address: shippingAddress || address,
         shippingFee: shippingFee || 0,
         discountPercentage: autoDiscountPercentage,
-        status: 'draft', // Always start as draft, inventory reserved on pending
+        status: status || 'draft', // Allow custom status (e.g., 'draft' for hold orders)
         paymentStatus: paymentStatus || 'pending',
         total: calculatedTotal // Pre-calculated from items
       });

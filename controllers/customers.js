@@ -157,6 +157,51 @@ customersRouter.get('/', async (request, response) => {
 });
 
 /**
+ * GET /api/customers/default-guest
+ * Get or create a virtual guest customer for POS
+ * Returns a guest customer object (customerType: 'guest')
+ * This is a virtual/abstract object - not tied to specific database record
+ */
+customersRouter.get('/default-guest', async (request, response) => {
+  try {
+    // Return virtual guest customer object
+    // Frontend will use this for walk-in customers
+    // Any customer with customerType='guest' is treated as walk-in
+    const virtualGuest = {
+      id: 'virtual-guest',
+      customerCode: 'GUEST',
+      fullName: 'Khách vãng lai',
+      phone: null,
+      email: null,
+      customerType: 'guest',
+      address: null,
+      gender: 'other',
+      totalSpent: 0,
+      isActive: true,
+      isVirtual: true, // Flag to indicate this is not a real DB record
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    response.json({
+      success: true,
+      data: {
+        customer: virtualGuest
+      }
+    });
+  } catch (error) {
+    console.error('Get default guest error:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to get default guest customer',
+        details: error.message
+      }
+    });
+  }
+});
+
+/**
  * GET /api/customers/:id
  * Get single customer by ID with order history and statistics
  */

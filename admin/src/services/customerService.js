@@ -424,6 +424,45 @@ const customerService = {
       console.error('Error checking phone:', error)
       return false
     }
+  },
+
+  // ========== POS SPECIFIC METHODS ==========
+
+  /**
+   * Get default guest customer for POS
+   * @returns {Promise<Object>} Default guest customer
+   */
+  getDefaultGuest: async () => {
+    try {
+      const response = await api.get('/customers/default-guest')
+      return response.data
+    } catch (error) {
+      console.error('Error getting default guest:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Quick search customers for POS
+   * Optimized for fast searching with minimal data
+   * @param {string} query - Search query (name, phone, email)
+   * @param {number} limit - Max results (default: 10)
+   * @returns {Promise<Object>} Search results
+   */
+  searchForPOS: async (query, limit = 10) => {
+    try {
+      const response = await api.get('/customers', {
+        params: {
+          search: query,
+          isActive: true,
+          limit
+        }
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error searching customers for POS:', error)
+      throw error
+    }
   }
 }
 

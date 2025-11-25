@@ -150,37 +150,17 @@ loginRouter.post('/register', async (request, response) => {
     const saltRounds = 10
     const passwordHash = await bcrypt.hash(password, saltRounds)
 
-    // Find the ADMIN role
-    let adminRole = await Role.findOne({ roleName: 'Admin' })
+    // Find the SUPER ADMIN role (has 'all' permission)
+    let superAdminRole = await Role.findOne({ permissions: 'all' })
 
-    // If ADMIN role doesn't exist, create it
-    if (!adminRole) {
-      adminRole = new Role({
-        roleName: 'Admin',
-        description: 'Administrator with full access to the system',
-        permissions: [
-          'view_dashboard',
-          'manage_products',
-          'manage_categories',
-          'manage_orders',
-          'manage_customers',
-          'manage_suppliers',
-          'manage_employees',
-          'manage_POS',
-          'manage_roles',
-          'manage_inventory',
-          'view_reports',
-          'manage_payments',
-          'manage_settings'
-        ]
+    // If SUPER ADMIN role doesn't exist, create it
+    if (!superAdminRole) {
+      superAdminRole = new Role({
+        roleName: 'Super Admin',
+        description: 'Super Administrator with unlimited access to the entire system',
+        permissions: ['all']
       })
-      await adminRole.save()
-    } else {
-      // Update existing admin role to include manage_settings if missing
-      if (!adminRole.permissions.includes('manage_settings')) {
-        adminRole.permissions.push('manage_settings')
-        await adminRole.save()
-      }
+      await superAdminRole.save()
     }
 
     // Start transaction
@@ -188,13 +168,14 @@ loginRouter.post('/register', async (request, response) => {
     session.startTransaction()
 
     try {
-      // Create user account
+      // Create user account with Super Admin role
       const userAccount = new UserAccount({
         username,
         email,
         passwordHash,
-        role: adminRole._id,
-        isActive: true
+        role: superAdminRole._id,
+        isActive: true,
+        isProtected: true // Can be protected later using npm run protect:admin
       })
       await userAccount.save({ session })
 

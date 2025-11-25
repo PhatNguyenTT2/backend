@@ -10,7 +10,8 @@ import {
   POSProductGrid,
   POSCart,
   POSPaymentModal,
-  POSLoadingScreen
+  POSLoadingScreen,
+  POSCustomerSelector
 } from '../../components/POSMain';
 import { POSBatchSelectModal } from '../../components/POSMain/POSBatchSelectModal';
 
@@ -26,6 +27,19 @@ export const POSMain = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(false);
+
+  // Customer state
+  // Note: selectedCustomer can be:
+  // 1. Virtual guest (id: 'virtual-guest', customerType: 'guest') - for walk-in customers
+  // 2. Real customer from database (customerType: 'retail'/'wholesale'/'vip')
+  // When creating order, backend will handle guest customer creation if needed
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerDiscounts, setCustomerDiscounts] = useState({
+    guest: 0,      // Walk-in customers: 0% discount
+    retail: 10,    // Retail customers: 10% discount
+    wholesale: 15, // Wholesale customers: 15% discount
+    vip: 20        // VIP customers: 20% discount
+  });
 
   // Batch selection modal state
   const [showBatchModal, setShowBatchModal] = useState(false);
@@ -370,9 +384,23 @@ export const POSMain = () => {
   // Calculate totals
   const calculateTotals = () => {
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const tax = subtotal * 0.1; // 10% tax
-    const total = subtotal + tax;
-    return { subtotal, tax, total };
+
+    // Calculate discount based on customer type
+    const discountPercentage = selectedCustomer
+      ? (customerDiscounts[selectedCustomer.customerType] || 0)
+      : 0;
+    const discount = subtotal * (discountPercentage / 100);
+
+    const shippingFee = 0; // POS always pickup = no shipping
+    const total = subtotal - discount + shippingFee;
+
+    return {
+      subtotal,
+      discount,
+      discountPercentage,
+      shippingFee,
+      total
+    };
   };
 
   // Handle logout
@@ -451,6 +479,9 @@ export const POSMain = () => {
           onClearCart={clearCart}
           onCheckout={() => setShowPaymentModal(true)}
           totals={totals}
+          selectedCustomer={selectedCustomer}
+          onCustomerChange={setSelectedCustomer}
+          customerDiscounts={customerDiscounts}
         />
       </div>
 
