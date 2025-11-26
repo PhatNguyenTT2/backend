@@ -313,7 +313,6 @@ export const AddProductBatchModal = ({ isOpen, onClose, onSuccess, productId }) 
             >
               <option value="active">Active</option>
               <option value="expired">Expired</option>
-              <option value="disposed">Disposed</option>
             </select>
           </div>
 

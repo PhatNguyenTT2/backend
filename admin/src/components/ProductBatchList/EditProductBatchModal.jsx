@@ -317,7 +317,6 @@ export const EditProductBatchModal = ({ isOpen, onClose, onSuccess, batch }) => 
             >
               <option value="active">Active</option>
               <option value="expired">Expired</option>
-              <option value="disposed">Disposed</option>
             </select>
           </div>
 

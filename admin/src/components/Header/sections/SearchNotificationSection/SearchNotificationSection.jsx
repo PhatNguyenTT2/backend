@@ -1,5 +1,6 @@
 import React from 'react';
-import { Search, Bell, ShoppingCart } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { NotificationDropdown } from './NotificationDropdown';
 
 export const SearchNotificationSection = () => {
   return (
@@ -14,18 +15,7 @@ export const SearchNotificationSection = () => {
       </div>
 
       <div className="flex items-center space-x-4">
-        <div className="relative">
-          <Bell className="w-6 h-6 text-gray-600" />
-          <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-            3
-          </span>
-        </div>
-        <div className="relative">
-          <ShoppingCart className="w-6 h-6 text-gray-600" />
-          <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-            2
-          </span>
-        </div>
+        <NotificationDropdown />
       </div>
     </div>
   );

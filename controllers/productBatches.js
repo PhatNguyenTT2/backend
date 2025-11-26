@@ -19,7 +19,6 @@ const { userExtractor } = require('../utils/auth');
  * - getNearExpiryBatches() - Use GET /api/product-batches?nearExpiry=true
  * - getBatchesByProduct() - Use GET /api/product-batches?product=:productId
  * - updateBatchQuantity() - Use PUT /api/product-batches/:id with { quantity: value }
- * - disposeBatch() - Use PUT /api/product-batches/:id with { status: 'disposed' }
  */
 
 /**
@@ -28,7 +27,7 @@ const { userExtractor } = require('../utils/auth');
  * 
  * Query parameters:
  * - product: ObjectId - Filter by product
- * - status: string - Filter by status (active/expired/disposed)
+ * - status: string - Filter by status (active/expired)
  * - nearExpiry: boolean - Filter batches expiring within 30 days
  * - expired: boolean - Filter expired batches
  * - search: string - Search by batch code
@@ -351,7 +350,7 @@ productBatchesRouter.post('/', userExtractor, async (request, response) => {
  * Note: This endpoint handles all updates including:
  * - Price updates
  * - Quantity adjustments
- * - Status changes (active/expired/disposed)
+ * - Status changes (active/expired)
  * - Promotion updates
  */
 productBatchesRouter.put('/:id', userExtractor, async (request, response) => {
@@ -512,7 +511,7 @@ productBatchesRouter.delete('/:id', userExtractor, async (request, response) => 
         error: {
           message: 'Cannot delete batch with inventory',
           code: 'BATCH_HAS_INVENTORY',
-          details: `This batch has ${detailInventory.quantityOnHand} unit(s) in inventory. Please clear inventory first or set status to 'disposed'.`
+          details: `This batch has ${detailInventory.quantityOnHand} unit(s) in inventory. Please clear inventory first.`
         }
       });
     }
@@ -524,7 +523,7 @@ productBatchesRouter.delete('/:id', userExtractor, async (request, response) => 
         error: {
           message: 'Cannot delete batch with remaining quantity',
           code: 'BATCH_HAS_QUANTITY',
-          details: `This batch has ${batch.quantity} unit(s) remaining. Please update quantity to 0 or set status to 'disposed'.`
+          details: `This batch has ${batch.quantity} unit(s) remaining. Please update quantity to 0 first.`
         }
       });
     }

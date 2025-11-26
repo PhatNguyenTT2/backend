@@ -71,7 +71,6 @@ export const ProductBatchListHeader = ({
               <option value="">All Status</option>
               <option value="active">Active</option>
               <option value="expired">Expired</option>
-              <option value="disposed">Disposed</option>
             </select>
             <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
               <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">

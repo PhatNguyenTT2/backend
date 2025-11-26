@@ -67,7 +67,7 @@ const productBatchSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: {
-      values: ['active', 'expired', 'disposed'],
+      values: ['active', 'expired'],
       message: '{VALUE} is not a valid status'
     },
     default: 'active'

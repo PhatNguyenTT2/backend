@@ -9,7 +9,7 @@ const productBatchService = {
    * Get all product batches with optional filters
    * @param {Object} params - Query parameters
    * @param {string} params.product - Filter by product ID
-   * @param {string} params.status - Filter by status (active/expired/disposed)
+   * @param {string} params.status - Filter by status (active/expired)
    * @param {boolean} params.nearExpiry - Filter batches expiring within 30 days
    * @param {boolean} params.expired - Filter expired batches
    * @param {string} params.search - Search by batch code
@@ -56,7 +56,7 @@ const productBatchService = {
    * @param {number} batchData.discountPercentage - Discount percentage (optional)
    * @param {Date} batchData.mfgDate - Manufacturing date (optional)
    * @param {Date} batchData.expiryDate - Expiry date (optional)
-   * @param {string} batchData.status - Status (optional: active/expired/disposed)
+   * @param {string} batchData.status - Status (optional: active/expired)
    * @param {string} batchData.notes - Notes (optional)
    * @returns {Promise<Object>} Created batch data
    */
@@ -184,23 +184,6 @@ const productBatchService = {
   },
 
   /**
-   * Get disposed batches only
-   * @param {Object} params - Additional query parameters (optional)
-   * @returns {Promise<Object>} Disposed batches
-   */
-  getDisposedBatches: async (params = {}) => {
-    try {
-      const response = await api.get('/product-batches', {
-        params: { status: 'disposed', ...params }
-      })
-      return response.data
-    } catch (error) {
-      console.error('Error fetching disposed batches:', error)
-      throw error
-    }
-  },
-
-  /**
    * Get batches with promotion applied
    * @param {string} promotionType - Promotion type (discount/flash-sale)
    * @param {Object} params - Additional query parameters (optional)
@@ -255,7 +238,7 @@ const productBatchService = {
   /**
    * Update batch status
    * @param {string} batchId - Batch ID
-   * @param {string} status - New status (active/expired/disposed)
+   * @param {string} status - New status (active/expired)
    * @returns {Promise<Object>} Updated batch data
    */
   updateBatchStatus: async (batchId, status) => {
@@ -264,26 +247,6 @@ const productBatchService = {
       return response.data
     } catch (error) {
       console.error('Error updating batch status:', error)
-      throw error
-    }
-  },
-
-  /**
-   * Dispose batch (set status to disposed)
-   * @param {string} batchId - Batch ID
-   * @param {string} notes - Disposal notes (optional)
-   * @returns {Promise<Object>} Updated batch data
-   */
-  disposeBatch: async (batchId, notes = null) => {
-    try {
-      const updateData = { status: 'disposed' }
-      if (notes) {
-        updateData.notes = notes
-      }
-      const response = await api.put(`/product-batches/${batchId}`, updateData)
-      return response.data
-    } catch (error) {
-      console.error('Error disposing batch:', error)
       throw error
     }
   },

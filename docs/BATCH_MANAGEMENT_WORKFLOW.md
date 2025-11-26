@@ -261,7 +261,7 @@ function allocateBatchesFEFO(productId, requestedQty) {
 ### Business Rules
 - ✅ **FEFO tự động**: Ưu tiên lô HSD gần nhất
 - ✅ **Multi-batch**: Cho phép lấy từ nhiều lô nếu 1 lô không đủ
-- ✅ **Validation**: Không bán lô đã hết hạn hoặc disposed
+- ✅ **Validation**: Không bán lô đã hết hạn
 - ✅ **Transaction**: Atomic update batches + inventory
 - ✅ **Logging**: Lưu snapshot batches đã bán để truy xuất
 

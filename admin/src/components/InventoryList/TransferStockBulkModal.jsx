@@ -447,17 +447,18 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                   const isExpired = batch.batchId?.expiryDate &&
                     new Date(batch.batchId.expiryDate) <= new Date();
 
-                  // Don't allow transfer of expired batches
-                  if (isExpired) {
+                  // For Warehouse -> Shelf: Don't allow expired batches
+                  if (direction === 'toShelf' && isExpired) {
                     return false;
                   }
 
+                  // For Shelf -> Warehouse: Allow expired batches (for disposal processing)
                   // Check stock availability based on direction
                   if (direction === 'toShelf') {
                     // Warehouse -> Shelf: only show batches with warehouse stock
                     return (batch.quantityOnHand || 0) > 0;
                   } else {
-                    // Shelf -> Warehouse: only show batches with shelf stock
+                    // Shelf -> Warehouse: show batches with shelf stock (including expired)
                     return (batch.quantityOnShelf || 0) > 0;
                   }
                 });
@@ -469,7 +470,11 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                     </h3>
 
                     {availableBatches.length === 0 ? (
-                      <p className="text-[13px] text-gray-500">No batches available for transfer</p>
+                      <p className="text-[13px] text-gray-500">
+                        {direction === 'toShelf'
+                          ? 'No active batches available for transfer to shelf'
+                          : 'No batches available for transfer to warehouse'}
+                      </p>
                     ) : (
                       <div className="space-y-2">
                         {availableBatches.map(batch => {
@@ -481,7 +486,10 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                             ? (batch.quantityOnHand || 0)
                             : (batch.quantityOnShelf || 0);
 
-                          // Check if batch is expiring soon (within 30 days)
+                          // Check batch status
+                          const isExpired = batch.batchId?.expiryDate &&
+                            new Date(batch.batchId.expiryDate) <= new Date();
+
                           const isExpiringSoon = batch.batchId?.expiryDate &&
                             (() => {
                               const expiryDate = new Date(batch.batchId.expiryDate);
@@ -491,8 +499,15 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                             })();
 
                           return (
-                            <div key={detailId} className={`flex items-center gap-3 p-3 border rounded-lg ${isExpiringSoon ? 'border-amber-300 bg-amber-50' : 'border-gray-200'
-                              }`}>
+                            <div
+                              key={detailId}
+                              className={`flex items-center gap-3 p-3 border rounded-lg ${isExpired
+                                ? 'border-red-300 bg-red-50'
+                                : isExpiringSoon
+                                  ? 'border-amber-300 bg-amber-50'
+                                  : 'border-gray-200'
+                                }`}
+                            >
                               <input
                                 type="checkbox"
                                 checked={selection.selected}
@@ -504,7 +519,12 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                                   <p className="text-[13px] font-semibold text-emerald-600">
                                     {batch.batchId?.batchCode || 'N/A'}
                                   </p>
-                                  {isExpiringSoon && (
+                                  {isExpired && (
+                                    <span className="text-[10px] font-semibold text-red-700 bg-red-200 px-2 py-0.5 rounded">
+                                      EXPIRED
+                                    </span>
+                                  )}
+                                  {!isExpired && isExpiringSoon && (
                                     <span className="text-[10px] font-semibold text-amber-700 bg-amber-200 px-2 py-0.5 rounded">
                                       Expiring Soon
                                     </span>
@@ -514,6 +534,11 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                                   {direction === 'toShelf' ? 'Warehouse' : 'Shelf'}: {maxQty} units •
                                   Exp: {batch.batchId?.expiryDate ? new Date(batch.batchId.expiryDate).toLocaleDateString() : 'N/A'}
                                 </p>
+                                {isExpired && direction === 'toWarehouse' && (
+                                  <p className="text-[10px] text-red-600 mt-1 italic">
+                                    ⚠️ Transfer to warehouse for disposal processing
+                                  </p>
+                                )}
                               </div>
                               {selection.selected && (
                                 <input

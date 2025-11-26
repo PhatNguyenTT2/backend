@@ -645,7 +645,7 @@ inventoryMovementBatchesRouter.post('/bulk-transfer', userExtractor, async (requ
           continue;
         }
 
-        // Get detail inventory
+        // Get detail inventory with batch info
         const detailInventory = await DetailInventory.findById(detailInventoryId)
           .populate('batchId');
 
@@ -657,23 +657,36 @@ inventoryMovementBatchesRouter.post('/bulk-transfer', userExtractor, async (requ
           continue;
         }
 
+        // Check batch status
+        const batch = detailInventory.batchId;
+
+        // Don't allow expired batches to be moved to shelf
+        if (direction === 'toShelf' && batch.status === 'expired') {
+          results.failed.push({
+            detailInventoryId,
+            batchCode: batch.batchCode,
+            error: 'Cannot transfer expired batch to shelf'
+          });
+          continue;
+        }
+
         // Check stock availability
         if (direction === 'toShelf') {
           // Warehouse -> Shelf
           if (detailInventory.quantityOnHand < quantity) {
             results.failed.push({
               detailInventoryId,
-              batchCode: detailInventory.batchId?.batchCode,
+              batchCode: batch.batchCode,
               error: `Insufficient warehouse stock (available: ${detailInventory.quantityOnHand}, requested: ${quantity})`
             });
             continue;
           }
         } else {
-          // Shelf -> Warehouse
+          // Shelf -> Warehouse (allow expired batches)
           if (detailInventory.quantityOnShelf < quantity) {
             results.failed.push({
               detailInventoryId,
-              batchCode: detailInventory.batchId?.batchCode,
+              batchCode: batch.batchCode,
               error: `Insufficient shelf stock (available: ${detailInventory.quantityOnShelf}, requested: ${quantity})`
             });
             continue;
@@ -686,14 +699,14 @@ inventoryMovementBatchesRouter.post('/bulk-transfer', userExtractor, async (requ
         const movementQuantity = direction === 'toShelf' ? quantity : -quantity;
 
         const movement = new InventoryMovementBatch({
-          batchId: detailInventory.batchId._id,
+          batchId: batch._id,
           inventoryDetail: detailInventoryId,
           movementType: 'transfer',
           quantity: movementQuantity,
-          reason: reason || 'Bulk Stock Transfer',
+          reason: reason || (batch.status === 'expired' ? 'Expired Stock Return to Warehouse' : 'Bulk Stock Transfer'),
           date: date || new Date(),
           performedBy: performedBy || request.user?.id || null,
-          notes: notes || null
+          notes: notes || (batch.status === 'expired' ? 'Returning expired batch for disposal' : null)
         });
 
         await movement.save();
@@ -711,7 +724,8 @@ inventoryMovementBatchesRouter.post('/bulk-transfer', userExtractor, async (requ
 
         results.succeeded.push({
           detailInventoryId,
-          batchCode: detailInventory.batchId?.batchCode,
+          batchCode: batch.batchCode,
+          batchStatus: batch.status,
           quantity,
           movementId: movement._id
         });

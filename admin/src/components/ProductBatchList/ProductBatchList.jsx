@@ -107,8 +107,6 @@ export const ProductBatchList = ({
         return 'bg-[#10b981]';
       case 'expired':
         return 'bg-[#ef4444]';
-      case 'disposed':
-        return 'bg-[#6b7280]';
       default:
         return 'bg-[#6b7280]';
     }
@@ -317,8 +315,7 @@ export const ProductBatchList = ({
           if (isStatusDropdown) {
             const statusOptions = [
               { value: 'active', label: 'Active', color: 'bg-[#10b981]' },
-              { value: 'expired', label: 'Expired', color: 'bg-[#ef4444]' },
-              { value: 'disposed', label: 'Disposed', color: 'bg-[#6b7280]' }
+              { value: 'expired', label: 'Expired', color: 'bg-[#ef4444]' }
             ];
 
             return (
