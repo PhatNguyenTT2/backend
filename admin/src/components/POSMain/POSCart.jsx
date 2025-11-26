@@ -76,6 +76,12 @@ export const POSCart = ({
                     </h3>
                     <p className="text-[10px] font-['Poppins',sans-serif] text-gray-500 mt-0.5">
                       {item.productCode}
+                      {/* Show batch code for fresh products */}
+                      {item.batch && (
+                        <span className="ml-2 px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[9px] font-semibold">
+                          🌿 {item.batch.batchCode}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <button
@@ -112,9 +118,13 @@ export const POSCart = ({
                   </div>
 
                   <div className="text-right">
-                    <p className="text-[11px] font-['Poppins',sans-serif] text-gray-500">
-                      {formatVND(item.price)} each
-                    </p>
+                    {/* For fresh products with batch selection, only show total */}
+                    {/* For regular products, show unit price + total */}
+                    {!item.batch && (
+                      <p className="text-[11px] font-['Poppins',sans-serif] text-gray-500">
+                        {formatVND(item.price)} each
+                      </p>
+                    )}
                     <p className="text-[15px] font-bold font-['Poppins',sans-serif] text-emerald-600">
                       {formatVND(item.price * item.quantity)}
                     </p>

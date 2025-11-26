@@ -107,32 +107,31 @@ productSchema.virtual('totalQuantityOnShelf').get(function () {
 // Virtual: Discount percentage from FEFO batch (First Expired First Out)
 // Returns the discount percentage of the batch with nearest expiry date that has stock
 productSchema.virtual('discountPercentage').get(function () {
-  console.log(`[Product ${this.productCode}] Calculating discountPercentage...`);
-  console.log(`[Product ${this.productCode}] this.batches type: ${typeof this.batches}, isArray: ${Array.isArray(this.batches)}, value:`, this.batches);
-
   // Check if batches virtual is populated
   // Note: Virtual populate returns undefined if not explicitly populated in query
   const batches = this.populated('batches') ? this.batches : null;
 
   if (!batches || !Array.isArray(batches) || batches.length === 0) {
-    console.log(`[Product ${this.productCode}] No batches found or batches not populated. populated('batches'):`, this.populated('batches'));
     return 0;
   }
 
-  console.log(`[Product ${this.productCode}] Total batches: ${batches.length}`);
 
   // Filter batches with shelf stock and active status
   const availableBatches = batches.filter(batch => {
-    const hasStock = (batch.quantityOnShelf || 0) > 0;
+    // Check detailInventory.quantityOnShelf instead of batch.quantityOnShelf
+    // because quantityOnShelf is stored in DetailInventory, not in ProductBatch
+    const hasStock = batch.detailInventory
+      ? (batch.detailInventory.quantityOnShelf || 0) > 0
+      : (batch.quantity || 0) > 0; // Fallback to batch.quantity if detailInventory not populated
+
     const isActive = batch.status === 'active' || !batch.status;
-    console.log(`[Product ${this.productCode}] Batch ${batch.batchCode}: quantityOnShelf=${batch.quantityOnShelf}, status=${batch.status}, hasStock=${hasStock}, isActive=${isActive}`);
+
+
     return hasStock && isActive;
   });
 
-  console.log(`[Product ${this.productCode}] Available batches with stock: ${availableBatches.length}`);
 
   if (availableBatches.length === 0) {
-    console.log(`[Product ${this.productCode}] No available batches with stock`);
     return 0;
   }
 
@@ -144,15 +143,12 @@ productSchema.virtual('discountPercentage').get(function () {
   });
 
   const fefoBatch = sortedBatches[0];
-  console.log(`[Product ${this.productCode}] FEFO Batch selected: ${fefoBatch.batchCode}, expiryDate=${fefoBatch.expiryDate}, promotionApplied=${fefoBatch.promotionApplied}, discountPercentage=${fefoBatch.discountPercentage}`);
 
   // Return discount percentage if batch has discount promotion
   if (fefoBatch.promotionApplied === 'discount' && (fefoBatch.discountPercentage || 0) > 0) {
-    console.log(`[Product ${this.productCode}] Discount found: ${fefoBatch.discountPercentage}%`);
     return fefoBatch.discountPercentage;
   }
 
-  console.log(`[Product ${this.productCode}] No discount promotion on FEFO batch`);
   return 0;
 });
 

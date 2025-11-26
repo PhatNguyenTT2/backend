@@ -130,6 +130,14 @@ productBatchSchema.index({ status: 1 });
 productBatchSchema.index({ expiryDate: 1 });
 
 // ============ VIRTUALS ============
+// Virtual: Get detail inventory for this batch
+productBatchSchema.virtual('detailInventory', {
+  ref: 'DetailInventory',
+  localField: '_id',
+  foreignField: 'batchId',
+  justOne: true
+});
+
 // Virtual to check if batch is expired
 productBatchSchema.virtual('isExpired').get(function () {
   if (!this.expiryDate) return false;

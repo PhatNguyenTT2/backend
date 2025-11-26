@@ -137,7 +137,8 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
       const data = await productService.getAllProducts({
         limit: 200,
         isActive: true,
-        withInventory: true
+        withInventory: true,
+        withBatches: true // Include batches to get discountPercentage from FEFO
       });
       const productsList = data.data?.products || data.products || [];
       console.log('📥 Loaded products with inventory:', productsList.length);
@@ -197,6 +198,68 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
     return isNaN(parsed) ? 0 : parsed;
   };
 
+  // Helper: Get current price after discount (FEFO batch discount)
+  const getCurrentPrice = (product) => {
+    if (!product) return 0;
+
+    const basePrice = getProductPrice(product);
+    const discountPercentage = product.discountPercentage || 0;
+
+    if (discountPercentage > 0) {
+      return basePrice * (1 - discountPercentage / 100);
+    }
+
+    return basePrice;
+  };
+
+  // Helper: Get discount percentage
+  const getDiscountPercentage = (product) => {
+    if (!product) return 0;
+    return product.discountPercentage || 0;
+  };
+
+  // Helper: Get batch unit price (handle Decimal128)
+  const getBatchPrice = (batch) => {
+    if (!batch) return 0;
+
+    const price = batch.unitPrice;
+
+    // Handle null or undefined
+    if (price === null || price === undefined) return 0;
+
+    // Handle Decimal128 object
+    if (typeof price === 'object' && price !== null) {
+      if (price.$numberDecimal) {
+        return parseFloat(price.$numberDecimal);
+      }
+      return parseFloat(price.toString());
+    }
+
+    // Handle number or string
+    const parsed = parseFloat(price);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  // Helper: Get batch discount percentage
+  const getBatchDiscountPercentage = (batch) => {
+    if (!batch) return 0;
+    return batch.discountPercentage || 0;
+  };
+
+  // Helper: Get current batch price after discount
+  const getCurrentBatchPrice = (batch) => {
+    if (!batch) return 0;
+
+    const basePrice = getBatchPrice(batch);
+    const discountPercentage = getBatchDiscountPercentage(batch);
+
+    if (discountPercentage > 0) {
+      return basePrice * (1 - discountPercentage / 100);
+    }
+
+    return basePrice;
+  };
+
   // Helper: Get available quantity on shelf
   const getAvailableQuantity = (product) => {
     if (!product || !product.inventory) return 0;
@@ -231,7 +294,10 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
         console.log('📋 Batch details:', batches.map(b => ({
           batchCode: b.batchCode,
           qtyOnShelf: b.detailInventory?.quantityOnShelf,
-          status: b.status
+          status: b.status,
+          unitPrice: b.unitPrice,
+          discountPercentage: b.discountPercentage,
+          promotionApplied: b.promotionApplied
         })));
 
         // Filter batches with quantity on shelf > 0
@@ -288,7 +354,7 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
     if (!newItems[itemIndex].batchSelections) {
       newItems[itemIndex].batchSelections = [];
     }
-    newItems[itemIndex].batchSelections.push({ batchId: '', quantity: 1 });
+    newItems[itemIndex].batchSelections.push({ batchId: '', quantity: 1, unitPrice: 0 });
     setFormData({ ...formData, items: newItems });
   };
 
@@ -302,7 +368,29 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
   // Update batch selection
   const handleBatchSelectionChange = (itemIndex, batchIndex, field, value) => {
     const newItems = [...formData.items];
-    newItems[itemIndex].batchSelections[batchIndex][field] = value;
+    const item = newItems[itemIndex];
+
+    // Update the field
+    item.batchSelections[batchIndex][field] = value;
+
+    // If batchId is selected, store the batch's unit price
+    if (field === 'batchId' && value) {
+      const productBatches = availableBatches[item.productId] || [];
+      const selectedBatch = productBatches.find(b => (b.id || b._id) === value);
+
+      if (selectedBatch) {
+        const batchPrice = getCurrentBatchPrice(selectedBatch);
+        item.batchSelections[batchIndex].unitPrice = batchPrice;
+
+        console.log('💰 Batch price stored:', {
+          batchCode: selectedBatch.batchCode,
+          basePrice: getBatchPrice(selectedBatch),
+          discount: getBatchDiscountPercentage(selectedBatch) + '%',
+          currentPrice: batchPrice
+        });
+      }
+    }
+
     setFormData({ ...formData, items: newItems });
   };
 
@@ -330,9 +418,18 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
       });
 
       if (product) {
-        const price = getProductPrice(product);
-        newItems[index].unitPrice = price;
-        console.log('💰 Auto-filled price for', product.name, ':', price);
+        const currentPrice = getCurrentPrice(product);
+        const discount = getDiscountPercentage(product);
+        // For fresh products, unitPrice will be determined by batch selection
+        // For non-fresh products, use product's current price
+        newItems[index].unitPrice = currentPrice;
+        console.log('💰 Auto-filled price for', product.name, ':', {
+          basePrice: getProductPrice(product),
+          discount: discount + '%',
+          currentPrice: currentPrice,
+          isFresh: isFreshProduct(product),
+          note: isFreshProduct(product) ? 'Price will be determined by batch selection' : 'Using product price'
+        });
 
         // Load batches if product is fresh
         if (isFreshProduct(product)) {
@@ -459,15 +556,17 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
     return formData.items.reduce((sum, item) => {
       const product = products.find(p => (p.id || p._id) === item.productId);
 
-      // For fresh products with batch selections, sum all batch quantities
+      // For fresh products with batch selections, sum using batch-specific prices
       if (product && isFreshProduct(product) && item.batchSelections && item.batchSelections.length > 0) {
         const batchTotal = item.batchSelections.reduce((batchSum, batchSel) => {
-          return batchSum + ((Number(batchSel.quantity) || 0) * item.unitPrice);
+          // Use batch-specific unitPrice stored in batchSelection
+          const batchPrice = batchSel.unitPrice || 0;
+          return batchSum + ((Number(batchSel.quantity) || 0) * batchPrice);
         }, 0);
         return sum + batchTotal;
       }
 
-      // For non-fresh products, use the single quantity
+      // For non-fresh products, use the single quantity with product price
       return sum + ((Number(item.quantity) || 0) * item.unitPrice);
     }, 0);
   };
@@ -551,12 +650,13 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
           const product = products.find(p => (p.id || p._id) === item.productId);
 
           // For fresh products with batch selections, create multiple items (one per batch)
+          // Use batch-specific unitPrice stored in batchSelection
           if (product && isFreshProduct(product) && item.batchSelections && item.batchSelections.length > 0) {
             return item.batchSelections.map(batchSel => ({
               product: item.productId,
               batch: batchSel.batchId,
               quantity: Number(batchSel.quantity),
-              unitPrice: Number(item.unitPrice)
+              unitPrice: Number(batchSel.unitPrice || 0) // Use batch-specific price
             }));
           }
 
@@ -833,9 +933,11 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                             const onShelf = getAvailableQuantity(prod);
                             const productId = prod.id || prod._id;
                             const categoryLabel = isFreshProduct(prod) ? ' 🌿' : '';
+                            const discount = getDiscountPercentage(prod);
+                            const discountLabel = discount > 0 ? ` 🔥-${discount}%` : '';
                             return (
                               <option key={productId} value={productId}>
-                                {prod.name}{categoryLabel} ({onShelf} in stock)
+                                {prod.name}{categoryLabel}{discountLabel} ({onShelf} in stock)
                               </option>
                             );
                           })}
@@ -843,22 +945,44 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                         {errors[`item_${index}_product`] && (
                           <p className="mt-1 text-[10px] text-red-500">{errors[`item_${index}_product`]}</p>
                         )}
-                        {product && !isFresh && (
-                          <p className="mt-1 text-[10px] text-emerald-600">
-                            Available: {availableQty} units
-                          </p>
+                        {product && (
+                          <div className="mt-1 space-y-0.5">
+                            {!isFresh && (
+                              <p className="text-[10px] text-emerald-600">
+                                Available: {availableQty} units
+                              </p>
+                            )}
+                            {getDiscountPercentage(product) > 0 && (
+                              <p className="text-[10px] text-red-600 font-semibold">
+                                🔥 {getDiscountPercentage(product)}% OFF - Current Price: {formatCurrency(getCurrentPrice(product))}
+                              </p>
+                            )}
+                          </div>
                         )}
                       </div>
 
                       {/* Unit Price (Read-only) */}
                       <div className="w-40">
-                        <label className="block text-[11px] font-medium text-gray-700 mb-1">Unit Price</label>
+                        <label className="block text-[11px] font-medium text-gray-700 mb-1">
+                          Unit Price
+                          {product && getDiscountPercentage(product) > 0 && (
+                            <span className="ml-1 text-red-600 font-semibold">🔥-{getDiscountPercentage(product)}%</span>
+                          )}
+                        </label>
                         <input
                           type="text"
                           value={formatCurrency(item.unitPrice)}
                           disabled
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[12px] bg-gray-50 cursor-not-allowed"
+                          className={`w-full px-3 py-2 border rounded-lg text-[12px] cursor-not-allowed ${product && getDiscountPercentage(product) > 0
+                            ? 'bg-red-50 border-red-300 text-red-700 font-semibold'
+                            : 'bg-gray-50 border-gray-300'
+                            }`}
                         />
+                        {product && getDiscountPercentage(product) > 0 && (
+                          <p className="mt-0.5 text-[9px] text-gray-500 line-through">
+                            Was: {formatCurrency(getProductPrice(product))}
+                          </p>
+                        )}
                       </div>
 
                       {/* Remove Button */}
@@ -922,11 +1046,13 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                                         const expiryDate = new Date(batch.expiryDate);
                                         const today = new Date();
                                         const daysToExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-                                        const promotionLabel = batch.promotionApplied !== 'none' ? ` 🔥${batch.discountPercentage}%` : '';
+                                        const batchDiscount = getBatchDiscountPercentage(batch);
+                                        const promotionLabel = batchDiscount > 0 ? ` 🔥-${batchDiscount}%` : '';
+                                        const currentPrice = getCurrentBatchPrice(batch);
 
                                         return (
                                           <option key={batchId} value={batchId}>
-                                            {batch.batchCode} ({daysToExpiry}d, {qtyOnShelf}u){promotionLabel}
+                                            {batch.batchCode} ({daysToExpiry}d, {qtyOnShelf}u){promotionLabel} - {formatCurrency(currentPrice)}/u
                                           </option>
                                         );
                                       })}
@@ -935,9 +1061,21 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                                       <p className="mt-0.5 text-[9px] text-red-500">{errors[`item_${index}_batch_${batchIdx}_id`]}</p>
                                     )}
                                     {selectedBatch && (
-                                      <p className="mt-0.5 text-[9px] text-gray-600">
-                                        Exp: {new Date(selectedBatch.expiryDate).toLocaleDateString('vi-VN')} • {selectedBatch.detailInventory?.quantityOnShelf || 0} units
-                                      </p>
+                                      <div className="mt-0.5 space-y-0.5">
+                                        <p className="text-[9px] text-gray-600">
+                                          Exp: {new Date(selectedBatch.expiryDate).toLocaleDateString('vi-VN')} • {selectedBatch.detailInventory?.quantityOnShelf || 0} units
+                                        </p>
+                                        {getBatchDiscountPercentage(selectedBatch) > 0 && (
+                                          <p className="text-[9px] text-red-600 font-semibold">
+                                            🔥 {getBatchDiscountPercentage(selectedBatch)}% OFF - Price: {formatCurrency(getCurrentBatchPrice(selectedBatch))}/unit
+                                          </p>
+                                        )}
+                                        {getBatchDiscountPercentage(selectedBatch) === 0 && (
+                                          <p className="text-[9px] text-emerald-600">
+                                            Price: {formatCurrency(getBatchPrice(selectedBatch))}/unit
+                                          </p>
+                                        )}
+                                      </div>
                                     )}
                                   </div>
 
@@ -956,7 +1094,7 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                                     )}
                                     {selectedBatch && batchSel.quantity && (
                                       <p className="mt-0.5 text-[9px] text-gray-600">
-                                        Total: {formatCurrency(batchSel.quantity * item.unitPrice)}
+                                        Total: {formatCurrency(batchSel.quantity * (batchSel.unitPrice || 0))}
                                       </p>
                                     )}
                                   </div>
@@ -985,7 +1123,7 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
                             <p className="text-[11px] font-semibold text-orange-900">
                               Total Quantity: {item.batchSelections.reduce((sum, bs) => sum + (Number(bs.quantity) || 0), 0)} units
                               {' • '}
-                              Total Amount: {formatCurrency(item.batchSelections.reduce((sum, bs) => sum + ((Number(bs.quantity) || 0) * item.unitPrice), 0))}
+                              Total Amount: {formatCurrency(item.batchSelections.reduce((sum, bs) => sum + ((Number(bs.quantity) || 0) * (bs.unitPrice || 0)), 0))}
                             </p>
                           </div>
                         )}

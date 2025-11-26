@@ -416,11 +416,55 @@ export const POSMain = () => {
   const handleAddProductWithBatch = (productData, batch, quantity) => {
     const { product, inventory } = productData;
 
-    // Determine cart item ID based on product type:
-    // - FRESH products: Use product-batch combo (staff manually selects batch)
-    // - REGULAR products: Use product.id only (backend auto-selects FEFO batch)
-    const isFresh = product.category?.name?.toLowerCase().includes('fresh');
-    const cartItemId = isFresh ? `${product.id}-${batch.id}` : product.id;
+    // Helper: Get batch unit price (handle Decimal128)
+    const getBatchPrice = (batch) => {
+      if (!batch) return 0;
+      const price = batch.unitPrice;
+      if (price === null || price === undefined) return 0;
+      if (typeof price === 'object' && price !== null) {
+        if (price.$numberDecimal) return parseFloat(price.$numberDecimal);
+        return parseFloat(price.toString());
+      }
+      const parsed = parseFloat(price);
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    // Helper: Get batch discount percentage
+    const getBatchDiscountPercentage = (batch) => {
+      if (!batch) return 0;
+      return batch.discountPercentage || 0;
+    };
+
+    // Helper: Get current batch price after discount
+    const getCurrentBatchPrice = (batch) => {
+      if (!batch) return 0;
+      const basePrice = getBatchPrice(batch);
+      const discountPercentage = getBatchDiscountPercentage(batch);
+      if (discountPercentage > 0) {
+        return basePrice * (1 - discountPercentage / 100);
+      }
+      return basePrice;
+    };
+
+    // Get batch ID (handle both id and _id)
+    const batchId = batch.id || batch._id;
+
+    // CRITICAL: For FRESH products with batch selection, ALWAYS use product-batch combo as ID
+    // This ensures each batch creates a separate cart item
+    const cartItemId = `${product.id}-${batchId}`;
+
+    // Get current price from batch (with discount applied)
+    const batchPrice = getCurrentBatchPrice(batch);
+
+    console.log('🛒 Adding product with batch to cart:', {
+      product: product.name,
+      batch: batch.batchCode,
+      batchId,
+      quantity,
+      basePrice: getBatchPrice(batch),
+      discount: getBatchDiscountPercentage(batch),
+      finalPrice: batchPrice
+    });
 
     const cartItem = {
       id: cartItemId,
@@ -428,33 +472,33 @@ export const POSMain = () => {
       productCode: product.productCode,
       name: product.name,
       image: product.image,
-      price: parseFloat(batch.unitPrice || product.unitPrice),
+      price: batchPrice, // Use batch price after discount
       quantity: quantity,
-      stock: inventory.quantityAvailable,
+      stock: batch.quantity || inventory?.quantityAvailable || 0, // Use batch quantity for stock
       categoryName: product.category?.name || 'Uncategorized',
 
-      // Batch info (only for FRESH products that require manual selection)
-      ...(isFresh && {
-        batch: {
-          id: batch.id,
-          batchCode: batch.batchCode,
-          expiryDate: batch.expiryDate,
-          availableQty: batch.quantity,
-          daysUntilExpiry: batch.daysUntilExpiry
-        }
-      })
+      // Batch info (required for FRESH products)
+      batch: {
+        id: batchId, // Use normalized batch ID
+        batchCode: batch.batchCode,
+        expiryDate: batch.expiryDate,
+        availableQty: batch.quantity,
+        daysUntilExpiry: batch.daysUntilExpiry,
+        unitPrice: getBatchPrice(batch), // Original price
+        discountPercentage: getBatchDiscountPercentage(batch) // Discount if any
+      }
     };
 
     // Check if this exact product+batch combo already exists in cart
     const existingItem = cart.find(item => item.id === cartItemId);
 
     if (existingItem) {
-      // Update quantity
+      // Update quantity for existing batch
       const newQuantity = existingItem.quantity + quantity;
-      const maxQty = isFresh ? batch.quantity : inventory.quantityAvailable;
+      const maxQty = batch.quantity;
 
       if (newQuantity > maxQty) {
-        showToast('error', `Not enough stock. Available: ${maxQty}`);
+        showToast('error', `Not enough stock for batch ${batch.batchCode}. Available: ${maxQty}`);
         return;
       }
 
@@ -464,14 +508,20 @@ export const POSMain = () => {
           : item
       ));
 
-      showToast('success', `Updated ${product.name} quantity to ${newQuantity}`);
+      showToast('success', `Updated ${product.name} (${batch.batchCode}) quantity to ${newQuantity}`);
     } else {
-      // Add new item
+      // Add new cart item for this batch
       setCart([...cart, cartItem]);
-      showToast('success', `Added ${quantity}x ${product.name} to cart`);
+      showToast('success', `Added ${quantity}x ${product.name} (${batch.batchCode}) to cart`);
     }
 
-    console.log(`Added ${quantity}x ${product.name} (Batch: ${batch.batchCode})`);
+    console.log(`✅ Added to cart:`, {
+      product: product.name,
+      batch: batch.batchCode,
+      quantity,
+      price: batchPrice,
+      total: batchPrice * quantity
+    });
   };
 
   // Update quantity
@@ -564,36 +614,55 @@ export const POSMain = () => {
     try {
       setLoading(true);
 
-      // Prepare order items from cart
-      // DON'T include batch - let backend auto-select using FEFO
-      const orderItems = cart.map(item => {
-        console.log('🛒 Cart item:', {
-          productId: item.productId || item.id,
-          quantity: item.quantity,
-          price: item.price,
-          hasBatch: !!item.batch
-        });
+      console.log('🔄 Hold Order - Processing cart:', cart);
 
-        return {
+      // Prepare order items from cart
+      // Include batch for fresh products, omit for regular (backend will use FEFO)
+      const orderItems = cart.map(item => {
+        const itemData = {
           product: item.productId || item.id,
           quantity: item.quantity,
-          unitPrice: item.price
-          // Batch will be auto-selected by backend using FEFO
+          unitPrice: item.price // Price already calculated (with discount if applicable)
         };
+
+        // Include batch for fresh products with manual selection
+        if (item.batch && item.batch.id) {
+          itemData.batch = item.batch.id;
+          console.log(`🌿 Fresh product with manual batch:`, {
+            product: item.name,
+            batch: item.batch.batchCode,
+            quantity: item.quantity,
+            price: item.price
+          });
+        } else {
+          console.log(`📦 Regular product (will use FEFO):`, {
+            product: item.name,
+            quantity: item.quantity,
+            price: item.price
+          });
+        }
+
+        return itemData;
       });
+
+      // Get customer ID (use virtual-guest if no customer selected)
+      const customerId = selectedCustomer?.id === 'virtual-guest'
+        ? 'virtual-guest'
+        : selectedCustomer?.id || 'virtual-guest';
+
+      console.log('👤 Customer:', customerId);
 
       // Prepare order data
       const orderData = {
-        customer: selectedCustomer?.id === 'virtual-guest' ? 'virtual-guest' : selectedCustomer?.id,
-        createdBy: currentEmployee.id,
+        customer: customerId,
+        items: orderItems,
         deliveryType: 'pickup', // POS always pickup
         shippingFee: 0,
         status: 'draft', // Hold order = draft status
-        paymentStatus: 'pending',
-        items: orderItems
+        paymentStatus: 'pending'
       };
 
-      console.log('📝 Creating hold order:', orderData);
+      console.log('📝 Creating hold order:', JSON.stringify(orderData, null, 2));
 
       // Get POS token from localStorage
       const posToken = localStorage.getItem('posToken');

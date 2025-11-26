@@ -37,6 +37,7 @@ export const ProductGrid = ({ filters = {}, sortBy = 'newest', onPaginationChang
         page: pagination.currentPage,
         per_page: pagination.perPage,
         withInventory: true, // Include inventory data to show on-shelf quantities
+        withBatches: true, // Include batches to calculate discountPercentage (FEFO)
         ...filters
       };
 

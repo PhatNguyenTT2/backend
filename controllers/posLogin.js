@@ -698,7 +698,7 @@ posLoginRouter.post('/order', async (request, response) => {
     }
     const autoDiscountPercentage = discountPercentageMap[customerDoc.customerType?.toLowerCase()] || 0
 
-    // Validate items and select batches using FEFO
+    // Validate items and process with FEFO or manual batch selection
     const processedItems = []
     for (const item of items) {
       if (!item.product || !item.quantity || item.quantity <= 0) {
@@ -722,38 +722,111 @@ posLoginRouter.post('/order', async (request, response) => {
         })
       }
 
-      // Auto-allocate batches using FEFO (don't use manual batch from frontend)
-      console.log(`📦 Using FEFO auto-allocation for ${product.name}`)
+      console.log(`\n🔍 Processing: ${product.name} (${product.productCode})`)
+      console.log(`   Quantity: ${item.quantity}`)
+      console.log(`   Has manual batch: ${!!item.batch}`)
+      console.log(`   Unit price: ${item.unitPrice}`)
 
-      let batchAllocations
-      try {
-        batchAllocations = await allocateQuantityFEFO(item.product, item.quantity)
-      } catch (error) {
-        return response.status(400).json({
-          success: false,
-          error: {
-            message: error.message || `Insufficient stock for: ${product.name}`,
-            code: 'INSUFFICIENT_SHELF_STOCK',
-            details: {
-              product: product.name,
-              requestedQuantity: item.quantity
+      // Check if batch is manually provided (for POS fresh products)
+      if (item.batch) {
+        console.log(`🌿 Fresh product: Using manually selected batch`)
+
+        // Validate batch exists
+        const batch = await ProductBatch.findById(item.batch)
+        if (!batch) {
+          return response.status(404).json({
+            success: false,
+            error: {
+              message: `Batch not found: ${item.batch}`,
+              code: 'BATCH_NOT_FOUND'
             }
-          }
-        })
-      }
+          })
+        }
 
-      console.log(`✅ Allocated ${batchAllocations.length} batch(es):`,
-        batchAllocations.map(a => `${a.batchCode} (${a.quantity})`).join(', ')
-      )
+        console.log(`   Selected batch: ${batch.batchCode}`)
 
-      // Create order detail for each batch allocation
-      for (const allocation of batchAllocations) {
+        // Get DetailInventory for this batch
+        const DetailInventory = require('../models/detailInventory')
+        const detailInventory = await DetailInventory.findOne({ batchId: item.batch })
+
+        if (!detailInventory) {
+          return response.status(404).json({
+            success: false,
+            error: {
+              message: `Inventory not found for batch: ${batch.batchCode}`,
+              code: 'BATCH_INVENTORY_NOT_FOUND'
+            }
+          })
+        }
+
+        console.log(`   Available on shelf: ${detailInventory.quantityOnShelf}`)
+
+        if (detailInventory.quantityOnShelf < item.quantity) {
+          return response.status(400).json({
+            success: false,
+            error: {
+              message: `Insufficient stock in selected batch: ${batch.batchCode}`,
+              code: 'INSUFFICIENT_BATCH_STOCK',
+              details: {
+                batchCode: batch.batchCode,
+                available: detailInventory.quantityOnShelf,
+                requested: item.quantity
+              }
+            }
+          })
+        }
+
+        // Use manually selected batch with its specific price
+        const batchPrice = item.unitPrice || batch.unitPrice || product.unitPrice
+
         processedItems.push({
           product: item.product,
-          batch: allocation.batchId,
-          quantity: allocation.quantity,
-          unitPrice: item.unitPrice || allocation.unitPrice
+          batch: item.batch,
+          quantity: item.quantity,
+          unitPrice: batchPrice
         })
+
+        console.log(`✅ Manual batch: ${batch.batchCode} (${item.quantity} units) at ${batchPrice}/unit`)
+      } else {
+        // Auto-allocate batches using FEFO (for regular products)
+        console.log(`📦 Regular product: Using FEFO auto-allocation`)
+
+        let batchAllocations
+        try {
+          batchAllocations = await allocateQuantityFEFO(item.product, item.quantity)
+          console.log(`   FEFO allocated ${batchAllocations.length} batch(es)`)
+        } catch (error) {
+          console.error(`❌ FEFO allocation failed:`, error.message)
+          return response.status(400).json({
+            success: false,
+            error: {
+              message: error.message || `Insufficient stock for: ${product.name}`,
+              code: 'INSUFFICIENT_SHELF_STOCK',
+              details: {
+                product: product.name,
+                requestedQuantity: item.quantity
+              }
+            }
+          })
+        }
+
+        console.log(`   Batches:`, batchAllocations.map(a =>
+          `${a.batchCode} (${a.quantity})`
+        ).join(', '))
+
+        // Create order detail for each batch allocation
+        for (const allocation of batchAllocations) {
+          const allocationPrice = item.unitPrice || allocation.unitPrice || product.unitPrice
+
+          processedItems.push({
+            product: item.product,
+            batch: allocation.batchId,
+            quantity: allocation.quantity,
+            unitPrice: allocationPrice
+          })
+
+          console.log(`✅ FEFO batch: ${allocation.batchCode} (${allocation.quantity} units) at ${allocationPrice}/unit`)
+        }
       }
     }
 

@@ -99,16 +99,21 @@ productsRouter.get('/', async (request, response) => {
     // Populate batches if requested (or if withInventory is true for totalQuantityOnShelf calculation)
     if (withBatches === 'true' || withInventory === 'true') {
       // Determine select fields based on what's requested
-      let selectFields = 'batchCode quantityOnShelf expiryDate status promotionApplied discountPercentage';
+      let selectFields = 'batchCode quantity expiryDate status promotionApplied discountPercentage';
       if (withBatches === 'true') {
         // Include additional fields when explicitly requesting batches
-        selectFields = 'batchCode quantity expiryDate manufacturingDate costPrice unitPrice quantityOnShelf status promotionApplied discountPercentage';
+        selectFields = 'batchCode quantity expiryDate manufacturingDate costPrice unitPrice status promotionApplied discountPercentage';
       }
 
       query = query.populate({
         path: 'batches',
         select: selectFields,
-        options: { sort: { expiryDate: 1 } }
+        options: { sort: { expiryDate: 1 } },
+        // Populate detailInventory to get quantityOnShelf
+        populate: {
+          path: 'detailInventory',
+          select: 'quantityOnShelf quantityOnHand quantityReserved'
+        }
         // Don't use match to allow discount calculation on all batches
       });
     }
@@ -124,7 +129,10 @@ productsRouter.get('/', async (request, response) => {
       if (productObj.batches && Array.isArray(productObj.batches) && productObj.batches.length > 0) {
         // Filter batches with shelf stock and active status
         const availableBatches = productObj.batches.filter(batch => {
-          const hasStock = (batch.quantityOnShelf || 0) > 0;
+          // Check detailInventory.quantityOnShelf instead of batch.quantityOnShelf
+          const hasStock = batch.detailInventory
+            ? (batch.detailInventory.quantityOnShelf || 0) > 0
+            : (batch.quantity || 0) > 0;
           const isActive = batch.status === 'active' || !batch.status;
           return hasStock && isActive;
         });

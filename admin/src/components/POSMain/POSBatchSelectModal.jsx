@@ -6,6 +6,7 @@ export const POSBatchSelectModal = ({
   onClose,
   onBatchSelected
 }) => {
+  // Single batch selection with quantity
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [quantity, setQuantity] = useState(1);
 
@@ -35,20 +36,79 @@ export const POSBatchSelectModal = ({
     return `₫${parseFloat(amount).toLocaleString('vi-VN')}`;
   };
 
+  // Helper: Get batch unit price (handle Decimal128)
+  const getBatchPrice = (batch) => {
+    if (!batch) return 0;
+
+    const price = batch.unitPrice;
+
+    // Handle null or undefined
+    if (price === null || price === undefined) return 0;
+
+    // Handle Decimal128 object
+    if (typeof price === 'object' && price !== null) {
+      if (price.$numberDecimal) {
+        return parseFloat(price.$numberDecimal);
+      }
+      return parseFloat(price.toString());
+    }
+
+    // Handle number or string
+    const parsed = parseFloat(price);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  // Helper: Get batch discount percentage
+  const getBatchDiscountPercentage = (batch) => {
+    if (!batch) return 0;
+    return batch.discountPercentage || 0;
+  };
+
+  // Helper: Get current batch price after discount
+  const getCurrentBatchPrice = (batch) => {
+    if (!batch) return 0;
+
+    const basePrice = getBatchPrice(batch);
+    const discountPercentage = getBatchDiscountPercentage(batch);
+
+    if (discountPercentage > 0) {
+      return basePrice * (1 - discountPercentage / 100);
+    }
+
+    return basePrice;
+  };
+
   const handleQuantityChange = (value) => {
-    const maxQty = selectedBatch
-      ? (selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 1)
-      : 1;
+    if (!selectedBatch) return;
+    const maxQty = selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 0;
     const newQty = Math.max(1, Math.min(value, maxQty));
     setQuantity(newQty);
   };
 
   const handleConfirm = () => {
-    if (selectedBatch && onBatchSelected) {
-      onBatchSelected(selectedBatch, quantity);
-      setSelectedBatch(null);
-      setQuantity(1);
+    if (!onBatchSelected || !selectedBatch) {
+      alert('Please select a batch');
+      return;
     }
+
+    if (quantity <= 0) {
+      alert('Quantity must be greater than 0');
+      return;
+    }
+
+    // Call onBatchSelected for the selected batch
+    onBatchSelected(selectedBatch, quantity);
+
+    // Reset and close
+    setSelectedBatch(null);
+    setQuantity(1);
+    onClose();
+  };
+
+  // Handle batch selection
+  const handleBatchSelect = (batch) => {
+    setSelectedBatch(batch);
+    setQuantity(1);
   };
 
   return (
@@ -59,13 +119,10 @@ export const POSBatchSelectModal = ({
           <div className="flex justify-between items-start">
             <div>
               <h2 className="text-xl font-bold text-gray-900 font-['Poppins']">
-                🌿 Select Batch - Fresh Product
+                Select Batch - Fresh Product
               </h2>
               <p className="text-sm text-gray-600 mt-1">
                 {product.name} - {product.productCode}
-              </p>
-              <p className="text-xs text-orange-700 mt-1 font-semibold">
-                ℹ️ Manual batch selection required for fresh products
               </p>
             </div>
             <button
@@ -102,19 +159,6 @@ export const POSBatchSelectModal = ({
               </div>
             </div>
           </div>
-
-          {/* Info Box */}
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-xs text-blue-800 flex items-center gap-2">
-              <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-              <span>
-                <strong>Fresh products</strong> require manual batch selection. Prices may vary between batches based on expiry date promotions.
-              </span>
-            </p>
-          </div>
-
           {/* Batch List */}
           <div className="space-y-3">
             <h3 className="font-semibold text-gray-700 mb-3">
@@ -123,24 +167,21 @@ export const POSBatchSelectModal = ({
 
             {batches.map((batch, index) => {
               const isSelected = selectedBatch?.id === batch.id;
-              const isRecommended = batch.isAutoSelected; // FEFO batch
+              const maxQty = batch.detailInventory?.quantityOnShelf || batch.quantityOnShelf || 0;
 
               return (
                 <div
                   key={batch.id}
-                  onClick={() => {
-                    setSelectedBatch(batch);
-                    setQuantity(1);
-                  }}
+                  onClick={() => handleBatchSelect(batch)}
                   className={`
-                    p-4 border-2 rounded-lg cursor-pointer transition-all
+                    p-4 border-2 rounded-lg transition-all cursor-pointer
                     ${isSelected
                       ? 'border-emerald-500 bg-emerald-50 shadow-md'
                       : 'border-gray-200 hover:border-emerald-300 hover:shadow-sm'
                     }
                   `}
                 >
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-start gap-4">
                     {/* Left: Batch Info */}
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -151,6 +192,13 @@ export const POSBatchSelectModal = ({
                         {isSelected && (
                           <span className="px-2 py-1 bg-emerald-500 text-white rounded text-xs font-semibold">
                             ✓ Selected
+                          </span>
+                        )}
+
+                        {/* Show discount badge if applicable */}
+                        {getBatchDiscountPercentage(batch) > 0 && (
+                          <span className="px-2 py-1 bg-red-500 text-white rounded text-xs font-semibold">
+                            🔥 -{getBatchDiscountPercentage(batch)}% OFF
                           </span>
                         )}
 
@@ -203,14 +251,44 @@ export const POSBatchSelectModal = ({
                       </div>
                     </div>
 
-                    {/* Right: Price */}
-                    <div className="text-right ml-4">
-                      <p className="text-3xl font-bold text-gray-900">
-                        {formatCurrency(batch.unitPrice || product.unitPrice)}
-                      </p>
-                      <p className="text-xs text-gray-600 mt-1">
-                        per unit
-                      </p>
+                    {/* Right: Price and Quantity */}
+                    <div className="flex flex-col items-end gap-3">
+                      {/* Price Display */}
+                      <div className="text-right">
+                        {getBatchDiscountPercentage(batch) > 0 ? (
+                          <>
+                            <p className="text-2xl font-bold text-red-600">
+                              {formatCurrency(getCurrentBatchPrice(batch))}
+                            </p>
+                            <p className="text-xs text-gray-500 line-through">
+                              {formatCurrency(getBatchPrice(batch))}
+                            </p>
+                            <p className="text-xs text-red-600 font-semibold">
+                              🔥 -{getBatchDiscountPercentage(batch)}%
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-2xl font-bold text-gray-900">
+                              {formatCurrency(getBatchPrice(batch))}
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              per unit
+                            </p>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Selection indicator */}
+                      {isSelected && (
+                        <div className="text-center">
+                          <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center">
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -220,48 +298,79 @@ export const POSBatchSelectModal = ({
 
           {/* Quantity Selection */}
           {selectedBatch && (
-            <div className="mt-6 p-5 bg-emerald-50 border-2 border-emerald-200 rounded-lg">
-              <label className="block text-sm font-bold text-gray-700 mb-3">
-                Quantity
-              </label>
+            <div className="mt-6 p-5 bg-gradient-to-br from-emerald-50 to-blue-50 border-2 border-emerald-300 rounded-lg">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Selected Batch</h3>
 
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={() => handleQuantityChange(quantity - 1)}
-                  className="w-12 h-12 bg-white border-2 border-emerald-500 text-emerald-600 rounded-lg font-bold text-xl hover:bg-emerald-50 transition-colors"
-                >
-                  -
-                </button>
+              <div className="mb-4 p-3 bg-white rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-mono font-bold text-gray-900">{selectedBatch.batchCode}</span>
+                  {getBatchDiscountPercentage(selectedBatch) > 0 && (
+                    <span className="px-2 py-1 bg-red-500 text-white rounded text-xs font-semibold">
+                      🔥 -{getBatchDiscountPercentage(selectedBatch)}% OFF
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-gray-600">
+                  Expiry: {formatDate(selectedBatch.expiryDate)}
+                </div>
+                <div className="text-sm text-gray-600">
+                  Available: {selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 0} units
+                </div>
+              </div>
 
-                <input
-                  type="number"
-                  value={quantity}
-                  onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
-                  min="1"
-                  max={selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 1}
-                  className="w-28 h-12 text-center text-2xl font-bold border-2 border-emerald-300 rounded-lg focus:border-emerald-500 focus:outline-none"
-                />
+              {/* Quantity Controls */}
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-gray-700 mb-3">
+                  Quantity
+                </label>
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => handleQuantityChange(quantity - 1)}
+                    className="w-12 h-12 bg-white border-2 border-emerald-500 text-emerald-600 rounded-lg font-bold text-xl hover:bg-emerald-50 transition-colors"
+                  >
+                    -
+                  </button>
 
-                <button
-                  onClick={() => handleQuantityChange(quantity + 1)}
-                  className="w-12 h-12 bg-white border-2 border-emerald-500 text-emerald-600 rounded-lg font-bold text-xl hover:bg-emerald-50 transition-colors"
-                >
-                  +
-                </button>
+                  <input
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
+                    min="1"
+                    max={selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 1}
+                    className="w-28 h-12 text-center text-2xl font-bold border-2 border-emerald-300 rounded-lg focus:border-emerald-500 focus:outline-none"
+                  />
 
-                <span className="text-sm text-gray-600">
-                  / {selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 0} units on shelf
-                </span>
+                  <button
+                    onClick={() => handleQuantityChange(quantity + 1)}
+                    className="w-12 h-12 bg-white border-2 border-emerald-500 text-emerald-600 rounded-lg font-bold text-xl hover:bg-emerald-50 transition-colors"
+                  >
+                    +
+                  </button>
+
+                  <span className="text-sm text-gray-600">
+                    / {selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 0} units on shelf
+                  </span>
+                </div>
               </div>
 
               {/* Subtotal */}
-              <div className="mt-5 pt-4 border-t border-emerald-300">
+              <div className="pt-4 border-t-2 border-emerald-400">
                 <div className="flex justify-between items-center">
                   <span className="text-lg text-gray-700 font-semibold">Subtotal:</span>
                   <span className="text-4xl font-bold text-emerald-600">
-                    {formatCurrency((selectedBatch.unitPrice || product.unitPrice) * quantity)}
+                    {formatCurrency(getCurrentBatchPrice(selectedBatch) * quantity)}
                   </span>
                 </div>
+                {getBatchDiscountPercentage(selectedBatch) > 0 && (
+                  <div className="mt-2 text-right">
+                    <span className="text-sm text-gray-500 line-through">
+                      {formatCurrency(getBatchPrice(selectedBatch) * quantity)}
+                    </span>
+                    <span className="ml-2 text-sm text-red-600 font-semibold">
+                      (Save {formatCurrency((getBatchPrice(selectedBatch) - getCurrentBatchPrice(selectedBatch)) * quantity)})
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -287,7 +396,7 @@ export const POSBatchSelectModal = ({
               }
             `}
           >
-            Add to Cart
+            {selectedBatch ? `Add ${quantity} items to Cart` : 'Select a Batch'}
           </button>
         </div>
       </div>
