@@ -56,7 +56,7 @@ export const CustomerDiscountSettings = () => {
 
       await settingsService.updateCustomerDiscounts(discounts);
 
-      setSuccess('✅ Discount settings updated successfully!');
+      setSuccess('Discount settings updated successfully!');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err.error?.message || 'Failed to update settings');
@@ -67,18 +67,18 @@ export const CustomerDiscountSettings = () => {
   };
 
   const handleReset = async () => {
-    console.log('🔄 handleReset called - Customer Discounts');
+    console.log('handleReset called - Customer Discounts');
     try {
       setError(null);
       setSuccess(null);
 
-      console.log('📡 Calling resetCustomerDiscounts API...');
+      console.log('Calling resetCustomerDiscounts API...');
       const response = await settingsService.resetCustomerDiscounts();
-      console.log('📥 API Response:', response);
+      console.log('API Response:', response);
 
       if (response.success && response.data) {
         setDiscounts(response.data);
-        setSuccess('✅ Settings reset to default values!');
+        setSuccess('Settings reset to default values!');
         setTimeout(() => setSuccess(null), 3000);
       } else {
         setError('Failed to reset settings');

@@ -55,7 +55,7 @@ export const POSSecuritySettings = () => {
 
       await settingsService.updatePOSSecurity(security);
 
-      setSuccess('✅ POS security settings updated successfully!');
+      setSuccess('POS security settings updated successfully!');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err.error?.message || 'Failed to update settings');
@@ -66,18 +66,18 @@ export const POSSecuritySettings = () => {
   };
 
   const handleReset = async () => {
-    console.log('🔄 handleReset called - POS Security');
+    console.log('handleReset called - POS Security');
     try {
       setError(null);
       setSuccess(null);
 
-      console.log('📡 Calling resetPOSSecurity API...');
+      console.log('Calling resetPOSSecurity API...');
       const response = await settingsService.resetPOSSecurity();
-      console.log('📥 API Response:', response);
+      console.log('API Response:', response);
 
       if (response.success && response.data) {
         setSecurity(response.data);
-        setSuccess('✅ Settings reset to default values!');
+        setSuccess('Settings reset to default values!');
         setTimeout(() => setSuccess(null), 3000);
       } else {
         setError('Failed to reset settings');

@@ -76,12 +76,12 @@ export const FreshProductPromotionSettings = () => {
       });
 
       if (response.success) {
-        setSuccessMessage('✅ Fresh product promotion settings saved successfully!');
+        setSuccessMessage('Fresh product promotion settings saved successfully!');
 
         // Restart scheduler with new settings
         try {
           await settingsService.restartPromotionScheduler();
-          console.log('✅ Scheduler restarted with new settings');
+          console.log('Scheduler restarted with new settings');
         } catch (err) {
           console.error('Failed to restart scheduler:', err);
         }
@@ -107,7 +107,7 @@ export const FreshProductPromotionSettings = () => {
       const response = await settingsService.runPromotionNow();
 
       if (response.success) {
-        setSuccessMessage(`✅ Promotion applied! ${response.data.applied} batches updated, ${response.data.removed} expired promotions removed.`);
+        setSuccessMessage(`Promotion applied! ${response.data.applied} batches updated, ${response.data.removed} expired promotions removed.`);
         setTimeout(() => setSuccessMessage(''), 5000);
       }
     } catch (error) {
@@ -146,35 +146,31 @@ export const FreshProductPromotionSettings = () => {
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-2xl">🌿</span>
-          <h2 className="text-[18px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-            Fresh Product Auto-Promotion Settings
-          </h2>
-        </div>
-        <p className="text-[13px] text-gray-600 font-['Poppins',sans-serif]">
-          Configure automatic promotion for fresh products (category='fresh') that are expiring soon.
-          System will automatically apply discounts to batches based on expiry date.
-        </p>
-      </div>
-
       {/* Success Message */}
       {successMessage && (
         <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-[13px] text-green-700 font-['Poppins',sans-serif]">
-            {successMessage}
-          </p>
+          <div className="flex items-center space-x-2">
+            <svg className="w-5 h-5 text-green-700" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <p className="text-[13px] text-green-700 font-['Poppins',sans-serif]">
+              {successMessage}
+            </p>
+          </div>
         </div>
       )}
 
       {/* Error Message */}
       {errors.submit && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-[13px] text-red-700 font-['Poppins',sans-serif]">
-            {errors.submit}
-          </p>
+          <div className="flex items-center space-x-2">
+            <svg className="w-5 h-5 text-red-700" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <p className="text-[13px] text-red-700 font-['Poppins',sans-serif]">
+              {errors.submit}
+            </p>
+          </div>
         </div>
       )}
 
@@ -218,9 +214,6 @@ export const FreshProductPromotionSettings = () => {
           {errors.promotionStartTime && (
             <p className="mt-1 text-[11px] text-red-500">{errors.promotionStartTime}</p>
           )}
-          <p className="mt-2 text-[11px] text-gray-500">
-            ℹ️ Example: Set to 17:00 (5 PM) to start discounting fresh products in the evening
-          </p>
         </div>
 
         {/* Discount Percentage */}
@@ -256,9 +249,6 @@ export const FreshProductPromotionSettings = () => {
           {errors.discountPercentage && (
             <p className="mt-1 text-[11px] text-red-500">{errors.discountPercentage}</p>
           )}
-          <p className="mt-2 text-[11px] text-gray-500">
-            ℹ️ This discount will be applied to fresh product batches that meet the expiry criteria
-          </p>
         </div>
 
         {/* Apply To Options */}
@@ -346,39 +336,29 @@ export const FreshProductPromotionSettings = () => {
             Run Now
           </button>
 
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={loadSettings}
-              disabled={saving}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-[13px] font-['Poppins',sans-serif] font-medium disabled:opacity-50"
-            >
-              Reset
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-[13px] font-['Poppins',sans-serif] font-medium disabled:opacity-50 flex items-center gap-2"
-            >
-              {saving ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z" />
-                  </svg>
-                  Save Settings
-                </>
-              )}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-[13px] font-['Poppins',sans-serif] font-medium disabled:opacity-50 flex items-center gap-2"
+          >
+            {saving ? (
+              <>
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Saving...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z" />
+                </svg>
+                Save Settings
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

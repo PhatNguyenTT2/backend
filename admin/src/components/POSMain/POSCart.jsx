@@ -7,6 +7,7 @@ export const POSCart = ({
   onRemoveItem,
   onClearCart,
   onCheckout,
+  onHoldOrder,
   totals,
   // Customer selector props
   selectedCustomer,
@@ -161,13 +162,27 @@ export const POSCart = ({
             </div>
           </div>
 
-          <button
-            onClick={onCheckout}
-            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[16px] font-bold font-['Poppins',sans-serif] transition-colors flex items-center justify-center gap-2"
-          >
-            <span>Proceed to Payment</span>
-            <span className="text-[12px] font-normal opacity-75">(F9)</span>
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onHoldOrder}
+              className="flex-1 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[16px] font-bold font-['Poppins',sans-serif] transition-colors flex items-center justify-center gap-2"
+              title="Save order as draft to process later"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01" />
+              </svg>
+              <span>Hold</span>
+              <span className="text-[12px] font-normal opacity-75">(F8)</span>
+            </button>
+            <button
+              onClick={onCheckout}
+              className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[16px] font-bold font-['Poppins',sans-serif] transition-colors flex items-center justify-center gap-2"
+            >
+              <span>Payment</span>
+              <span className="text-[12px] font-normal opacity-75">(F9)</span>
+            </button>
+          </div>
         </div>
       )}
     </div>

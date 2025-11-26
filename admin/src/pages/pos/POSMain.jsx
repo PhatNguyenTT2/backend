@@ -219,6 +219,11 @@ export const POSMain = () => {
         document.getElementById('product-search')?.focus();
       }
 
+      if (e.key === 'F8' && cart.length > 0) {
+        e.preventDefault();
+        handleHoldOrder();
+      }
+
       if (e.key === 'F9' && cart.length > 0) {
         e.preventDefault();
         setShowPaymentModal(true);
@@ -544,6 +549,109 @@ export const POSMain = () => {
     }
   };
 
+  // Handle hold order (save as draft)
+  const handleHoldOrder = async () => {
+    if (cart.length === 0) {
+      showToast('error', 'Cart is empty!');
+      return;
+    }
+
+    if (!currentEmployee) {
+      showToast('error', 'Employee information not found!');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Prepare order items from cart
+      // DON'T include batch - let backend auto-select using FEFO
+      const orderItems = cart.map(item => {
+        console.log('🛒 Cart item:', {
+          productId: item.productId || item.id,
+          quantity: item.quantity,
+          price: item.price,
+          hasBatch: !!item.batch
+        });
+
+        return {
+          product: item.productId || item.id,
+          quantity: item.quantity,
+          unitPrice: item.price
+          // Batch will be auto-selected by backend using FEFO
+        };
+      });
+
+      // Prepare order data
+      const orderData = {
+        customer: selectedCustomer?.id === 'virtual-guest' ? 'virtual-guest' : selectedCustomer?.id,
+        createdBy: currentEmployee.id,
+        deliveryType: 'pickup', // POS always pickup
+        shippingFee: 0,
+        status: 'draft', // Hold order = draft status
+        paymentStatus: 'pending',
+        items: orderItems
+      };
+
+      console.log('📝 Creating hold order:', orderData);
+
+      // Get POS token from localStorage
+      const posToken = localStorage.getItem('posToken');
+      console.log('🔑 POS Token:', posToken ? 'Found' : 'Not Found');
+
+      if (!posToken) {
+        throw new Error('POS authentication required');
+      }
+
+      console.log('🌐 Calling API: POST /api/pos-login/order');
+
+      // Call POS-specific API endpoint (no admin auth required)
+      const response = await fetch('/api/pos-login/order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${posToken}`
+        },
+        body: JSON.stringify(orderData)
+      });
+
+      console.log('📡 Response status:', response.status, response.statusText);
+
+      // Check if response is ok before parsing JSON
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ API Error Response:', errorText);
+
+        // Try to parse as JSON if possible
+        try {
+          const errorJson = JSON.parse(errorText);
+          throw new Error(errorJson.error?.message || `API Error: ${response.status}`);
+        } catch {
+          throw new Error(`Failed to hold order: ${response.status} ${response.statusText}`);
+        }
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error?.message || 'Failed to hold order');
+      }
+
+      console.log('✅ Hold order created:', result.data.order);
+
+      // Clear cart and show success
+      setCart([]);
+      setSelectedCustomer(null);
+      showToast('success', `Order ${result.data.order.orderNumber} saved as draft!`);
+
+    } catch (error) {
+      console.error('❌ Error holding order:', error);
+      showToast('error', error.message || 'Failed to hold order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Handle payment
   const handlePayment = (paymentMethod) => {
     console.log('Processing payment with method:', paymentMethod);
@@ -603,6 +711,7 @@ export const POSMain = () => {
           onRemoveItem={removeFromCart}
           onClearCart={clearCart}
           onCheckout={() => setShowPaymentModal(true)}
+          onHoldOrder={handleHoldOrder}
           totals={totals}
           selectedCustomer={selectedCustomer}
           onCustomerChange={setSelectedCustomer}
