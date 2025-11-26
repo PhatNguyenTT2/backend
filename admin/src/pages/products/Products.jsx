@@ -130,9 +130,10 @@ export const Products = () => {
       setIsLoading(true);
       setError(null);
 
-      // Fetch products with inventory to get stock information
+      // Fetch products with inventory and batches for discount calculation
       const response = await productService.getAllProducts({
-        withInventory: true
+        withInventory: true,
+        withBatches: true
       });
 
       // Handle response structure

@@ -8,7 +8,8 @@ export const ProductBatchListHeader = ({
   onSearch,
   statusFilter = '',
   onStatusFilterChange,
-  onAddBatch
+  onAddBatch,
+  onConfigureDiscount
 }) => {
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const dropdownRef = useRef(null);
@@ -146,7 +147,23 @@ export const ProductBatchListHeader = ({
 
           {/* Dropdown Menu */}
           {showActionsDropdown && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
+              <button
+                onClick={() => {
+                  onConfigureDiscount && onConfigureDiscount();
+                  setShowActionsDropdown(false);
+                }}
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors flex items-center gap-2"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14 5.33333L8.66667 10.6667L5.33333 7.33333L2 10.6667" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M10.6667 5.33333H14V8.66667" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Configure Discount
+              </button>
+
+              <div className="border-t border-gray-200 my-1"></div>
+
               <button
                 onClick={() => {
                   console.log('Export CSV');

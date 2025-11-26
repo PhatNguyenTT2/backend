@@ -104,6 +104,58 @@ productSchema.virtual('totalQuantityOnShelf').get(function () {
   return 0;
 });
 
+// Virtual: Discount percentage from FEFO batch (First Expired First Out)
+// Returns the discount percentage of the batch with nearest expiry date that has stock
+productSchema.virtual('discountPercentage').get(function () {
+  console.log(`[Product ${this.productCode}] Calculating discountPercentage...`);
+  console.log(`[Product ${this.productCode}] this.batches type: ${typeof this.batches}, isArray: ${Array.isArray(this.batches)}, value:`, this.batches);
+
+  // Check if batches virtual is populated
+  // Note: Virtual populate returns undefined if not explicitly populated in query
+  const batches = this.populated('batches') ? this.batches : null;
+
+  if (!batches || !Array.isArray(batches) || batches.length === 0) {
+    console.log(`[Product ${this.productCode}] No batches found or batches not populated. populated('batches'):`, this.populated('batches'));
+    return 0;
+  }
+
+  console.log(`[Product ${this.productCode}] Total batches: ${batches.length}`);
+
+  // Filter batches with shelf stock and active status
+  const availableBatches = batches.filter(batch => {
+    const hasStock = (batch.quantityOnShelf || 0) > 0;
+    const isActive = batch.status === 'active' || !batch.status;
+    console.log(`[Product ${this.productCode}] Batch ${batch.batchCode}: quantityOnShelf=${batch.quantityOnShelf}, status=${batch.status}, hasStock=${hasStock}, isActive=${isActive}`);
+    return hasStock && isActive;
+  });
+
+  console.log(`[Product ${this.productCode}] Available batches with stock: ${availableBatches.length}`);
+
+  if (availableBatches.length === 0) {
+    console.log(`[Product ${this.productCode}] No available batches with stock`);
+    return 0;
+  }
+
+  // Sort by expiry date (nearest first) - FEFO logic
+  const sortedBatches = [...availableBatches].sort((a, b) => {
+    if (!a.expiryDate) return 1;
+    if (!b.expiryDate) return -1;
+    return new Date(a.expiryDate) - new Date(b.expiryDate);
+  });
+
+  const fefoBatch = sortedBatches[0];
+  console.log(`[Product ${this.productCode}] FEFO Batch selected: ${fefoBatch.batchCode}, expiryDate=${fefoBatch.expiryDate}, promotionApplied=${fefoBatch.promotionApplied}, discountPercentage=${fefoBatch.discountPercentage}`);
+
+  // Return discount percentage if batch has discount promotion
+  if (fefoBatch.promotionApplied === 'discount' && (fefoBatch.discountPercentage || 0) > 0) {
+    console.log(`[Product ${this.productCode}] Discount found: ${fefoBatch.discountPercentage}%`);
+    return fefoBatch.discountPercentage;
+  }
+
+  console.log(`[Product ${this.productCode}] No discount promotion on FEFO batch`);
+  return 0;
+});
+
 // ============ MIDDLEWARE ============
 /**
  * Pre-save hook: Auto-generate productCode

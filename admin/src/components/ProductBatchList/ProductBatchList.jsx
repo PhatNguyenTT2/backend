@@ -75,9 +75,20 @@ export const ProductBatchList = ({
       setActiveDropdown(null);
     } else {
       const buttonRect = event.currentTarget.getBoundingClientRect();
+
+      // Determine position based on dropdown type
+      let leftPosition;
+      if (type === 'status') {
+        // For Status: show dropdown to the right of button
+        leftPosition = buttonRect.left;
+      } else {
+        // For Actions: show dropdown aligned to the right
+        leftPosition = buttonRect.right - 140; // 140px is dropdown width
+      }
+
       setDropdownPosition({
         top: buttonRect.bottom + 4,
-        left: buttonRect.left
+        left: leftPosition
       });
       setActiveDropdown(dropdownKey);
     }
@@ -122,7 +133,7 @@ export const ProductBatchList = ({
             <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
               {/* Batch Code Column - Sortable */}
               <div
-                className="w-[160px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+                className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => handleSortClick('batchCode')}
               >
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
@@ -132,42 +143,42 @@ export const ProductBatchList = ({
               </div>
 
               {/* Cost Price Column */}
-              <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+              <div className="w-[110px] px-3 flex items-center flex-shrink-0">
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                   Cost Price
                 </p>
               </div>
 
               {/* Unit Price Column */}
-              <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+              <div className="w-[110px] px-3 flex items-center flex-shrink-0">
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                   Unit Price
                 </p>
               </div>
 
               {/* Quantity Column */}
-              <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+              <div className="w-[90px] px-3 flex items-center flex-shrink-0">
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                   Quantity
                 </p>
               </div>
 
               {/* MFG Date Column */}
-              <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+              <div className="w-[110px] px-3 flex items-center flex-shrink-0">
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                   MFG Date
                 </p>
               </div>
 
               {/* Expiry Date Column */}
-              <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+              <div className="w-[110px] px-3 flex items-center flex-shrink-0">
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                   Expiry Date
                 </p>
               </div>
 
-              {/* Promotion Column */}
-              <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+              {/* Promotion Column - Flex grow to take remaining space */}
+              <div className="flex-1 min-w-[120px] px-3 flex items-center">
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                   Promotion
                 </p>
@@ -201,28 +212,28 @@ export const ProductBatchList = ({
                     }`}
                 >
                   {/* Batch Code */}
-                  <div className="w-[160px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[140px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[12px] font-medium font-['Poppins',sans-serif] text-gray-600 leading-[20px] truncate">
                       {batch.batchCode || '-'}
                     </p>
                   </div>
 
                   {/* Cost Price */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[110px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
                       {formatVND(batch.costPrice || 0)}
                     </p>
                   </div>
 
                   {/* Unit Price */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[110px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
                       {formatVND(batch.unitPrice || 0)}
                     </p>
                   </div>
 
                   {/* Quantity */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[90px] px-3 flex items-center flex-shrink-0">
                     <p className={`text-[13px] font-medium font-['Poppins',sans-serif] leading-[20px] ${(batch.quantity || 0) > 10 ? 'text-emerald-600' : 'text-red-600'
                       }`}>
                       {batch.quantity || 0}
@@ -230,14 +241,14 @@ export const ProductBatchList = ({
                   </div>
 
                   {/* MFG Date */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[110px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
                       {formatDate(batch.mfgDate)}
                     </p>
                   </div>
 
                   {/* Expiry Date */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[110px] px-3 flex items-center flex-shrink-0">
                     <p className={`text-[13px] font-normal font-['Poppins',sans-serif] leading-[20px] ${batch.isNearExpiry ? 'text-orange-600 font-medium' :
                       batch.isExpired ? 'text-red-600 font-medium' : 'text-[#212529]'
                       }`}>
@@ -248,9 +259,9 @@ export const ProductBatchList = ({
                     </p>
                   </div>
 
-                  {/* Promotion */}
-                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
+                  {/* Promotion - Flex grow */}
+                  <div className="flex-1 min-w-[120px] px-3 flex items-center">
+                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
                       {batch.promotionApplied === 'none' ? '-' :
                         batch.promotionApplied === 'discount' ? `${batch.discountPercentage}% OFF` :
                           batch.promotionApplied}
@@ -358,7 +369,7 @@ export const ProductBatchList = ({
             return (
               <div
                 ref={dropdownRef}
-                className="fixed min-w-[140px] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
+                className="fixed w-40 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
                 style={{
                   top: `${dropdownPosition.top}px`,
                   left: `${dropdownPosition.left}px`
@@ -369,7 +380,7 @@ export const ProductBatchList = ({
                     onEdit && onEdit(batch);
                     setActiveDropdown(null);
                   }}
-                  className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
                 >
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M11.3333 2.00004C11.5084 1.82494 11.7163 1.68605 11.9451 1.59129C12.1739 1.49653 12.4191 1.44775 12.6666 1.44775C12.9142 1.44775 13.1594 1.49653 13.3882 1.59129C13.617 1.68605 13.8249 1.82494 14 2.00004C14.1751 2.17513 14.314 2.383 14.4088 2.61178C14.5035 2.84055 14.5523 3.08575 14.5523 3.33337C14.5523 3.58099 14.5035 3.82619 14.4088 4.05497C14.314 4.28374 14.1751 4.49161 14 4.66671L5.00001 13.6667L1.33334 14.6667L2.33334 11L11.3333 2.00004Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -384,11 +395,11 @@ export const ProductBatchList = ({
                     onDelete && onDelete(batch);
                     setActiveDropdown(null);
                   }}
-                  className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                  className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center gap-2"
                 >
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M2 4H3.33333H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M5.33333 4V2.66667C5.33333 2.31304 5.47381 1.97391 5.72386 1.72386C5.97391 1.47381 6.31304 1.33333 6.66667 1.33333H9.33333C9.68696 1.33333 10.0261 1.47381 10.2761 1.72386C10.5262 1.97391 10.6667 2.31304 10.6667 2.66667V4M12.6667 4V13.3333C12.6667 13.687 12.5262 14.0261 12.2761 14.2761C12.0261 14.5262 11.687 14.6667 11.3333 14.6667H4.66667C4.31304 14.6667 3.97391 14.5262 3.72386 14.2761C3.47381 14.0261 3.33333 13.687 3.33333 13.3333V4H12.6667Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M5.33301 4.00004V2.66671C5.33301 2.31309 5.47348 1.97395 5.72353 1.7239C5.97358 1.47385 6.31272 1.33337 6.66634 1.33337H9.33301C9.68663 1.33337 10.0258 1.47385 10.2758 1.7239C10.5259 1.97395 10.6663 2.31309 10.6663 2.66671V4.00004M12.6663 4.00004V13.3334C12.6663 13.687 12.5259 14.0261 12.2758 14.2762C12.0258 14.5262 11.6866 14.6667 11.333 14.6667H4.66634C4.31272 14.6667 3.97358 14.5262 3.72353 14.2762C3.47348 14.0261 3.33301 13.687 3.33301 13.3334V4.00004H12.6663Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                   Delete
                 </button>

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { ProductBatchListHeader, ProductBatchList } from '../components/ProductBatchList';
+import { BulkDiscountModal } from '../components/ProductBatchList/BulkDiscountModal';
 import productBatchService from '../services/productBatchService';
 import productService from '../services/productService';
 
@@ -39,6 +40,7 @@ const ProductBatches = () => {
   // Modal states
   const [addBatchModal, setAddBatchModal] = useState(false);
   const [editBatchModal, setEditBatchModal] = useState(false);
+  const [bulkDiscountModal, setBulkDiscountModal] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState(null);
 
   // Breadcrumb items
@@ -89,12 +91,16 @@ const ProductBatches = () => {
       const response = await productBatchService.getAllBatches(params);
 
       if (response.success) {
-        // Debug: Check batch data structure
+        // Debug: Check batch data structure with discount fields
         console.log('Fetched batches:', response.data.batches.map(b => ({
           batchCode: b.batchCode,
           costPrice: b.costPrice,
           unitPrice: b.unitPrice,
-          quantity: b.quantity
+          quantity: b.quantity,
+          status: b.status,
+          promotionApplied: b.promotionApplied,
+          discountPercentage: b.discountPercentage,
+          expiryDate: b.expiryDate
         })));
 
         setBatches(response.data.batches || []);
@@ -206,6 +212,16 @@ const ProductBatches = () => {
     }
   };
 
+  // Handle configure discount
+  const handleConfigureDiscount = () => {
+    setBulkDiscountModal(true);
+  };
+
+  // Handle bulk discount success
+  const handleBulkDiscountSuccess = () => {
+    fetchBatches();
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -254,6 +270,16 @@ const ProductBatches = () => {
           statusFilter={filters.status}
           onStatusFilterChange={handleStatusFilterChange}
           onAddBatch={handleAddBatch}
+          onConfigureDiscount={handleConfigureDiscount}
+        />
+
+        {/* Bulk Discount Modal */}
+        <BulkDiscountModal
+          isOpen={bulkDiscountModal}
+          onClose={() => setBulkDiscountModal(false)}
+          onSuccess={handleBulkDiscountSuccess}
+          productId={productId}
+          productName={product?.name}
         />
 
         {/* Loading State */}

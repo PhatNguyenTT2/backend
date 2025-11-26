@@ -26,10 +26,22 @@ export const ProductCard = ({ product, onAddToCart, onClick }) => {
 
   // Safe access với fallback
   const productId = product.id || product._id;
-  const price = product.unitPrice || 0;
   const categoryName = product.category?.name || product.categoryName || 'Uncategorized';
   const onShelfQuantity = product.inventory?.quantityOnShelf || 0;
   const imageUrl = product.image || null;
+
+  // Get discount percentage from backend (calculated via FEFO virtual property)
+  const basePrice = product.unitPrice || 0;
+  const discountPercentage = product.discountPercentage || 0;
+  const hasDiscount = discountPercentage > 0;
+  const finalPrice = hasDiscount ? basePrice * (1 - discountPercentage / 100) : basePrice;
+
+  // Debug log for discount
+  if (product.productCode === 'PROD2025000004') {
+    console.log('[ProductCard Toonies] product.discountPercentage:', product.discountPercentage);
+    console.log('[ProductCard Toonies] product.batches:', product.batches);
+    console.log('[ProductCard Toonies] hasDiscount:', hasDiscount, 'finalPrice:', finalPrice);
+  }
 
   const handleClick = () => {
     // If onClick prop is provided, use it (for POS mode)
@@ -121,9 +133,25 @@ export const ProductCard = ({ product, onAddToCart, onClick }) => {
         {/* Price Section */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex flex-col">
-            <span className="text-base font-bold text-emerald-600">
-              {formatVND(price)}
-            </span>
+            {hasDiscount ? (
+              <>
+                <span className="text-base font-bold text-red-600">
+                  {formatVND(finalPrice)}
+                </span>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-xs text-gray-500 line-through">
+                    {formatVND(basePrice)}
+                  </span>
+                  <span className="bg-red-100 text-red-700 text-xs font-semibold px-1.5 py-0.5 rounded">
+                    -{discountPercentage}%
+                  </span>
+                </div>
+              </>
+            ) : (
+              <span className="text-base font-bold text-emerald-600">
+                {formatVND(basePrice)}
+              </span>
+            )}
           </div>
 
           {/* Add to Cart Button */}

@@ -91,29 +91,69 @@ productsRouter.get('/', async (request, response) => {
       .limit(parseInt(limit))
       .sort({ createdAt: -1 });
 
-    // Populate batches if requested
-    if (withBatches === 'true') {
-      query = query.populate({
-        path: 'batches',
-        select: 'batchCode quantity expiryDate manufacturingDate costPrice unitPrice quantityOnShelf',
-        options: { sort: { expiryDate: 1 } }
-      });
-    }
-
     // Populate inventory if requested
-    // Also populate batches to calculate totalQuantityOnShelf virtual
     if (withInventory === 'true') {
       query = query.populate('inventory', 'quantityOnHand quantityOnShelf quantityReserved reorderPoint warehouseLocation');
+    }
 
-      // Also populate batches with quantityOnShelf to calculate totalQuantityOnShelf
+    // Populate batches if requested (or if withInventory is true for totalQuantityOnShelf calculation)
+    if (withBatches === 'true' || withInventory === 'true') {
+      // Determine select fields based on what's requested
+      let selectFields = 'batchCode quantityOnShelf expiryDate status promotionApplied discountPercentage';
+      if (withBatches === 'true') {
+        // Include additional fields when explicitly requesting batches
+        selectFields = 'batchCode quantity expiryDate manufacturingDate costPrice unitPrice quantityOnShelf status promotionApplied discountPercentage';
+      }
+
       query = query.populate({
         path: 'batches',
-        select: 'quantityOnShelf',
-        match: { quantityOnShelf: { $gt: 0 } } // Only batches with stock on shelf
+        select: selectFields,
+        options: { sort: { expiryDate: 1 } }
+        // Don't use match to allow discount calculation on all batches
       });
     }
 
     const products = await query;
+
+    // Calculate discountPercentage for each product manually (FEFO logic)
+    // Virtual properties don't work properly with populated data in toJSON
+    const productsWithDiscount = products.map(product => {
+      const productObj = product.toJSON();
+
+      // Calculate discount from FEFO batch
+      if (productObj.batches && Array.isArray(productObj.batches) && productObj.batches.length > 0) {
+        // Filter batches with shelf stock and active status
+        const availableBatches = productObj.batches.filter(batch => {
+          const hasStock = (batch.quantityOnShelf || 0) > 0;
+          const isActive = batch.status === 'active' || !batch.status;
+          return hasStock && isActive;
+        });
+
+        if (availableBatches.length > 0) {
+          // Sort by expiry date (nearest first) - FEFO logic
+          const sortedBatches = [...availableBatches].sort((a, b) => {
+            if (!a.expiryDate) return 1;
+            if (!b.expiryDate) return -1;
+            return new Date(a.expiryDate) - new Date(b.expiryDate);
+          });
+
+          const fefoBatch = sortedBatches[0];
+
+          // Set discount percentage if batch has discount promotion
+          if (fefoBatch.promotionApplied === 'discount' && (fefoBatch.discountPercentage || 0) > 0) {
+            productObj.discountPercentage = fefoBatch.discountPercentage;
+          } else {
+            productObj.discountPercentage = 0;
+          }
+        } else {
+          productObj.discountPercentage = 0;
+        }
+      } else {
+        productObj.discountPercentage = 0;
+      }
+
+      return productObj;
+    });
 
     // Get total count for pagination
     const total = await Product.countDocuments(filter);
@@ -121,7 +161,7 @@ productsRouter.get('/', async (request, response) => {
     response.json({
       success: true,
       data: {
-        products,
+        products: productsWithDiscount,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
