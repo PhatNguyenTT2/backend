@@ -944,4 +944,120 @@ posLoginRouter.post('/order', async (request, response) => {
   }
 })
 
+/**
+ * @route   GET /api/pos-login/orders
+ * @desc    Get orders (draft/held orders) for POS
+ * @access  Private (POS)
+ * @query   ?status=draft - filter by status
+ */
+posLoginRouter.get('/orders', async (request, response) => {
+  try {
+    const authorization = request.get('authorization')
+
+    if (!authorization || !authorization.toLowerCase().startsWith('bearer ')) {
+      return response.status(401).json({
+        success: false,
+        error: {
+          message: 'Token missing or invalid',
+          code: 'MISSING_TOKEN'
+        }
+      })
+    }
+
+    const token = authorization.substring(7)
+
+    // Verify POS token
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET)
+
+    if (!decodedToken.isPOS) {
+      return response.status(403).json({
+        success: false,
+        error: {
+          message: 'Invalid POS token',
+          code: 'INVALID_TOKEN_TYPE'
+        }
+      })
+    }
+
+    // Get employee ID from token
+    const employeeId = decodedToken.id
+
+    // Verify employee exists
+    const employee = await Employee.findById(employeeId)
+    if (!employee) {
+      return response.status(404).json({
+        success: false,
+        error: {
+          message: 'Employee not found',
+          code: 'EMPLOYEE_NOT_FOUND'
+        }
+      })
+    }
+
+    // Get query parameters
+    const { status = 'draft' } = request.query
+
+    console.log(`📋 Fetching orders - Status: ${status}, Employee: ${employee.fullName}`)
+
+    // Fetch orders
+    const Order = require('../models/order')
+    const orders = await Order.find({
+      status: status,
+      createdBy: employeeId // Only show orders created by this employee
+    })
+      .populate('customer', 'customerCode fullName phone customerType')
+      .populate('createdBy', 'fullName')
+      .populate({
+        path: 'details',
+        populate: [
+          { path: 'product', select: 'productCode name image unitPrice' },
+          { path: 'batch', select: 'batchCode expiryDate' }
+        ]
+      })
+      .sort({ orderDate: -1 }) // Newest first
+      .limit(50) // Limit to 50 recent orders
+
+    console.log(`✅ Found ${orders.length} order(s)`)
+
+    return response.status(200).json({
+      success: true,
+      data: {
+        orders,
+        count: orders.length
+      }
+    })
+  } catch (error) {
+    console.error('❌ POS Get Orders error:', error)
+
+    if (error.name === 'JsonWebTokenError') {
+      return response.status(401).json({
+        success: false,
+        error: {
+          message: 'Invalid token',
+          code: 'INVALID_TOKEN'
+        }
+      })
+    }
+
+    if (error.name === 'TokenExpiredError') {
+      return response.status(401).json({
+        success: false,
+        error: {
+          message: 'Token has expired',
+          code: 'TOKEN_EXPIRED'
+        }
+      })
+    }
+
+    return response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to fetch orders',
+        code: 'SERVER_ERROR',
+        details: error.message
+      }
+    })
+  }
+})
+
 module.exports = posLoginRouter

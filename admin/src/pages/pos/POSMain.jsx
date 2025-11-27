@@ -15,6 +15,7 @@ import {
   POSCustomerSelector
 } from '../../components/POSMain';
 import { POSBatchSelectModal } from '../../components/POSMain/POSBatchSelectModal';
+import { POSHeldOrdersModal } from '../../components/POSMain/POSHeldOrdersModal';
 
 export const POSMain = () => {
   const navigate = useNavigate();
@@ -46,6 +47,9 @@ export const POSMain = () => {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [selectedProductData, setSelectedProductData] = useState(null);
   const [scanning, setScanning] = useState(false);
+
+  // Held orders modal state
+  const [showHeldOrdersModal, setShowHeldOrdersModal] = useState(false);
 
   // Toast notification state
   const [toast, setToast] = useState(null); // { type: 'success'|'error', message: string }
@@ -732,6 +736,75 @@ export const POSMain = () => {
     setShowPaymentModal(false);
   };
 
+  // Handle load order from held orders
+  const handleLoadHeldOrder = async (order) => {
+    try {
+      console.log('📥 Loading held order:', order.orderNumber);
+
+      // Check if current cart has items
+      if (cart.length > 0) {
+        const confirm = window.confirm(
+          'Current cart will be cleared. Do you want to continue?'
+        );
+        if (!confirm) return;
+      }
+
+      // Clear current cart
+      setCart([]);
+
+      // Set customer from order
+      if (order.customer) {
+        setSelectedCustomer({
+          id: order.customer._id || order.customer.id,
+          customerCode: order.customer.customerCode,
+          fullName: order.customer.fullName,
+          phone: order.customer.phone,
+          customerType: order.customer.customerType
+        });
+      }
+
+      // Convert order details to cart items
+      const cartItems = [];
+
+      for (const detail of order.details || []) {
+        const product = detail.product;
+        const batch = detail.batch;
+
+        // Create cart item
+        const cartItem = {
+          id: batch ? `${product._id || product.id}-${batch._id || batch.id}` : (product._id || product.id),
+          productId: product._id || product.id,
+          productCode: product.productCode,
+          name: product.name,
+          image: product.image,
+          price: parseFloat(detail.unitPrice || 0),
+          quantity: detail.quantity,
+          stock: 999, // We don't have real-time stock from order
+          categoryName: product.category?.name || 'Uncategorized'
+        };
+
+        // Add batch info if exists
+        if (batch) {
+          cartItem.batch = {
+            id: batch._id || batch.id,
+            batchCode: batch.batchCode,
+            expiryDate: batch.expiryDate
+          };
+        }
+
+        cartItems.push(cartItem);
+      }
+
+      setCart(cartItems);
+      showToast('success', `Loaded order ${order.orderNumber} to cart`);
+
+      console.log('✅ Order loaded to cart:', cartItems);
+    } catch (error) {
+      console.error('❌ Error loading held order:', error);
+      showToast('error', 'Failed to load order');
+    }
+  };
+
   const totals = calculateTotals();
 
   if (loading) {
@@ -781,6 +854,7 @@ export const POSMain = () => {
           onClearCart={clearCart}
           onCheckout={() => setShowPaymentModal(true)}
           onHoldOrder={handleHoldOrder}
+          onOpenHeldOrders={() => setShowHeldOrdersModal(true)}
           totals={totals}
           selectedCustomer={selectedCustomer}
           onCustomerChange={setSelectedCustomer}
@@ -804,6 +878,13 @@ export const POSMain = () => {
           setSelectedProductData(null);
         }}
         onBatchSelected={handleBatchSelected}
+      />
+
+      {/* Held Orders Modal */}
+      <POSHeldOrdersModal
+        isOpen={showHeldOrdersModal}
+        onClose={() => setShowHeldOrdersModal(false)}
+        onLoadOrder={handleLoadHeldOrder}
       />
 
       {/* Toast Notification */}
