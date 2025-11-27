@@ -106,9 +106,9 @@ const orderService = {
   /**
    * Delete order
    * @param {string} orderId - Order ID
-   * @param {boolean} hardDelete - If true, permanently delete (only for pending orders with no payment)
+   * @param {boolean} hardDelete - Hard delete (true) or soft delete/cancel (false, default)
    * @returns {Promise<Object>} Success message
-   * @note Soft delete (cancel) by default, hard delete only for pending unpaid orders
+   * @note Soft delete (cancel) by default, hard delete only for draft/pending unpaid orders
    */
   deleteOrder: async (orderId, hardDelete = false) => {
     try {
@@ -117,6 +117,21 @@ const orderService = {
       return response.data
     } catch (error) {
       console.error('Error deleting order:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Delete all draft orders (bulk delete)
+   * @returns {Promise<Object>} Response with deleted count
+   * @note Hard deletes all draft orders and their details
+   */
+  deleteAllDrafts: async () => {
+    try {
+      const response = await api.delete('/orders/bulk/draft')
+      return response.data.data
+    } catch (error) {
+      console.error('Error deleting all draft orders:', error)
       throw error
     }
   },

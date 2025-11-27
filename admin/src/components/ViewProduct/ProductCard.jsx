@@ -36,13 +36,6 @@ export const ProductCard = ({ product, onAddToCart, onClick }) => {
   const hasDiscount = discountPercentage > 0;
   const finalPrice = hasDiscount ? basePrice * (1 - discountPercentage / 100) : basePrice;
 
-  // Debug log for discount
-  if (product.productCode === 'PROD2025000004') {
-    console.log('[ProductCard Toonies] product.discountPercentage:', product.discountPercentage);
-    console.log('[ProductCard Toonies] product.batches:', product.batches);
-    console.log('[ProductCard Toonies] hasDiscount:', hasDiscount, 'finalPrice:', finalPrice);
-  }
-
   const handleClick = () => {
     // If onClick prop is provided, use it (for POS mode)
     if (onClick) {

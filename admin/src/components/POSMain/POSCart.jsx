@@ -134,16 +134,44 @@ export const POSCart = ({
                   </div>
 
                   <div className="text-right">
-                    {/* For fresh products with batch selection, only show total */}
-                    {/* For regular products, show unit price + total */}
-                    {!item.batch && (
-                      <p className="text-[11px] font-['Poppins',sans-serif] text-gray-500">
-                        {formatVND(item.price)} each
-                      </p>
-                    )}
-                    <p className="text-[15px] font-bold font-['Poppins',sans-serif] text-emerald-600">
-                      {formatVND(item.price * item.quantity)}
-                    </p>
+                    {/* Check if item has discount (batch with discount or product with discount) */}
+                    {(() => {
+                      const hasDiscount = item.batch?.discountPercentage > 0 || item.discountPercentage > 0;
+                      const basePrice = item.batch?.unitPrice || item.basePrice || item.price;
+                      const discountPercent = item.batch?.discountPercentage || item.discountPercentage || 0;
+
+                      if (hasDiscount) {
+                        return (
+                          <>
+                            <div className="flex items-center justify-end gap-1 mb-0.5">
+                              <span className="text-[10px] font-['Poppins',sans-serif] text-gray-400 line-through">
+                                {formatVND(basePrice)}
+                              </span>
+                              <span className="text-[9px] font-bold font-['Poppins',sans-serif] px-1 py-0.5 bg-red-100 text-red-600 rounded">
+                                -{discountPercent}%
+                              </span>
+                            </div>
+                            <p className="text-[11px] font-['Poppins',sans-serif] text-emerald-600 font-semibold">
+                              {formatVND(item.price)} each
+                            </p>
+                            <p className="text-[15px] font-bold font-['Poppins',sans-serif] text-emerald-600">
+                              {formatVND(item.price * item.quantity)}
+                            </p>
+                          </>
+                        );
+                      } else {
+                        return (
+                          <>
+                            <p className="text-[11px] font-['Poppins',sans-serif] text-gray-500">
+                              {formatVND(item.price)} each
+                            </p>
+                            <p className="text-[15px] font-bold font-['Poppins',sans-serif] text-emerald-600">
+                              {formatVND(item.price * item.quantity)}
+                            </p>
+                          </>
+                        );
+                      }
+                    })()}
                   </div>
                 </div>
               </div>

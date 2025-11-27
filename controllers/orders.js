@@ -921,7 +921,7 @@ ordersRouter.put('/:id', async (request, response) => {
 /**
  * DELETE /api/orders/:id
  * Delete order (soft delete by setting status to 'cancelled')
- * Hard delete only allowed for pending orders with no payment
+ * Hard delete allowed for draft and pending orders with no payment
  */
 ordersRouter.delete('/:id', async (request, response) => {
   try {
@@ -960,7 +960,8 @@ ordersRouter.delete('/:id', async (request, response) => {
       });
     }
 
-    if (hardDelete === 'true' && order.status === 'pending' && order.paymentStatus === 'pending') {
+    // Allow hard delete for draft or pending orders with pending payment
+    if (hardDelete === 'true' && ['draft', 'pending'].includes(order.status) && order.paymentStatus === 'pending') {
       // Hard delete: remove order and its details
       const session = await mongoose.startSession();
       session.startTransaction();
@@ -970,6 +971,8 @@ ordersRouter.delete('/:id', async (request, response) => {
         await Order.findByIdAndDelete(request.params.id, { session });
 
         await session.commitTransaction();
+
+        console.log(`✅ Hard deleted order ${order.orderNumber} (status: ${order.status})`);
 
         response.json({
           success: true,
@@ -986,6 +989,8 @@ ordersRouter.delete('/:id', async (request, response) => {
       order.status = 'cancelled';
       await order.save();
 
+      console.log(`✅ Soft deleted (cancelled) order ${order.orderNumber}`);
+
       response.json({
         success: true,
         message: 'Order cancelled successfully'
@@ -997,6 +1002,80 @@ ordersRouter.delete('/:id', async (request, response) => {
       success: false,
       error: {
         message: 'Failed to delete order',
+        details: error.message
+      }
+    });
+  }
+});
+
+/**
+ * DELETE /api/orders/bulk/draft
+ * Delete all draft orders (hard delete)
+ * Used to clean up held orders from POS
+ */
+ordersRouter.delete('/bulk/draft', async (request, response) => {
+  try {
+    console.log('📋 Bulk deleting all draft orders...');
+
+    // Find all draft orders
+    const draftOrders = await Order.find({ status: 'draft' });
+
+    if (draftOrders.length === 0) {
+      return response.json({
+        success: true,
+        message: 'No draft orders to delete',
+        data: {
+          deletedCount: 0
+        }
+      });
+    }
+
+    console.log(`Found ${draftOrders.length} draft order(s) to delete`);
+
+    // Hard delete all draft orders and their details
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      const orderIds = draftOrders.map(o => o._id);
+
+      // Delete all order details for these orders
+      const detailsResult = await OrderDetail.deleteMany(
+        { order: { $in: orderIds } },
+        { session }
+      );
+
+      // Delete all draft orders
+      const ordersResult = await Order.deleteMany(
+        { status: 'draft' },
+        { session }
+      );
+
+      await session.commitTransaction();
+
+      console.log(`✅ Deleted ${ordersResult.deletedCount} draft order(s) and ${detailsResult.deletedCount} order detail(s)`);
+
+      response.json({
+        success: true,
+        message: `Successfully deleted ${ordersResult.deletedCount} draft order(s)`,
+        data: {
+          deletedCount: ordersResult.deletedCount,
+          deletedDetailsCount: detailsResult.deletedCount,
+          orderNumbers: draftOrders.map(o => o.orderNumber)
+        }
+      });
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+  } catch (error) {
+    console.error('❌ Error in bulk delete draft orders:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to delete draft orders',
         details: error.message
       }
     });

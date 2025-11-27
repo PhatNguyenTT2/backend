@@ -999,7 +999,7 @@ posLoginRouter.get('/orders', async (request, response) => {
 
     console.log(`📋 Fetching orders - Status: ${status}, Employee: ${employee.fullName}`)
 
-    // Fetch orders
+    // Fetch orders WITHOUT populate details (will fetch separately like Admin)
     const Order = require('../models/order')
     const orders = await Order.find({
       status: status,
@@ -1007,23 +1007,52 @@ posLoginRouter.get('/orders', async (request, response) => {
     })
       .populate('customer', 'customerCode fullName phone customerType')
       .populate('createdBy', 'fullName')
-      .populate({
-        path: 'details',
-        populate: [
-          { path: 'product', select: 'productCode name image unitPrice' },
-          { path: 'batch', select: 'batchCode expiryDate' }
-        ]
-      })
       .sort({ orderDate: -1 }) // Newest first
       .limit(50) // Limit to 50 recent orders
+      .lean() // Convert to plain JS objects for better performance
 
     console.log(`✅ Found ${orders.length} order(s)`)
+
+    // Fetch order details separately for each order (like Admin InvoiceModal)
+    const OrderDetail = require('../models/orderDetail')
+
+    // Helper to parse Decimal128 to number
+    const parseDecimal = (value) => {
+      if (!value) return 0
+      if (typeof value === 'object' && value.$numberDecimal) {
+        return parseFloat(value.$numberDecimal)
+      }
+      if (typeof value === 'object' && value.toString) {
+        return parseFloat(value.toString())
+      }
+      return parseFloat(value) || 0
+    }
+
+    const ordersWithDetails = await Promise.all(
+      orders.map(async (order) => {
+        const details = await OrderDetail.find({ order: order._id })
+          .populate('product', 'productCode name image unitPrice discountPercentage')
+          .populate('batch', 'batchCode expiryDate unitPrice discountPercentage')
+          .lean()
+
+        // Parse Decimal128 fields to numbers
+        return {
+          ...order,
+          total: parseDecimal(order.total),
+          shippingFee: parseDecimal(order.shippingFee),
+          discountPercentage: order.discountPercentage || 0,
+          details // Add details array to order
+        }
+      })
+    )
+
+    console.log(`✅ Loaded details for ${ordersWithDetails.length} order(s)`)
 
     return response.status(200).json({
       success: true,
       data: {
-        orders,
-        count: orders.length
+        orders: ordersWithDetails,
+        count: ordersWithDetails.length
       }
     })
   } catch (error) {

@@ -363,7 +363,7 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
         // Render Actions Dropdown
         if (isActionDropdown) {
           const canEdit = !['delivered', 'cancelled', 'refunded'].includes(order.status);
-          const canDelete = order.status === 'pending' && order.paymentStatus === 'pending';
+          const canDelete = ['draft', 'pending'].includes(order.status) && order.paymentStatus === 'pending';
           const canRefund = order.status === 'delivered' && order.paymentStatus === 'paid';
 
           return (
@@ -446,7 +446,7 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
                   }`}
                 title={
                   !canDelete
-                    ? 'Can only delete pending orders with pending payment'
+                    ? 'Can only delete draft or pending orders with pending payment'
                     : 'Delete order'
                 }
               >

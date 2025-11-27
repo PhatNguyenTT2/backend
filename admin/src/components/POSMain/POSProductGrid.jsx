@@ -35,9 +35,33 @@ export const POSProductGrid = ({ products, loading, searchTerm, onProductClick }
     );
   }
 
+  // Filter products: only show products that are on shelf (quantityOnShelf > 0)
+  const productsOnShelf = products.filter(product => {
+    const onShelfQuantity = product.inventory?.quantityOnShelf || 0;
+    return onShelfQuantity > 0;
+  });
+
+  // Show message if all products are filtered out
+  if (productsOnShelf.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" className="mx-auto mb-3 text-gray-300">
+            <rect x="2" y="2" width="20" height="20" rx="2" stroke="currentColor" strokeWidth="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" />
+            <path d="M2 17l5-5 3 3 7-7 5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <p className="text-gray-500 text-[15px] font-['Poppins',sans-serif]">
+            No products available on shelf
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-4">
-      {products.map(product => (
+      {productsOnShelf.map(product => (
         <ProductCard
           key={product.id}
           product={product}

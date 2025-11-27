@@ -82,7 +82,7 @@ export const POSHeldOrdersModal = ({ isOpen, onClose, onLoadOrder }) => {
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-xl font-bold text-gray-900 font-['Poppins']">
-                📋 Held Orders (Draft)
+                Held Orders (Draft)
               </h2>
               <p className="text-sm text-gray-600 mt-1">
                 Click on an order to load it back to cart
@@ -214,7 +214,7 @@ export const POSHeldOrdersModal = ({ isOpen, onClose, onLoadOrder }) => {
                   {/* Click indicator */}
                   <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-center">
                     <span className="text-xs text-gray-500">
-                      👆 Click to load this order
+                      Click to load this order
                     </span>
                   </div>
                 </div>

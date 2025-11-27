@@ -231,9 +231,9 @@ export const Orders = () => {
   };
 
   const handleDelete = async (order) => {
-    // Validation: Can only delete pending orders with pending payment
-    if (order.status !== 'pending' || order.paymentStatus !== 'pending') {
-      alert('Can only delete pending orders with pending payment.');
+    // Validation: Can only delete draft or pending orders with pending payment
+    if (!['draft', 'pending'].includes(order.status) || order.paymentStatus !== 'pending') {
+      alert('Can only delete draft or pending orders with pending payment.');
       return;
     }
 
@@ -248,6 +248,28 @@ export const Orders = () => {
     } catch (err) {
       console.error('Error deleting order:', err);
       alert(err.response?.data?.message || 'Failed to delete order');
+    }
+  };
+
+  const handleDeleteAllDrafts = async () => {
+    const draftCount = orders.filter(o => o.status === 'draft').length;
+
+    if (draftCount === 0) {
+      alert('No draft orders to delete.');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete all ${draftCount} draft order(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await orderService.deleteAllDrafts();
+      alert(`Successfully deleted ${response.deletedCount} draft order(s)!`);
+      fetchOrders(); // Refresh the list
+    } catch (err) {
+      console.error('Error deleting draft orders:', err);
+      alert(err.response?.data?.error?.message || 'Failed to delete draft orders');
     }
   };
 
@@ -266,6 +288,7 @@ export const Orders = () => {
           onAddOrder={handleAddOrder}
           statusFilter={statusFilter}
           onStatusFilterChange={handleStatusFilterChange}
+          onDeleteAllDrafts={handleDeleteAllDrafts}
         />
 
         {/* Loading State */}

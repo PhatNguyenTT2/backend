@@ -12,10 +12,14 @@ import {
   POSCart,
   POSPaymentModal,
   POSLoadingScreen,
-  POSCustomerSelector
+  POSCustomerSelector,
+  POSInvoiceModal
 } from '../../components/POSMain';
 import { POSBatchSelectModal } from '../../components/POSMain/POSBatchSelectModal';
 import { POSHeldOrdersModal } from '../../components/POSMain/POSHeldOrdersModal';
+import orderService from '../../services/orderService';
+import orderDetailService from '../../services/orderDetailService';
+import paymentService from '../../services/paymentService';
 
 export const POSMain = () => {
   const navigate = useNavigate();
@@ -50,6 +54,14 @@ export const POSMain = () => {
 
   // Held orders modal state
   const [showHeldOrdersModal, setShowHeldOrdersModal] = useState(false);
+
+  // Invoice modal state
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoiceOrder, setInvoiceOrder] = useState(null);
+  const [invoiceOrderDetails, setInvoiceOrderDetails] = useState([]);
+
+  // Existing order state (from held order)
+  const [existingOrder, setExistingOrder] = useState(null);
 
   // Toast notification state
   const [toast, setToast] = useState(null); // { type: 'success'|'error', message: string }
@@ -303,6 +315,13 @@ export const POSMain = () => {
       const currentQuantityInCart = existingItem ? existingItem.quantity : 0;
       const availableStock = product.stock || product.inventory?.quantityAvailable || 0;
 
+      // Check if product has stock on shelf (same check as ProductGrid filter)
+      const onShelfQuantity = product.inventory?.quantityOnShelf || 0;
+      if (onShelfQuantity <= 0) {
+        showToast('error', `${product.name} is not available on shelf!`);
+        return;
+      }
+
       if (currentQuantityInCart >= availableStock) {
         showToast('error', `Not enough stock. Available: ${availableStock}`);
         return;
@@ -316,10 +335,19 @@ export const POSMain = () => {
         ));
         showToast('success', `Updated ${product.name} quantity`);
       } else {
+        // Calculate final price with discount
+        const basePrice = product.unitPrice || product.price || 0;
+        const discountPercentage = product.discountPercentage || 0;
+        const finalPrice = discountPercentage > 0
+          ? basePrice * (1 - discountPercentage / 100)
+          : basePrice;
+
         setCart([...cart, {
           ...product,
           quantity: 1,
-          price: product.unitPrice || product.price || 0
+          basePrice: basePrice, // Store original price
+          discountPercentage: discountPercentage, // Store discount percentage
+          price: finalPrice // Store final price after discount
         }]);
         showToast('success', `Added ${product.name} to cart`);
       }
@@ -367,7 +395,7 @@ export const POSMain = () => {
           return qty > 0;
         });
 
-        console.log('📦 Scanned - Total batches:', batches.length, '→ Available on shelf:', availableBatches.length);
+        console.log('📦 Scanned FRESH product - Total batches:', batches.length, '→ Available on shelf:', availableBatches.length);
 
         if (availableBatches.length === 0) {
           showToast('error', `${product.name} has no batches available on shelf!`);
@@ -380,10 +408,52 @@ export const POSMain = () => {
         });
         setShowBatchModal(true);
       } else {
-        // REGULAR PRODUCT: Auto-add to cart immediately
+        // REGULAR PRODUCT: Add directly to cart (NO batch selection)
         // Backend will handle FEFO (First Expired First Out) batch selection when creating order
-        // Use first batch (FEFO sorted) for display price only
-        handleAddProductWithBatch(response.data, batches[0], 1);
+        // This is same logic as clicking product card for regular products
+        console.log('📦 Scanned REGULAR product - Adding to cart directly');
+
+        const existingItem = cart.find(item => item.id === product.id);
+        const currentQuantityInCart = existingItem ? existingItem.quantity : 0;
+        const availableStock = product.stock || inventory?.quantityAvailable || 0;
+
+        // Check if product has stock on shelf
+        const onShelfQuantity = inventory?.quantityOnShelf || 0;
+        if (onShelfQuantity <= 0) {
+          showToast('error', `${product.name} is not available on shelf!`);
+          return;
+        }
+
+        // Check if enough stock for current quantity
+        if (currentQuantityInCart >= availableStock) {
+          showToast('error', `Not enough stock. Available: ${availableStock}`);
+          return;
+        }
+
+        // Calculate final price with discount
+        const basePrice = product.unitPrice || product.price || 0;
+        const discountPercentage = product.discountPercentage || 0;
+        const finalPrice = discountPercentage > 0
+          ? basePrice * (1 - discountPercentage / 100)
+          : basePrice;
+
+        if (existingItem) {
+          setCart(cart.map(item =>
+            item.id === product.id
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          ));
+          showToast('success', `Updated ${product.name} quantity`);
+        } else {
+          setCart([...cart, {
+            ...product,
+            quantity: 1,
+            basePrice: basePrice, // Store original price
+            discountPercentage: discountPercentage, // Store discount percentage
+            price: finalPrice // Store final price after discount
+          }]);
+          showToast('success', `Added ${product.name} to cart`);
+        }
       }
 
       // Reset search term after successful scan
@@ -561,6 +631,7 @@ export const POSMain = () => {
   const clearCart = () => {
     if (window.confirm('Clear all items from cart?')) {
       setCart([]);
+      setExistingOrder(null); // Clear existing order when clearing cart
     }
   };
 
@@ -726,20 +797,148 @@ export const POSMain = () => {
   };
 
   // Handle payment
-  const handlePayment = (paymentMethod) => {
-    console.log('Processing payment with method:', paymentMethod);
-    console.log('Cart items:', cart);
-    console.log('Total:', calculateTotals().total);
+  // Handle initial payment method selection (creates order)
+  const handlePaymentMethodSelect = async (paymentMethod) => {
+    console.log('🎯 Payment method selected:', paymentMethod);
+    console.log('📦 Cart items:', cart);
+    console.log('💰 Total:', calculateTotals().total);
 
-    // TODO: Implement actual payment processing
-    alert(`Payment with ${paymentMethod} will be implemented`);
-    setShowPaymentModal(false);
+    try {
+      // Validate cart
+      if (!cart || cart.length === 0) {
+        showToast('error', 'Cart is empty!');
+        return;
+      }
+
+      // Validate customer
+      if (!selectedCustomer) {
+        showToast('error', 'Please select a customer!');
+        return;
+      }
+
+      const totals = calculateTotals();
+
+      // Check if we already have an existing order (from held order)
+      if (existingOrder) {
+        console.log('📋 Using existing order from held order:', existingOrder.orderNumber);
+
+        // Update order status to pending if it was draft
+        if (existingOrder.status === 'draft') {
+          console.log('📝 Updating order status from draft to pending...');
+          const updateResponse = await orderService.updateOrder(existingOrder.id, {
+            status: 'pending'
+          });
+
+          if (!updateResponse.success) {
+            throw new Error('Failed to update order status');
+          }
+
+          const updatedOrder = updateResponse.data;
+          setExistingOrder(updatedOrder);
+
+          return { order: updatedOrder, paymentMethod };
+        }
+
+        // Order already pending/completed, use as is
+        return { order: existingOrder, paymentMethod };
+      }
+
+      // Step 1: Create new order via POS API with status 'pending'
+      console.log('📝 Step 1: Creating new order via POS API...');
+
+      // Prepare items for POS API
+      const items = cart.map(item => ({
+        product: item.product.id,
+        batch: item.batch?.id || null, // null for auto FEFO
+        quantity: item.quantity,
+        unitPrice: item.price
+      }));
+
+      const orderData = {
+        customer: selectedCustomer.id === 'virtual-guest' ? null : selectedCustomer.id,
+        items: items,
+        deliveryType: 'pickup',
+        shippingFee: 0,
+        status: 'pending', // Order status starts as pending
+        paymentStatus: 'pending' // Will be updated after payment
+      };
+
+      // Use POS API to create order (same logic as held orders)
+      const orderResponse = await posLoginService.createOrder(orderData);
+
+      if (!orderResponse.success) {
+        throw new Error(orderResponse.error?.message || 'Failed to create order');
+      }
+
+      const createdOrder = orderResponse.data;
+      console.log('✅ Order created:', createdOrder);
+
+      // Store order and payment method for confirmation
+      setInvoiceOrder(createdOrder);
+      setInvoiceOrderDetails(createdOrder.details || []);
+
+      // Pass to payment modal for confirmation - modal will handle payment creation
+      return { order: createdOrder, paymentMethod };
+    } catch (error) {
+      console.error('❌ Error creating order:', error);
+      showToast('error', error.message || 'Failed to create order');
+      throw error;
+    }
+  };  // Handle payment confirmation (creates payment record)
+  const handlePaymentConfirm = async (paymentMethod, order) => {
+    console.log('📝 Step 2: Creating payment with status completed...');
+
+    try {
+      const totals = calculateTotals();
+
+      const paymentData = {
+        referenceType: 'Order',
+        referenceId: order.id,
+        amount: totals.total,
+        paymentMethod: paymentMethod,
+        paymentDate: new Date().toISOString(),
+        status: 'completed', // Payment is completed immediately in POS
+        notes: `POS Payment - ${order.orderNumber}`
+      };
+
+      const paymentResponse = await paymentService.createPayment(paymentData);
+
+      if (!paymentResponse.success) {
+        console.error('❌ Failed to create payment:', paymentResponse.error);
+        showToast('error', 'Failed to create payment record');
+        throw new Error(paymentResponse.error?.message || 'Failed to create payment');
+      }
+
+      console.log('✅ Payment created:', paymentResponse.data);
+
+      // Fetch full order data with populated fields for invoice
+      console.log('📝 Step 3: Fetching full order data for invoice...');
+
+      const fullOrderResponse = await orderService.getOrder(order.id);
+      const fullOrder = fullOrderResponse.data;
+
+      // Add payment method to order object for invoice display
+      fullOrder.paymentMethod = paymentMethod;
+
+      // Step 4: Show invoice modal
+      console.log('📝 Step 4: Showing invoice modal...');
+      setInvoiceOrder(fullOrder);
+      setInvoiceOrderDetails(order.details || []);
+      setShowPaymentModal(false);
+      setShowInvoiceModal(true);
+
+      console.log('✅ Payment workflow completed successfully!');
+    } catch (error) {
+      console.error('❌ Payment confirmation error:', error);
+      throw error;
+    }
   };
 
   // Handle load order from held orders
   const handleLoadHeldOrder = async (order) => {
     try {
       console.log('📥 Loading held order:', order.orderNumber);
+      console.log('📦 Order details:', order.details);
 
       // Check if current cart has items
       if (cart.length > 0) {
@@ -763,6 +962,21 @@ export const POSMain = () => {
         });
       }
 
+      // Helper: Parse price (handle Decimal128 and other formats)
+      const parsePrice = (price) => {
+        if (!price && price !== 0) return 0;
+
+        // Handle Decimal128 object
+        if (typeof price === 'object' && price !== null) {
+          if (price.$numberDecimal) return parseFloat(price.$numberDecimal);
+          if (price.toString) return parseFloat(price.toString());
+        }
+
+        // Handle number or string
+        const parsed = parseFloat(price);
+        return isNaN(parsed) ? 0 : parsed;
+      };
+
       // Convert order details to cart items
       const cartItems = [];
 
@@ -770,35 +984,120 @@ export const POSMain = () => {
         const product = detail.product;
         const batch = detail.batch;
 
+        // Get price info from detail (handle Decimal128)
+        const unitPrice = parsePrice(detail.unitPrice);
+
+        console.log(`📝 Processing detail:`, {
+          product: product?.name,
+          batch: batch?.batchCode,
+          rawUnitPrice: detail.unitPrice,
+          parsedUnitPrice: unitPrice,
+          quantity: detail.quantity,
+          categoryName: product.category?.name
+        });
+
+        // Check if product is FRESH (only fresh products show batch info in cart)
+        const isFresh = product.category?.name?.toLowerCase().includes('fresh');
+
         // Create cart item
         const cartItem = {
-          id: batch ? `${product._id || product.id}-${batch._id || batch.id}` : (product._id || product.id),
+          id: (isFresh && batch) ? `${product._id || product.id}-${batch._id || batch.id}` : (product._id || product.id),
           productId: product._id || product.id,
           productCode: product.productCode,
           name: product.name,
           image: product.image,
-          price: parseFloat(detail.unitPrice || 0),
+          price: unitPrice, // This is the final price (after discount if any)
           quantity: detail.quantity,
           stock: 999, // We don't have real-time stock from order
           categoryName: product.category?.name || 'Uncategorized'
         };
 
-        // Add batch info if exists
-        if (batch) {
+        // Only add batch info for FRESH products (user manually selected batch)
+        // For regular products, batch is used by backend for FEFO but not displayed
+        if (isFresh && batch) {
+          // Fresh product: Show batch info
+          const batchUnitPrice = parsePrice(batch.unitPrice) || parsePrice(product.unitPrice) || unitPrice;
+          const batchDiscountPercentage = batch.discountPercentage || 0;
+
           cartItem.batch = {
             id: batch._id || batch.id,
             batchCode: batch.batchCode,
-            expiryDate: batch.expiryDate
+            expiryDate: batch.expiryDate,
+            unitPrice: batchUnitPrice, // Original price
+            discountPercentage: batchDiscountPercentage // Discount if any
           };
+
+          console.log(`  🌿 FRESH product with batch:`, cartItem.batch);
+        } else {
+          // Regular product: Calculate basePrice and discount from batch or product
+          // detail.unitPrice is the FINAL price (after batch discount applied by backend)
+          // We need to reverse-calculate the base price if batch has discount
+
+          let basePrice = unitPrice;
+          let discountPercentage = 0;
+
+          if (batch) {
+            // Batch exists: Check if it has discount
+            const batchUnitPrice = parsePrice(batch.unitPrice);
+            const batchDiscountPercentage = batch.discountPercentage || 0;
+
+            if (batchDiscountPercentage > 0 && batchUnitPrice > 0) {
+              // Batch has discount: use batch price as base
+              basePrice = batchUnitPrice;
+              discountPercentage = batchDiscountPercentage;
+
+              console.log(`  📦 Batch discount detected:`, {
+                batchCode: batch.batchCode,
+                batchUnitPrice,
+                batchDiscount: batchDiscountPercentage,
+                detailUnitPrice: unitPrice
+              });
+            } else if (batchUnitPrice > unitPrice) {
+              // No explicit discount, but batch price > detail price
+              // Calculate discount from difference
+              basePrice = batchUnitPrice;
+              discountPercentage = Math.round(((batchUnitPrice - unitPrice) / batchUnitPrice) * 100);
+            }
+          } else if (product.unitPrice) {
+            // No batch: use product price as base
+            const productUnitPrice = parsePrice(product.unitPrice);
+            const productDiscountPercentage = product.discountPercentage || 0;
+
+            if (productDiscountPercentage > 0 && productUnitPrice > 0) {
+              basePrice = productUnitPrice;
+              discountPercentage = productDiscountPercentage;
+            } else if (productUnitPrice > unitPrice) {
+              basePrice = productUnitPrice;
+              discountPercentage = Math.round(((productUnitPrice - unitPrice) / productUnitPrice) * 100);
+            }
+          }
+
+          // Only add basePrice and discount if discount exists
+          if (discountPercentage > 0) {
+            cartItem.basePrice = basePrice;
+            cartItem.discountPercentage = discountPercentage;
+          }
+
+          console.log(`  📦 REGULAR product:`, {
+            basePrice,
+            finalPrice: unitPrice,
+            discount: discountPercentage,
+            hasDiscount: discountPercentage > 0
+          });
         }
 
         cartItems.push(cartItem);
       }
 
       setCart(cartItems);
+
+      // Store existing order so we don't create a new one
+      setExistingOrder(order);
+
       showToast('success', `Loaded order ${order.orderNumber} to cart`);
 
       console.log('✅ Order loaded to cart:', cartItems);
+      console.log('✅ Existing order stored:', order.orderNumber);
     } catch (error) {
       console.error('❌ Error loading held order:', error);
       showToast('error', 'Failed to load order');
@@ -866,7 +1165,8 @@ export const POSMain = () => {
         isOpen={showPaymentModal}
         totals={totals}
         onClose={() => setShowPaymentModal(false)}
-        onPayment={handlePayment}
+        onPaymentMethodSelect={handlePaymentMethodSelect}
+        onPaymentConfirm={handlePaymentConfirm}
       />
 
       {/* Batch Selection Modal */}
@@ -885,6 +1185,28 @@ export const POSMain = () => {
         isOpen={showHeldOrdersModal}
         onClose={() => setShowHeldOrdersModal(false)}
         onLoadOrder={handleLoadHeldOrder}
+      />
+
+      {/* Invoice Modal */}
+      <POSInvoiceModal
+        isOpen={showInvoiceModal}
+        order={invoiceOrder}
+        orderDetails={invoiceOrderDetails}
+        onClose={() => {
+          setShowInvoiceModal(false);
+          setInvoiceOrder(null);
+          setInvoiceOrderDetails([]);
+        }}
+        onComplete={() => {
+          // Clear cart and close modal after delivery confirmation
+          setCart([]);
+          setSelectedCustomer(null);
+          setExistingOrder(null); // Clear existing order
+          setShowInvoiceModal(false);
+          setInvoiceOrder(null);
+          setInvoiceOrderDetails([]);
+          showToast('success', 'Order completed successfully!');
+        }}
       />
 
       {/* Toast Notification */}

@@ -7,7 +7,8 @@ export const OrderListHeader = ({
   onSearch,
   onAddOrder,
   statusFilter,
-  onStatusFilterChange
+  onStatusFilterChange,
+  onDeleteAllDrafts
 }) => {
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
@@ -104,8 +105,8 @@ export const OrderListHeader = ({
                       setShowStatusDropdown(false);
                     }}
                     className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors ${statusFilter === option.value
-                        ? 'bg-blue-50 text-blue-600'
-                        : 'text-gray-700 hover:bg-gray-50'
+                      ? 'bg-blue-50 text-blue-600'
+                      : 'text-gray-700 hover:bg-gray-50'
                       }`}
                   >
                     {option.label}
@@ -194,6 +195,24 @@ export const OrderListHeader = ({
                   <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 Add Order
+              </button>
+
+              <div className="border-t border-gray-200 my-1"></div>
+
+              <button
+                onClick={() => {
+                  if (onDeleteAllDrafts) {
+                    onDeleteAllDrafts();
+                  }
+                  setShowActionsDropdown(false);
+                }}
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center gap-2"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M2 4H3.33333H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M5.33301 4.00004V2.66671C5.33301 2.31309 5.47348 1.97395 5.72353 1.7239C5.97358 1.47385 6.31272 1.33337 6.66634 1.33337H9.33301C9.68663 1.33337 10.0258 1.47385 10.2758 1.7239C10.5259 1.97395 10.6663 2.31309 10.6663 2.66671V4.00004M12.6663 4.00004V13.3334C12.6663 13.687 12.5259 14.0261 12.2758 14.2762C12.0258 14.5262 11.6866 14.6667 11.333 14.6667H4.66634C4.31272 14.6667 3.97358 14.5262 3.72353 14.2762C3.47348 14.0261 3.33301 13.687 3.33301 13.3334V4.00004H12.6663Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Delete All Drafts
               </button>
 
               <div className="border-t border-gray-200 my-1"></div>
