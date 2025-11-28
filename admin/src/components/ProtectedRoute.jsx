@@ -53,22 +53,26 @@ export default function ProtectedRoute({ children, requiredPermission }) {
         return
       }
 
+      // Get user data
+      const user = authService.getUser()
+
+      // Check if user has any permissions at all
+      if (!user || !user.permissions || user.permissions.length === 0) {
+        // User has no permissions, redirect to no-access page
+        if (location.pathname !== '/no-access') {
+          navigate('/no-access', { replace: true })
+        }
+        return
+      }
+
       // If no specific permission required, just check authentication
       if (!requiredPermission) {
         setIsAuthorized(true)
         return
       }
 
-      // Check if user has required permission
-      const user = authService.getUser()
-      if (!user || !user.permissions) {
-        // User has no permissions at all, redirect to no-access page
-        navigate('/no-access', { replace: true })
-        return
-      }
-
-      // Check if user has the required permission
-      const hasPermission = user.permissions.includes(requiredPermission)
+      // Check if user has the required permission (or has 'all' permission)
+      const hasPermission = user.permissions.includes('all') || user.permissions.includes(requiredPermission)
 
       if (!hasPermission) {
         // Find first accessible route for this user

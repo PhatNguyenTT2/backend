@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import roleService from '../../../services/roleService';
+import permissionService from '../../../services/permissionService';
 
 export const EditRolesModal = ({ isOpen, onClose, onSuccess, role }) => {
   const [formData, setFormData] = useState({
@@ -10,23 +11,30 @@ export const EditRolesModal = ({ isOpen, onClose, onSuccess, role }) => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [availablePermissions, setAvailablePermissions] = useState([]);
+  const [loadingPermissions, setLoadingPermissions] = useState(true);
 
-  // Available permissions list (same as AddRolesModal)
-  const availablePermissions = [
-    'view_dashboard',
-    'manage_products',
-    'manage_categories',
-    'manage_orders',
-    'manage_customers',
-    'manage_suppliers',
-    'manage_employees',
-    'manage_POS',
-    'manage_roles',
-    'manage_inventory',
-    'view_reports',
-    'manage_payments',
-    'manage_settings'
-  ];
+  // Fetch available permissions from backend
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        setLoadingPermissions(true);
+        const response = await permissionService.getPermissions();
+        if (response.success) {
+          setAvailablePermissions(response.data.permissions || []);
+        }
+      } catch (error) {
+        console.error('Error fetching permissions:', error);
+        setAvailablePermissions([]);
+      } finally {
+        setLoadingPermissions(false);
+      }
+    };
+
+    if (isOpen) {
+      fetchPermissions();
+    }
+  }, [isOpen]);
 
   // Load role data when modal opens
   useEffect(() => {
@@ -199,26 +207,42 @@ export const EditRolesModal = ({ isOpen, onClose, onSuccess, role }) => {
             <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
               Permissions
             </label>
-            <div className="border border-gray-300 rounded-lg p-4 max-h-[300px] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-3">
-                {availablePermissions.map((permission) => (
-                  <label
-                    key={permission}
-                    className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={formData.permissions.includes(permission)}
-                      onChange={() => handlePermissionToggle(permission)}
-                      className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
-                    />
-                    <span className="ml-2 text-[12px] font-['Poppins',sans-serif] text-gray-700">
-                      {permission.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </span>
-                  </label>
-                ))}
+            {loadingPermissions ? (
+              <div className="border border-gray-300 rounded-lg p-4 flex items-center justify-center">
+                <div className="flex items-center gap-2 text-gray-500 text-[13px]">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Loading permissions...
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="border border-gray-300 rounded-lg p-4 max-h-[300px] overflow-y-auto">
+                {availablePermissions.length === 0 ? (
+                  <p className="text-center text-gray-500 text-[13px]">No permissions available</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    {availablePermissions.map((permission) => (
+                      <label
+                        key={permission}
+                        className="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={formData.permissions.includes(permission)}
+                          onChange={() => handlePermissionToggle(permission)}
+                          className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                        />
+                        <span className="ml-2 text-[12px] font-['Poppins',sans-serif] text-gray-700">
+                          {permission.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <p className="mt-2 text-[11px] text-gray-500 font-['Poppins',sans-serif]">
               Selected: {formData.permissions.length} permission{formData.permissions.length !== 1 ? 's' : ''}
             </p>

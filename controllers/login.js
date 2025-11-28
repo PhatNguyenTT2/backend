@@ -4,6 +4,7 @@ const loginRouter = require('express').Router()
 const UserAccount = require('../models/userAccount')
 const Employee = require('../models/employee')
 const Role = require('../models/role')
+const { ALL_PERMISSIONS, SUPER_ADMIN_PERMISSION } = require('../utils/constants')
 
 // Helper: Generate JWT token
 const generateToken = (userId, username, roleId) => {
@@ -151,14 +152,14 @@ loginRouter.post('/register', async (request, response) => {
     const passwordHash = await bcrypt.hash(password, saltRounds)
 
     // Find the SUPER ADMIN role (has 'all' permission)
-    let superAdminRole = await Role.findOne({ permissions: 'all' })
+    let superAdminRole = await Role.findOne({ permissions: SUPER_ADMIN_PERMISSION })
 
     // If SUPER ADMIN role doesn't exist, create it
     if (!superAdminRole) {
       superAdminRole = new Role({
         roleName: 'Super Admin',
         description: 'Super Administrator with unlimited access to the entire system',
-        permissions: ['all']
+        permissions: [SUPER_ADMIN_PERMISSION, ...ALL_PERMISSIONS]
       })
       await superAdminRole.save()
     }

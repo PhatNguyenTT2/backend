@@ -14,6 +14,7 @@ export { default as Inventories } from "./Inventories";
 export { default as DetailInventories } from "./DetailInventories";
 export { default as POSManagement } from "./POSManagement";
 export { default as Settings } from "./Settings";
+export { default as NoAccess } from "./NoAccess";
 
 // Reports
 export { default as SalesReports } from "./reports/Sales";

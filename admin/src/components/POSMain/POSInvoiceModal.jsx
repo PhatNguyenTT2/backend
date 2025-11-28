@@ -93,7 +93,8 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
   };
 
   // Calculate totals from orderDetails
-  const details = orderDetails || [];
+  // Try to get details from order.details first (from API response), fallback to orderDetails prop
+  const details = order.details || orderDetails || [];
   const subtotal = details.reduce((sum, detail) => {
     const quantity = parseFloat(detail.quantity) || 0;
     const unitPrice = parseFloat(detail.unitPrice) || 0;
@@ -195,9 +196,9 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
                 <p className="font-['Poppins',sans-serif]">
                   <span className="font-semibold text-gray-700">Type:</span>
                   <span className={`ml-2 capitalize font-medium ${order.customer.customerType === 'vip' ? 'text-purple-600' :
-                      order.customer.customerType === 'wholesale' ? 'text-emerald-600' :
-                        order.customer.customerType === 'retail' ? 'text-blue-600' :
-                          'text-gray-600'
+                    order.customer.customerType === 'wholesale' ? 'text-emerald-600' :
+                      order.customer.customerType === 'retail' ? 'text-blue-600' :
+                        'text-gray-600'
                     }`}>
                     {order.customer.customerType}
                   </span>
@@ -231,9 +232,6 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
                     Product Name
                   </th>
                   <th className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-center">
-                    Batch
-                  </th>
-                  <th className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-center">
                     Qty
                   </th>
                   <th className="border border-gray-300 px-3 py-2 text-[12px] font-semibold font-['Poppins',sans-serif] text-right">
@@ -259,9 +257,6 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
                         <td className="border border-gray-300 px-3 py-2 text-[12px] font-medium">
                           {detail.product?.name || 'Unknown Product'}
                         </td>
-                        <td className="border border-gray-300 px-3 py-2 text-[12px] text-center text-gray-600">
-                          {detail.batch?.batchCode || '-'}
-                        </td>
                         <td className="border border-gray-300 px-3 py-2 text-[12px] text-center">
                           {quantity}
                         </td>
@@ -276,7 +271,7 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
                   })
                 ) : (
                   <tr>
-                    <td colSpan="6" className="border border-gray-300 px-3 py-4 text-center text-[12px] text-gray-500">
+                    <td colSpan="5" className="border border-gray-300 px-3 py-4 text-center text-[12px] text-gray-500">
                       No items found
                     </td>
                   </tr>
@@ -284,7 +279,7 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
 
                 {/* Subtotal */}
                 <tr className="bg-gray-50">
-                  <td colSpan="5" className="border border-gray-300 px-3 py-2 text-[13px] font-semibold font-['Poppins',sans-serif] text-right">
+                  <td colSpan="4" className="border border-gray-300 px-3 py-2 text-[13px] font-semibold font-['Poppins',sans-serif] text-right">
                     Subtotal:
                   </td>
                   <td className="border border-gray-300 px-3 py-2 text-[13px] font-semibold font-['Poppins',sans-serif] text-right">
@@ -295,7 +290,7 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
                 {/* Discount */}
                 {discountPercentage > 0 && (
                   <tr className="bg-gray-50">
-                    <td colSpan="5" className="border border-gray-300 px-3 py-2 text-[13px] font-semibold font-['Poppins',sans-serif] text-right text-green-600">
+                    <td colSpan="4" className="border border-gray-300 px-3 py-2 text-[13px] font-semibold font-['Poppins',sans-serif] text-right text-green-600">
                       Discount ({discountPercentage}%) - {order.customer?.customerType?.toUpperCase() || 'N/A'}:
                     </td>
                     <td className="border border-gray-300 px-3 py-2 text-[13px] font-semibold font-['Poppins',sans-serif] text-right text-green-600">
@@ -306,7 +301,7 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
 
                 {/* Shipping Fee */}
                 <tr className="bg-gray-50">
-                  <td colSpan="5" className="border border-gray-300 px-3 py-2 text-[13px] font-semibold font-['Poppins',sans-serif] text-right">
+                  <td colSpan="4" className="border border-gray-300 px-3 py-2 text-[13px] font-semibold font-['Poppins',sans-serif] text-right">
                     Shipping Fee:
                   </td>
                   <td className="border border-gray-300 px-3 py-2 text-[13px] font-semibold font-['Poppins',sans-serif] text-right">
@@ -320,7 +315,7 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
 
                 {/* Total */}
                 <tr className="bg-emerald-50">
-                  <td colSpan="5" className="border border-gray-300 px-3 py-2 text-[16px] font-bold font-['Poppins',sans-serif] text-right text-emerald-600">
+                  <td colSpan="4" className="border border-gray-300 px-3 py-2 text-[16px] font-bold font-['Poppins',sans-serif] text-right text-emerald-600">
                     TOTAL:
                   </td>
                   <td className="border border-gray-300 px-3 py-2 text-[16px] font-bold font-['Poppins',sans-serif] text-right text-emerald-600">
@@ -353,8 +348,8 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
           {/* Status Badge */}
           <div className="text-center mb-6">
             <span className={`inline-block px-6 py-2 rounded-full text-[14px] font-bold font-['Poppins',sans-serif] ${order.status === 'pending' ? 'bg-amber-100 text-amber-800' :
-                order.status === 'delivered' ? 'bg-green-100 text-green-800' :
-                  'bg-gray-100 text-gray-800'
+              order.status === 'delivered' ? 'bg-green-100 text-green-800' :
+                'bg-gray-100 text-gray-800'
               }`}>
               Status: {order.status?.toUpperCase() || 'N/A'}
             </span>

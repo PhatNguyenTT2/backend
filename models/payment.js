@@ -118,7 +118,14 @@ paymentSchema.pre('save', async function (next) {
   if (this.isNew || this.isModified('referenceId') || this.isModified('referenceType')) {
     try {
       const Model = mongoose.model(this.referenceType);
-      const exists = await Model.exists({ _id: this.referenceId });
+
+      // ✅ CRITICAL FIX: Use session from $session() if available
+      // This allows validation to work inside transactions
+      const session = this.$session();
+      const exists = session
+        ? await Model.exists({ _id: this.referenceId }).session(session)
+        : await Model.exists({ _id: this.referenceId });
+
       if (!exists) {
         const error = new Error(`${this.referenceType} with ID ${this.referenceId} not found`);
         error.name = 'ValidationError';

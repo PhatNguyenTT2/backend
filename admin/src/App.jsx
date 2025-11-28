@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { Dashboard, ViewProduct, Products, ProductBatches, LoginSignup, Orders, Categories, Employees, Customers, Suppliers, Inventories, DetailInventories, SalesReports, PurchaseReports, Roles, POSManagement, Settings } from "./pages";
+import { Dashboard, ViewProduct, Products, ProductBatches, LoginSignup, Orders, Categories, Employees, Customers, Suppliers, Inventories, DetailInventories, SalesReports, PurchaseReports, Roles, POSManagement, Settings, NoAccess } from "./pages";
 import { POSLogin, POSMain } from "./pages/pos";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import Payments from "./pages/Payments";
@@ -14,6 +14,7 @@ function App() {
         {/* Auth Routes - Public */}
         <Route path="/" element={<LoginSignup />} />
         <Route path="/signup" element={<LoginSignup />} />
+        <Route path="/no-access" element={<NoAccess />} />
 
         {/* POS Routes - Separate authentication flow */}
         <Route path="/pos-login" element={<POSLogin />} />

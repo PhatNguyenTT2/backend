@@ -227,6 +227,120 @@ const posLoginService = {
   getAuthHeader() {
     const token = this.getToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
+  },
+
+  /**
+   * Create order with payment in single atomic transaction
+   * @param {object} orderData - Order data with payment method
+   * @returns {Promise<{success: boolean, data?: object, error?: object}>}
+   */
+  async createOrderWithPayment(orderData) {
+    try {
+      const token = this.getToken();
+
+      if (!token) {
+        return {
+          success: false,
+          error: {
+            message: 'POS authentication required',
+            code: 'NO_SESSION'
+          }
+        };
+      }
+
+      const response = await api.post('/pos-login/order-with-payment', orderData, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.data.success) {
+        return {
+          success: true,
+          data: response.data.data
+        };
+      }
+
+      return {
+        success: false,
+        error: response.data.error || 'Failed to create order with payment'
+      };
+    } catch (error) {
+      console.error('POS Create Order+Payment error:', error);
+
+      if (error.response?.data?.error) {
+        return {
+          success: false,
+          error: error.response.data.error
+        };
+      }
+
+      return {
+        success: false,
+        error: {
+          message: 'Failed to create order with payment',
+          code: 'SERVER_ERROR',
+          details: error.message
+        }
+      };
+    }
+  },
+
+  /**
+   * Create order (existing method - kept for backward compatibility)
+   * @param {object} orderData
+   * @returns {Promise<{success: boolean, data?: object, error?: object}>}
+   */
+  async createOrder(orderData) {
+    try {
+      const token = this.getToken();
+
+      if (!token) {
+        return {
+          success: false,
+          error: {
+            message: 'POS authentication required',
+            code: 'NO_SESSION'
+          }
+        };
+      }
+
+      const response = await api.post('/pos-login/order', orderData, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.data.success) {
+        return {
+          success: true,
+          data: response.data.order
+        };
+      }
+
+      return {
+        success: false,
+        error: response.data.error || 'Failed to create order'
+      };
+    } catch (error) {
+      console.error('POS Create Order error:', error);
+
+      if (error.response?.data?.error) {
+        return {
+          success: false,
+          error: error.response.data.error
+        };
+      }
+
+      return {
+        success: false,
+        error: {
+          message: 'Failed to create order',
+          code: 'SERVER_ERROR',
+          details: error.message
+        }
+      };
+    }
   }
 };
 

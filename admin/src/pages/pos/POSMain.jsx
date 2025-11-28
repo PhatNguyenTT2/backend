@@ -796,8 +796,7 @@ export const POSMain = () => {
     }
   };
 
-  // Handle payment
-  // Handle initial payment method selection (creates order)
+  // Handle payment - NEW ATOMIC WORKFLOW
   const handlePaymentMethodSelect = async (paymentMethod) => {
     console.log('🎯 Payment method selected:', paymentMethod);
     console.log('📦 Cart items:', cart);
@@ -816,13 +815,11 @@ export const POSMain = () => {
         return;
       }
 
-      const totals = calculateTotals();
-
       // Check if we already have an existing order (from held order)
       if (existingOrder) {
         console.log('📋 Using existing order from held order:', existingOrder.orderNumber);
 
-        // Update order status to pending if it was draft
+        // For held orders, still need to create payment separately
         if (existingOrder.status === 'draft') {
           console.log('📝 Updating order status from draft to pending...');
           const updateResponse = await orderService.updateOrder(existingOrder.id, {
@@ -839,16 +836,15 @@ export const POSMain = () => {
           return { order: updatedOrder, paymentMethod };
         }
 
-        // Order already pending/completed, use as is
         return { order: existingOrder, paymentMethod };
       }
 
-      // Step 1: Create new order via POS API with status 'pending'
-      console.log('📝 Step 1: Creating new order via POS API...');
+      // ✅ NEW: Create order + payment in single atomic transaction
+      console.log('📝 Creating order with payment (atomic transaction)...');
 
-      // Prepare items for POS API
+      // Prepare items
       const items = cart.map(item => ({
-        product: item.product.id,
+        product: item.productId || item.id,
         batch: item.batch?.id || null, // null for auto FEFO
         quantity: item.quantity,
         unitPrice: item.price
@@ -858,35 +854,39 @@ export const POSMain = () => {
         customer: selectedCustomer.id === 'virtual-guest' ? null : selectedCustomer.id,
         items: items,
         deliveryType: 'pickup',
-        shippingFee: 0,
-        status: 'pending', // Order status starts as pending
-        paymentStatus: 'pending' // Will be updated after payment
+        paymentMethod: paymentMethod, // ✅ Include payment method
+        notes: `POS Payment - ${paymentMethod}`
       };
 
-      // Use POS API to create order (same logic as held orders)
-      const orderResponse = await posLoginService.createOrder(orderData);
+      // ✅ Call new atomic endpoint
+      const response = await posLoginService.createOrderWithPayment(orderData);
 
-      if (!orderResponse.success) {
-        throw new Error(orderResponse.error?.message || 'Failed to create order');
+      if (!response.success) {
+        throw new Error(response.error?.message || 'Failed to create order');
       }
 
-      const createdOrder = orderResponse.data;
-      console.log('✅ Order created:', createdOrder);
+      const { order, payment } = response.data;
+      console.log('✅ Order & Payment created:', { order: order.orderNumber, payment: payment.paymentNumber });
 
-      // Store order and payment method for confirmation
-      setInvoiceOrder(createdOrder);
-      setInvoiceOrderDetails(createdOrder.details || []);
+      // Add payment method to order for invoice display
+      order.paymentMethod = paymentMethod;
 
-      // Pass to payment modal for confirmation - modal will handle payment creation
-      return { order: createdOrder, paymentMethod };
+      // Show invoice directly
+      setInvoiceOrder(order);
+      setInvoiceOrderDetails(order.details || []);
+      setShowPaymentModal(false);
+      setShowInvoiceModal(true);
+
+      console.log('✅ Payment workflow completed successfully!');
+
     } catch (error) {
-      console.error('❌ Error creating order:', error);
-      showToast('error', error.message || 'Failed to create order');
+      console.error('❌ Error processing payment:', error);
+      showToast('error', error.message || 'Failed to process payment');
       throw error;
     }
-  };  // Handle payment confirmation (creates payment record)
+  };  // Handle payment confirmation for held orders (legacy support)
   const handlePaymentConfirm = async (paymentMethod, order) => {
-    console.log('📝 Step 2: Creating payment with status completed...');
+    console.log('📝 Creating payment for existing order...');
 
     try {
       const totals = calculateTotals();
@@ -897,7 +897,7 @@ export const POSMain = () => {
         amount: totals.total,
         paymentMethod: paymentMethod,
         paymentDate: new Date().toISOString(),
-        status: 'completed', // Payment is completed immediately in POS
+        status: 'completed',
         notes: `POS Payment - ${order.orderNumber}`
       };
 
@@ -911,23 +911,16 @@ export const POSMain = () => {
 
       console.log('✅ Payment created:', paymentResponse.data);
 
-      // Fetch full order data with populated fields for invoice
-      console.log('📝 Step 3: Fetching full order data for invoice...');
-
       const fullOrderResponse = await orderService.getOrder(order.id);
       const fullOrder = fullOrderResponse.data;
-
-      // Add payment method to order object for invoice display
       fullOrder.paymentMethod = paymentMethod;
 
-      // Step 4: Show invoice modal
-      console.log('📝 Step 4: Showing invoice modal...');
       setInvoiceOrder(fullOrder);
       setInvoiceOrderDetails(order.details || []);
       setShowPaymentModal(false);
       setShowInvoiceModal(true);
 
-      console.log('✅ Payment workflow completed successfully!');
+      console.log('✅ Payment workflow completed!');
     } catch (error) {
       console.error('❌ Payment confirmation error:', error);
       throw error;

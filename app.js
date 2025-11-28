@@ -29,6 +29,7 @@ const detailPurchaseOrdersRouter = require('./controllers/detailPurchaseOrders')
 // const detailSuppliersRouter = require('./controllers/detailSuppliers')
 const userAccountsRouter = require('./controllers/userAccounts')
 const settingsRouter = require('./controllers/settings')
+const permissionsRouter = require('./controllers/permissions')
 const promotionScheduler = require('./services/promotionScheduler')
 
 const app = express()
@@ -77,6 +78,7 @@ app.use('/api/product-batches', productBatchesRouter)
 app.use('/api/detail-purchase-orders', detailPurchaseOrdersRouter)
 app.use('/api/user-accounts', userAccountsRouter)
 app.use('/api/settings', settingsRouter)
+app.use('/api/permissions', permissionsRouter)
 
 if (process.env.NODE_ENV === 'test') {
   const testingRouter = require('./controllers/testing')

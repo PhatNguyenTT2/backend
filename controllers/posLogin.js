@@ -538,16 +538,235 @@ posLoginRouter.post('/customer', async (request, response) => {
 })
 
 /**
+ * Helper function: Create order with FEFO logic
+ * Used by both /order and /order-with-payment endpoints
+ */
+async function createPOSOrder(orderData, employeeId, session = null) {
+  const Order = require('../models/order')
+  const OrderDetail = require('../models/orderDetail')
+  const Product = require('../models/product')
+  const ProductBatch = require('../models/productBatch')
+  const { allocateQuantityFEFO } = require('../utils/batchHelpers')
+
+  const { customer, items, deliveryType = 'pickup', shippingFee = 0, status = 'draft', paymentStatus = 'pending' } = orderData
+
+  // Validate items
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new Error('Order must have at least one item')
+  }
+
+  // Handle customer (virtual-guest or real customer)
+  let customerId = customer
+  let customerDoc = null
+
+  if (!customer || customer === 'virtual-guest') {
+    customerDoc = await Customer.findOne({
+      email: 'virtual.guest@pos.system',
+      customerType: 'guest'
+    })
+
+    if (!customerDoc) {
+      customerDoc = new Customer({
+        fullName: 'Virtual Guest',
+        email: 'virtual.guest@pos.system',
+        phone: '0000000000',
+        gender: 'other',
+        customerType: 'guest',
+        totalSpent: 0,
+        isActive: true
+      })
+      if (session) {
+        await customerDoc.save({ session })
+      } else {
+        await customerDoc.save()
+      }
+      console.log('✅ Created virtual guest customer:', customerDoc.customerCode)
+    }
+
+    customerId = customerDoc._id
+  } else {
+    customerDoc = await Customer.findById(customer)
+    if (!customerDoc) {
+      throw new Error('Customer not found')
+    }
+  }
+
+  // Auto-calculate discount percentage
+  const discountPercentageMap = {
+    'guest': 0,
+    'retail': 10,
+    'wholesale': 15,
+    'vip': 20
+  }
+  const autoDiscountPercentage = discountPercentageMap[customerDoc.customerType?.toLowerCase()] || 0
+
+  // Validate items and process with FEFO or manual batch selection
+  const processedItems = []
+  for (const item of items) {
+    if (!item.product || !item.quantity || item.quantity <= 0) {
+      throw new Error('Each item must have valid product and quantity')
+    }
+
+    const product = await Product.findById(item.product).populate('category')
+    if (!product) {
+      throw new Error(`Product not found: ${item.product}`)
+    }
+
+    console.log(`\n🔍 Processing: ${product.name} (${product.productCode})`)
+    console.log(`   Quantity: ${item.quantity}`)
+    console.log(`   Has manual batch: ${!!item.batch}`)
+    console.log(`   Unit price: ${item.unitPrice}`)
+
+    // Check if batch is manually provided (for POS fresh products)
+    if (item.batch) {
+      console.log(`🌿 Fresh product: Using manually selected batch`)
+
+      const batch = await ProductBatch.findById(item.batch)
+      if (!batch) {
+        throw new Error(`Batch not found: ${item.batch}`)
+      }
+
+      console.log(`   Selected batch: ${batch.batchCode}`)
+
+      const DetailInventory = require('../models/detailInventory')
+      const detailInventory = await DetailInventory.findOne({ batchId: item.batch })
+
+      if (!detailInventory) {
+        throw new Error(`Inventory not found for batch: ${batch.batchCode}`)
+      }
+
+      console.log(`   Available on shelf: ${detailInventory.quantityOnShelf}`)
+
+      if (detailInventory.quantityOnShelf < item.quantity) {
+        throw new Error(`Insufficient stock in batch ${batch.batchCode}: available=${detailInventory.quantityOnShelf}, requested=${item.quantity}`)
+      }
+
+      const batchPrice = item.unitPrice || batch.unitPrice || product.unitPrice
+
+      processedItems.push({
+        product: item.product,
+        batch: item.batch,
+        quantity: item.quantity,
+        unitPrice: batchPrice
+      })
+
+      console.log(`✅ Manual batch: ${batch.batchCode} (${item.quantity} units) at ${batchPrice}/unit`)
+    } else {
+      // Auto-allocate batches using FEFO (for regular products)
+      console.log(`📦 Regular product: Using FEFO auto-allocation`)
+
+      let batchAllocations
+      try {
+        batchAllocations = await allocateQuantityFEFO(item.product, item.quantity)
+        console.log(`   FEFO allocated ${batchAllocations.length} batch(es)`)
+      } catch (error) {
+        console.error(`❌ FEFO allocation failed:`, error.message)
+        throw new Error(error.message || `Insufficient stock for: ${product.name}`)
+      }
+
+      console.log(`   Batches:`, batchAllocations.map(a =>
+        `${a.batchCode} (${a.quantity})`
+      ).join(', '))
+
+      // Create order detail for each batch allocation
+      for (const allocation of batchAllocations) {
+        const allocationPrice = item.unitPrice || allocation.unitPrice || product.unitPrice
+
+        processedItems.push({
+          product: item.product,
+          batch: allocation.batchId,
+          quantity: allocation.quantity,
+          unitPrice: allocationPrice
+        })
+
+        console.log(`✅ FEFO batch: ${allocation.batchCode} (${allocation.quantity} units) at ${allocationPrice}/unit`)
+      }
+    }
+  }
+
+  // Calculate totals
+  const subtotal = processedItems.reduce((sum, item) => {
+    return sum + (item.quantity * parseFloat(item.unitPrice || 0))
+  }, 0)
+
+  const discountAmount = subtotal * (autoDiscountPercentage / 100)
+  const calculatedTotal = subtotal - discountAmount + (shippingFee || 0)
+
+  console.log(`💰 Total: Subtotal=${subtotal}, Discount=${discountAmount} (${autoDiscountPercentage}%), Total=${calculatedTotal}`)
+
+  // Create order
+  const order = new Order({
+    customer: customerId,
+    createdBy: employeeId,
+    orderDate: new Date(),
+    deliveryType: deliveryType,
+    status: status,
+    paymentStatus: paymentStatus,
+    shippingFee: shippingFee,
+    discountPercentage: autoDiscountPercentage,
+    total: calculatedTotal
+  })
+
+  if (session) {
+    await order.save({ session })
+  } else {
+    await order.save()
+  }
+
+  // Create order details
+  for (const item of processedItems) {
+    const orderDetail = new OrderDetail({
+      order: order._id,
+      product: item.product,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      batch: item.batch
+    })
+    if (session) {
+      await orderDetail.save({ session })
+    } else {
+      await orderDetail.save()
+    }
+  }
+
+  // Populate and return
+  await order.populate([
+    { path: 'customer', select: 'customerCode fullName phone customerType' },
+    { path: 'createdBy', select: 'fullName' },
+    {
+      path: 'details',
+      populate: [
+        {
+          path: 'product',
+          select: 'productCode name image unitPrice',
+          populate: { path: 'category', select: 'name' }
+        },
+        { path: 'batch', select: 'batchCode expiryDate unitPrice discountPercentage' }
+      ]
+    }
+  ])
+
+  console.log(`✅ Order created: ${order.orderNumber}`)
+
+  return order
+}
+
+/**
  * @route   POST /api/pos-login/order
  * @desc    Create new draft order from POS (no admin auth required)
  *          Uses same FEFO logic as /api/orders endpoint
  * @access  Private (POS)
  */
 posLoginRouter.post('/order', async (request, response) => {
+  const mongoose = require('mongoose')
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
   try {
     const authorization = request.get('authorization')
 
     if (!authorization || !authorization.toLowerCase().startsWith('bearer ')) {
+      await session.abortTransaction()
       return response.status(401).json({
         success: false,
         error: {
@@ -558,11 +777,10 @@ posLoginRouter.post('/order', async (request, response) => {
     }
 
     const token = authorization.substring(7)
-
-    // Verify POS token
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET)
 
     if (!decodedToken.isPOS) {
+      await session.abortTransaction()
       return response.status(403).json({
         success: false,
         error: {
@@ -572,12 +790,10 @@ posLoginRouter.post('/order', async (request, response) => {
       })
     }
 
-    // Get employee ID from token
     const employeeId = decodedToken.id
-
-    // Verify employee exists
     const employee = await Employee.findById(employeeId)
     if (!employee) {
+      await session.abortTransaction()
       return response.status(404).json({
         success: false,
         error: {
@@ -587,7 +803,6 @@ posLoginRouter.post('/order', async (request, response) => {
       })
     }
 
-    // Get request body and add createdBy from token
     const orderData = {
       ...request.body,
       createdBy: employeeId
@@ -599,308 +814,21 @@ posLoginRouter.post('/order', async (request, response) => {
       createdBy: employeeId
     })
 
-    // Use the Order model's create logic (same as /api/orders endpoint)
-    const ordersRouter = require('./orders')
+    // ✅ Use shared helper function
+    const order = await createPOSOrder(orderData, employeeId, session)
 
-    // Create a mock request with order data
-    const mockReq = {
-      body: orderData
-    }
+    await session.commitTransaction()
 
-    // Create a response handler
-    let orderResult = null
-    let orderError = null
+    console.log(`✅ Order created: ${order.orderNumber}`)
 
-    const mockRes = {
-      status: function (code) {
-        this.statusCode = code
-        return this
-      },
-      json: function (data) {
-        if (this.statusCode >= 400) {
-          orderError = data
-        } else {
-          orderResult = data
-        }
-        return this
-      },
-      statusCode: 200
-    }
+    return response.status(201).json({
+      success: true,
+      data: { order },
+      message: `Order created successfully with FEFO batch allocation`
+    })
 
-    // Import and use order creation logic
-    const Order = require('../models/order')
-    const OrderDetail = require('../models/orderDetail')
-    const Product = require('../models/product')
-    const ProductBatch = require('../models/productBatch')
-    const { allocateQuantityFEFO } = require('../utils/batchHelpers')
-    const mongoose = require('mongoose')
-
-    const { customer, items, deliveryType = 'pickup', shippingFee = 0, status = 'draft', paymentStatus = 'pending' } = orderData
-
-    // Validate items
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return response.status(400).json({
-        success: false,
-        error: {
-          message: 'Order must have at least one item',
-          code: 'MISSING_ITEMS'
-        }
-      })
-    }
-
-    // Handle customer (virtual-guest or real customer)
-    let customerId = customer
-    let customerDoc = null
-
-    if (!customer || customer === 'virtual-guest') {
-      // Find or create virtual guest customer
-      // Use email to identify virtual guest (customerCode is auto-generated)
-      customerDoc = await Customer.findOne({
-        email: 'virtual.guest@pos.system',
-        customerType: 'guest'
-      })
-
-      if (!customerDoc) {
-        customerDoc = new Customer({
-          // Don't set customerCode - let pre-save hook auto-generate it
-          fullName: 'Virtual Guest',
-          email: 'virtual.guest@pos.system',
-          phone: '0000000000',
-          gender: 'other',
-          customerType: 'guest',
-          totalSpent: 0,
-          isActive: true
-        })
-        await customerDoc.save()
-        console.log('✅ Created virtual guest customer:', customerDoc.customerCode)
-      }
-
-      customerId = customerDoc._id
-    } else {
-      customerDoc = await Customer.findById(customer)
-      if (!customerDoc) {
-        return response.status(404).json({
-          success: false,
-          error: {
-            message: 'Customer not found',
-            code: 'CUSTOMER_NOT_FOUND'
-          }
-        })
-      }
-    }
-
-    // Auto-calculate discount percentage
-    const discountPercentageMap = {
-      'guest': 0,
-      'retail': 10,
-      'wholesale': 15,
-      'vip': 20
-    }
-    const autoDiscountPercentage = discountPercentageMap[customerDoc.customerType?.toLowerCase()] || 0
-
-    // Validate items and process with FEFO or manual batch selection
-    const processedItems = []
-    for (const item of items) {
-      if (!item.product || !item.quantity || item.quantity <= 0) {
-        return response.status(400).json({
-          success: false,
-          error: {
-            message: 'Each item must have valid product and quantity',
-            code: 'INVALID_ITEM'
-          }
-        })
-      }
-
-      const product = await Product.findById(item.product).populate('category')
-      if (!product) {
-        return response.status(404).json({
-          success: false,
-          error: {
-            message: `Product not found: ${item.product}`,
-            code: 'PRODUCT_NOT_FOUND'
-          }
-        })
-      }
-
-      console.log(`\n🔍 Processing: ${product.name} (${product.productCode})`)
-      console.log(`   Quantity: ${item.quantity}`)
-      console.log(`   Has manual batch: ${!!item.batch}`)
-      console.log(`   Unit price: ${item.unitPrice}`)
-
-      // Check if batch is manually provided (for POS fresh products)
-      if (item.batch) {
-        console.log(`🌿 Fresh product: Using manually selected batch`)
-
-        // Validate batch exists
-        const batch = await ProductBatch.findById(item.batch)
-        if (!batch) {
-          return response.status(404).json({
-            success: false,
-            error: {
-              message: `Batch not found: ${item.batch}`,
-              code: 'BATCH_NOT_FOUND'
-            }
-          })
-        }
-
-        console.log(`   Selected batch: ${batch.batchCode}`)
-
-        // Get DetailInventory for this batch
-        const DetailInventory = require('../models/detailInventory')
-        const detailInventory = await DetailInventory.findOne({ batchId: item.batch })
-
-        if (!detailInventory) {
-          return response.status(404).json({
-            success: false,
-            error: {
-              message: `Inventory not found for batch: ${batch.batchCode}`,
-              code: 'BATCH_INVENTORY_NOT_FOUND'
-            }
-          })
-        }
-
-        console.log(`   Available on shelf: ${detailInventory.quantityOnShelf}`)
-
-        if (detailInventory.quantityOnShelf < item.quantity) {
-          return response.status(400).json({
-            success: false,
-            error: {
-              message: `Insufficient stock in selected batch: ${batch.batchCode}`,
-              code: 'INSUFFICIENT_BATCH_STOCK',
-              details: {
-                batchCode: batch.batchCode,
-                available: detailInventory.quantityOnShelf,
-                requested: item.quantity
-              }
-            }
-          })
-        }
-
-        // Use manually selected batch with its specific price
-        const batchPrice = item.unitPrice || batch.unitPrice || product.unitPrice
-
-        processedItems.push({
-          product: item.product,
-          batch: item.batch,
-          quantity: item.quantity,
-          unitPrice: batchPrice
-        })
-
-        console.log(`✅ Manual batch: ${batch.batchCode} (${item.quantity} units) at ${batchPrice}/unit`)
-      } else {
-        // Auto-allocate batches using FEFO (for regular products)
-        console.log(`📦 Regular product: Using FEFO auto-allocation`)
-
-        let batchAllocations
-        try {
-          batchAllocations = await allocateQuantityFEFO(item.product, item.quantity)
-          console.log(`   FEFO allocated ${batchAllocations.length} batch(es)`)
-        } catch (error) {
-          console.error(`❌ FEFO allocation failed:`, error.message)
-          return response.status(400).json({
-            success: false,
-            error: {
-              message: error.message || `Insufficient stock for: ${product.name}`,
-              code: 'INSUFFICIENT_SHELF_STOCK',
-              details: {
-                product: product.name,
-                requestedQuantity: item.quantity
-              }
-            }
-          })
-        }
-
-        console.log(`   Batches:`, batchAllocations.map(a =>
-          `${a.batchCode} (${a.quantity})`
-        ).join(', '))
-
-        // Create order detail for each batch allocation
-        for (const allocation of batchAllocations) {
-          const allocationPrice = item.unitPrice || allocation.unitPrice || product.unitPrice
-
-          processedItems.push({
-            product: item.product,
-            batch: allocation.batchId,
-            quantity: allocation.quantity,
-            unitPrice: allocationPrice
-          })
-
-          console.log(`✅ FEFO batch: ${allocation.batchCode} (${allocation.quantity} units) at ${allocationPrice}/unit`)
-        }
-      }
-    }
-
-    // Calculate totals
-    const subtotal = processedItems.reduce((sum, item) => {
-      return sum + (item.quantity * parseFloat(item.unitPrice || 0))
-    }, 0)
-
-    const discountAmount = subtotal * (autoDiscountPercentage / 100)
-    const calculatedTotal = subtotal - discountAmount + (shippingFee || 0)
-
-    console.log(`💰 Total: Subtotal=${subtotal}, Discount=${discountAmount} (${autoDiscountPercentage}%), Total=${calculatedTotal}`)
-
-    // Start transaction
-    const session = await mongoose.startSession()
-    session.startTransaction()
-
-    try {
-      // Create order
-      const order = new Order({
-        customer: customerId,
-        createdBy: employeeId,
-        orderDate: new Date(),
-        deliveryType: deliveryType,
-        status: status,
-        paymentStatus: paymentStatus,
-        shippingFee: shippingFee,
-        discountPercentage: autoDiscountPercentage,
-        total: calculatedTotal
-      })
-
-      await order.save({ session })
-
-      // Create order details with FEFO-selected batches
-      for (const item of processedItems) {
-        const orderDetail = new OrderDetail({
-          order: order._id,
-          product: item.product,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          batch: item.batch
-        })
-        await orderDetail.save({ session })
-      }
-
-      await session.commitTransaction()
-
-      // Populate and return
-      await order.populate([
-        { path: 'customer', select: 'customerCode fullName phone customerType' },
-        { path: 'createdBy', select: 'fullName' },
-        {
-          path: 'details',
-          populate: [
-            { path: 'product', select: 'productCode name' },
-            { path: 'batch', select: 'batchCode expiryDate' }
-          ]
-        }
-      ])
-
-      console.log(`✅ Order created: ${order.orderNumber}`)
-
-      return response.status(201).json({
-        success: true,
-        data: { order },
-        message: `Order created successfully with FEFO batch allocation`
-      })
-    } catch (error) {
-      await session.abortTransaction()
-      throw error
-    } finally {
-      session.endSession()
-    }
   } catch (error) {
+    await session.abortTransaction()
     console.error('❌ POS Create Order error:', error)
 
     if (error.name === 'JsonWebTokenError') {
@@ -941,10 +869,164 @@ posLoginRouter.post('/order', async (request, response) => {
         details: error.message
       }
     })
+  } finally {
+    session.endSession()
   }
 })
 
 /**
+ * @route   POST /api/pos-login/order-with-payment
+ * @desc    Create order and payment in single atomic transaction (POS only)
+ * @access  Private (POS)
+ * @body    {
+ *            customer: ObjectId | 'virtual-guest',
+ *            items: [{ product, batch?, quantity, unitPrice }],
+ *            deliveryType: 'pickup',
+ *            paymentMethod: 'cash' | 'card' | 'bank_transfer',
+ *            notes?: string
+ *          }
+ */
+/**
+ * @route   POST /api/pos-login/order-with-payment
+ * @desc    Create order and payment in single atomic transaction (POS only)
+ * @access  Private (POS)
+ * @body    {
+ *            customer: ObjectId | 'virtual-guest',
+ *            items: [{ product, batch?, quantity, unitPrice }],
+ *            deliveryType: 'pickup',
+ *            paymentMethod: 'cash' | 'card' | 'bank_transfer',
+ *            notes?: string
+ *          }
+ */
+posLoginRouter.post('/order-with-payment', async (request, response) => {
+  const mongoose = require('mongoose')
+  const session = await mongoose.startSession()
+  session.startTransaction()
+
+  try {
+    const authorization = request.get('authorization')
+    if (!authorization || !authorization.toLowerCase().startsWith('bearer ')) {
+      await session.abortTransaction()
+      return response.status(401).json({
+        success: false,
+        error: { message: 'Token missing or invalid', code: 'MISSING_TOKEN' }
+      })
+    }
+
+    const token = authorization.substring(7)
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET)
+
+    if (!decodedToken.isPOS) {
+      await session.abortTransaction()
+      return response.status(403).json({
+        success: false,
+        error: { message: 'Invalid POS token', code: 'INVALID_TOKEN_TYPE' }
+      })
+    }
+
+    const employeeId = decodedToken.id
+    const employee = await Employee.findById(employeeId)
+    if (!employee) {
+      await session.abortTransaction()
+      return response.status(404).json({
+        success: false,
+        error: { message: 'Employee not found', code: 'EMPLOYEE_NOT_FOUND' }
+      })
+    }
+
+    const { customer, items, deliveryType = 'pickup', paymentMethod, notes } = request.body
+
+    // Validate payment method
+    if (!paymentMethod || !['cash', 'card', 'bank_transfer'].includes(paymentMethod)) {
+      await session.abortTransaction()
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Valid payment method is required (cash/card/bank_transfer)',
+          code: 'INVALID_PAYMENT_METHOD'
+        }
+      })
+    }
+
+    console.log('📝 POS Order+Payment Request:', {
+      customer,
+      items: items?.length,
+      paymentMethod,
+      createdBy: employeeId
+    })
+
+    // ====== STEP 1: Create Order using shared helper ======
+    const orderData = {
+      customer,
+      items,
+      deliveryType,
+      shippingFee: 0,
+      status: 'pending', // ✅ POS order with payment starts as pending
+      paymentStatus: 'pending' // Will be updated after payment
+    }
+
+    const order = await createPOSOrder(orderData, employeeId, session)
+
+    // ====== STEP 2: Create Payment (status: 'completed') ======
+    const Payment = require('../models/payment')
+
+    const payment = new Payment({
+      referenceType: 'Order',
+      referenceId: order._id,
+      amount: order.total,
+      paymentMethod: paymentMethod,
+      paymentDate: new Date(),
+      status: 'completed', // ✅ POS payment is completed immediately
+      createdBy: employeeId,
+      notes: notes || `POS Payment - ${order.orderNumber}`
+    })
+
+    await payment.save({ session })
+
+    // ====== STEP 3: Update Order paymentStatus ======
+    order.paymentStatus = 'paid'
+    await order.save({ session })
+
+    // Commit transaction
+    await session.commitTransaction()
+
+    // Populate payment
+    await payment.populate('createdBy', 'fullName')
+
+    console.log(`✅ POS Order + Payment created: ${order.orderNumber}, Payment: ${payment.paymentNumber}`)
+
+    return response.status(201).json({
+      success: true,
+      data: {
+        order: order,
+        payment: payment
+      },
+      message: 'Order and payment created successfully'
+    })
+
+  } catch (error) {
+    await session.abortTransaction()
+    console.error('❌ POS Order+Payment error:', error)
+
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return response.status(401).json({
+        success: false,
+        error: { message: 'Invalid or expired token', code: 'INVALID_TOKEN' }
+      })
+    }
+
+    return response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to create order and payment',
+        code: 'SERVER_ERROR',
+        details: error.message
+      }
+    })
+  } finally {
+    session.endSession()
+  }
+})/**
  * @route   GET /api/pos-login/orders
  * @desc    Get orders (draft/held orders) for POS
  * @access  Private (POS)
