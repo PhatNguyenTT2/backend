@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, onEdit, onDelete, onUpdateStatus, onUpdatePayment, onViewInvoice }) => {
+export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, onEdit, onDelete, onUpdateStatus, onUpdatePayment, onViewInvoice, onRefund }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
@@ -411,8 +411,8 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
 
               <button
                 onClick={() => {
-                  if (onUpdateStatus) {
-                    onUpdateStatus(order, 'refunded');
+                  if (onRefund) {
+                    onRefund(order);
                   }
                   setActiveDropdown(null);
                 }}

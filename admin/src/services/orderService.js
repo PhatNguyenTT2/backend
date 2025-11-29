@@ -136,6 +136,24 @@ const orderService = {
     }
   },
 
+  /**
+   * Refund order (restore inventory to shelf)
+   * @param {string} orderId - Order ID
+   * @param {Object} refundData - Refund data
+   * @param {string} refundData.reason - Reason for refund (optional)
+   * @returns {Promise<Object>} Refunded order data
+   * @note Can only refund delivered orders that are paid
+   */
+  refundOrder: async (orderId, refundData = {}) => {
+    try {
+      const response = await api.post(`/orders/${orderId}/refund`, refundData)
+      return response.data
+    } catch (error) {
+      console.error('Error refunding order:', error)
+      throw error
+    }
+  },
+
   // ========== CONVENIENCE METHODS ==========
 
   /**

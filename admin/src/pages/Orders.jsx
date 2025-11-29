@@ -230,6 +230,32 @@ export const Orders = () => {
     }
   };
 
+  const handleRefund = async (order) => {
+    // Validation: Can only refund delivered orders that are fully paid
+    if (order.status !== 'delivered' || order.paymentStatus !== 'paid') {
+      alert('Can only refund delivered orders that are fully paid.');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to refund order ${order.orderNumber}? This will restore inventory to shelf.`)) {
+      return;
+    }
+
+    const reason = window.prompt('Enter refund reason (optional):', 'Customer request');
+
+    try {
+      const response = await orderService.refundOrder(order.id, { reason });
+
+      if (response.success) {
+        alert(`✅ Order ${order.orderNumber} refunded successfully!\n${response.message}`);
+        fetchOrders(); // Refresh the list
+      }
+    } catch (err) {
+      console.error('Error refunding order:', err);
+      alert(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to refund order');
+    }
+  };
+
   const handleDelete = async (order) => {
     // Validation: Can only delete draft or pending orders with pending payment
     if (!['draft', 'pending'].includes(order.status) || order.paymentStatus !== 'pending') {
@@ -326,6 +352,7 @@ export const Orders = () => {
               onUpdateStatus={handleUpdateStatus}
               onUpdatePayment={handleUpdatePayment}
               onViewInvoice={handleViewInvoice}
+              onRefund={handleRefund}
             />
 
             {/* Pagination */}

@@ -96,8 +96,7 @@ const orderSchema = new mongoose.Schema({
       message: '{VALUE} is not a valid status'
     },
     default: 'draft'
-  }
-
+  },
 }, {
   timestamps: true,
   toJSON: { virtuals: true, getters: true },

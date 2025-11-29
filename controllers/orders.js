@@ -1090,4 +1090,204 @@ ordersRouter.delete('/bulk/draft', async (request, response) => {
   }
 });
 
+/**
+ * POST /api/orders/:id/refund
+ * Refund delivered order (restore inventory to shelf)
+ * 
+ * Request body:
+ * {
+ *   reason: string (optional - reason for refund)
+ * }
+ * 
+ * Note: Order model middleware will automatically:
+ * - Restore inventory to shelf (quantityOnShelf)
+ * - Create inventory movement logs (type: 'in')
+ * - Update parent inventory statistics
+ */
+ordersRouter.post('/:id/refund', async (request, response) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const { reason } = request.body;
+
+    console.log('\n========== REFUND ORDER ==========');
+    console.log(`📝 Order ID: ${request.params.id}`);
+    console.log(`📄 Reason: ${reason || 'N/A'}`);
+    console.log('==================================\n');
+
+    // Step 1: Get order with full details
+    const order = await Order.findById(request.params.id)
+      .populate('customer', 'customerCode fullName phone')
+      .populate('createdBy', 'fullName')
+      .populate({
+        path: 'details',
+        populate: [
+          { path: 'product', select: 'productCode name' },
+          { path: 'batch', select: 'batchCode status' }
+        ]
+      })
+      .session(session);
+
+    if (!order) {
+      await session.abortTransaction();
+      return response.status(404).json({
+        success: false,
+        error: {
+          message: 'Order not found',
+          code: 'ORDER_NOT_FOUND'
+        }
+      });
+    }
+
+    console.log(`📦 Order: ${order.orderNumber}`);
+    console.log(`   Status: ${order.status}`);
+    console.log(`   Payment: ${order.paymentStatus}`);
+    console.log(`   Total: ${order.total}`);
+
+    // Step 2: Validate refund conditions
+    if (order.status !== 'delivered') {
+      await session.abortTransaction();
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Can only refund delivered orders',
+          code: 'INVALID_ORDER_STATUS',
+          details: { currentStatus: order.status }
+        }
+      });
+    }
+
+    if (order.paymentStatus !== 'paid') {
+      await session.abortTransaction();
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Can only refund paid orders',
+          code: 'INVALID_PAYMENT_STATUS',
+          details: { currentPaymentStatus: order.paymentStatus }
+        }
+      });
+    }
+
+    if (order.status === 'refunded') {
+      await session.abortTransaction();
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Order has already been refunded',
+          code: 'ALREADY_REFUNDED'
+        }
+      });
+    }
+
+    console.log('✅ Refund conditions validated');
+
+    // Step 3: Validate order has details with batch info
+    if (!order.details || order.details.length === 0) {
+      await session.abortTransaction();
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Order has no details to refund',
+          code: 'NO_ORDER_DETAILS'
+        }
+      });
+    }
+
+    // Check all details have batch info
+    const missingBatch = order.details.find(d => !d.batch);
+    if (missingBatch) {
+      await session.abortTransaction();
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: `Order detail missing batch info: ${missingBatch.product?.name}`,
+          code: 'MISSING_BATCH_INFO'
+        }
+      });
+    }
+
+    console.log(`📋 Order has ${order.details.length} detail line(s) to refund`);
+
+    // Step 4: Update order status (middleware will handle inventory restoration)
+    // Store original status for middleware
+    order._originalStatus = order.status;
+    order.status = 'refunded';
+    order.paymentStatus = 'refunded';
+
+    // Save order (triggers middleware that restores inventory)
+    await order.save({ session });
+
+    console.log('✅ Order status updated: delivered → refunded');
+    console.log('✅ Inventory restored by middleware (CASE 7)');
+
+    // Step 5: Update payment status
+    const Payment = require('../models/payment');
+    const payment = await Payment.findOneAndUpdate(
+      {
+        referenceType: 'Order',
+        referenceId: order._id,
+        status: { $in: ['completed', 'paid'] }
+      },
+      {
+        status: 'refunded',
+        notes: reason ? `Refunded: ${reason}` : 'Order refunded'
+      },
+      { session, new: true }
+    );
+
+    if (payment) {
+      console.log(`✅ Payment status updated: ${payment.paymentNumber} → refunded`);
+    } else {
+      console.warn(`⚠️ No payment found for order ${order.orderNumber}`);
+    }
+
+    // Step 6: Commit transaction
+    await session.commitTransaction();
+
+    console.log('\n========== REFUND COMPLETE ==========');
+    console.log(`✅ Order ${order.orderNumber} refunded successfully`);
+    console.log(`   Refund amount: ${order.total}`);
+    console.log(`   Inventory restored: ${order.details.length} batch(es)`);
+    console.log('=====================================\n');
+
+    // Populate and return
+    await order.populate([
+      { path: 'customer', select: 'customerCode fullName phone' },
+      { path: 'createdBy', select: 'fullName' },
+      {
+        path: 'details',
+        populate: [
+          { path: 'product', select: 'productCode name' },
+          { path: 'batch', select: 'batchCode expiryDate' }
+        ]
+      }
+    ]);
+
+    response.json({
+      success: true,
+      data: { order },
+      message: `Order refunded successfully. Inventory restored: ${order.details.length} batch(es)`
+    });
+
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('\n========== REFUND ERROR ==========');
+    console.error('❌ Error:', error.message);
+    console.error('==================================\n');
+
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to refund order',
+        code: 'REFUND_FAILED',
+        details: error.message
+      }
+    });
+  } finally {
+    session.endSession();
+  }
+});
+
 module.exports = ordersRouter;
