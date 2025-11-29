@@ -733,8 +733,9 @@ async function createPOSOrder(orderData, employeeId, session = null) {
     }
   }
 
-  // ⭐ CRITICAL: Store original status BEFORE populate for future middleware trigger
-  order._originalStatus = order.status
+  // ⭐ SOLUTION 1A: Store original status explicitly for middleware
+  // This ensures middleware can access it even in transaction context
+  order._originalStatus = 'draft' // Explicitly set to 'draft' since we just created it
 
   // Populate and return
   await order.populate([
@@ -753,7 +754,7 @@ async function createPOSOrder(orderData, employeeId, session = null) {
     }
   ])
 
-  console.log(`✅ Order created: ${order.orderNumber}`)
+  console.log(`✅ Order created: ${order.orderNumber} (status: ${order.status})\n`)
 
   return order
 }
@@ -893,18 +894,6 @@ posLoginRouter.post('/order', async (request, response) => {
  *            notes?: string
  *          }
  */
-/**
- * @route   POST /api/pos-login/order-with-payment
- * @desc    Create order and payment in single atomic transaction (POS only)
- * @access  Private (POS)
- * @body    {
- *            customer: ObjectId | 'virtual-guest',
- *            items: [{ product, batch?, quantity, unitPrice }],
- *            deliveryType: 'pickup',
- *            paymentMethod: 'cash' | 'card' | 'bank_transfer',
- *            notes?: string
- *          }
- */
 posLoginRouter.post('/order-with-payment', async (request, response) => {
   const mongoose = require('mongoose')
   const session = await mongoose.startSession()
@@ -955,14 +944,23 @@ posLoginRouter.post('/order-with-payment', async (request, response) => {
       })
     }
 
-    console.log('📝 POS Order+Payment Request:', {
-      customer,
-      items: items?.length,
+    console.log('\n========== POS ORDER + PAYMENT REQUEST ==========')
+    console.log('📝 Request Details:', {
+      customer: customer === 'virtual-guest' ? 'virtual-guest' : customer,
+      itemCount: items?.length,
       paymentMethod,
+      deliveryType,
       createdBy: employeeId
     })
+    console.log('Items:', items?.map(i => ({
+      product: i.product,
+      quantity: i.quantity,
+      batch: i.batch || 'auto-FEFO'
+    })))
+    console.log('================================================\n')
 
     // ====== STEP 1: Create Order using shared helper ======
+    console.log('📦 STEP 1: Creating order (draft)...')
     const orderData = {
       customer,
       items,
@@ -973,8 +971,10 @@ posLoginRouter.post('/order-with-payment', async (request, response) => {
     }
 
     const order = await createPOSOrder(orderData, employeeId, session)
+    console.log(`✅ Order created: ${order.orderNumber} (status: ${order.status})\n`)
 
     // ====== STEP 2: Create Payment (status: 'completed') ======
+    console.log('💳 STEP 2: Creating payment...')
     const Payment = require('../models/payment')
 
     const payment = new Payment({
@@ -989,9 +989,13 @@ posLoginRouter.post('/order-with-payment', async (request, response) => {
     })
 
     await payment.save({ session })
+    console.log(`✅ Payment created: ${payment.paymentNumber} (${paymentMethod})\n`)
 
     // ====== STEP 3: Update Order to delivered (POS direct sale) ======
-    // ⭐ CRITICAL: Re-fetch order to ensure we have a clean Mongoose document
+    console.log('🔄 STEP 3: Updating order status to delivered...')
+
+    // ⭐ SOLUTION 1B: Re-fetch order as CLEAN document (no population)
+    // This ensures Mongoose can properly track status changes
     const Order = require('../models/order')
     const orderToUpdate = await Order.findById(order._id).session(session)
 
@@ -999,21 +1003,34 @@ posLoginRouter.post('/order-with-payment', async (request, response) => {
       throw new Error('Order not found after creation')
     }
 
-    // Store original status and update to delivered
-    orderToUpdate._originalStatus = orderToUpdate.status // Should be 'draft'
-    orderToUpdate.status = 'delivered' // ✅ POS: draft → delivered (triggers inventory movement)
+    // ⭐ SOLUTION 1C: Set _originalStatus BEFORE changing status
+    // This is CRITICAL for middleware to detect status change
+    orderToUpdate._originalStatus = 'draft' // Must be 'draft' since we just created it
+    orderToUpdate.status = 'delivered' // POS: draft → delivered (direct sale)
     orderToUpdate.paymentStatus = 'paid'
 
-    // ⭐ Force Mongoose to detect status change
+    // ⭐ SOLUTION 1D: Force Mongoose to track status change
     orderToUpdate.markModified('status')
 
-    console.log(`🔄 Updating order ${orderToUpdate.orderNumber}: ${orderToUpdate._originalStatus} → ${orderToUpdate.status}`)
-    console.log(`   isModified('status'): ${orderToUpdate.isModified('status')}`)
+    // ⭐ SOLUTION 1E: Add debug logging
+    console.log('\n========== ORDER STATUS UPDATE ==========')
+    console.log(`Order ID: ${orderToUpdate._id}`)
+    console.log(`Order Number: ${orderToUpdate.orderNumber}`)
+    console.log(`_originalStatus: ${orderToUpdate._originalStatus}`)
+    console.log(`New status: ${orderToUpdate.status}`)
+    console.log(`Payment status: ${orderToUpdate.paymentStatus}`)
+    console.log(`isModified('status'): ${orderToUpdate.isModified('status')}`)
+    console.log(`isNew: ${orderToUpdate.isNew}`)
+    console.log('=========================================\n')
 
+    console.log('💾 Saving order (this will trigger pre-save middleware)...')
     await orderToUpdate.save({ session })
+    console.log('✅ Order saved successfully\n')
 
     // Commit transaction
+    console.log('✅ Committing transaction...')
     await session.commitTransaction()
+    console.log('✅ Transaction committed successfully\n')
 
     // Populate orderToUpdate with full details for response
     await orderToUpdate.populate([
@@ -1035,8 +1052,16 @@ posLoginRouter.post('/order-with-payment', async (request, response) => {
     // Populate payment
     await payment.populate('createdBy', 'fullName')
 
-    console.log(`✅ POS Order + Payment created: ${orderToUpdate.orderNumber}, Payment: ${payment.paymentNumber}`)
-    console.log(`   Final order status: ${orderToUpdate.status}`)
+    console.log('\n========== POS ORDER + PAYMENT COMPLETED ==========')
+    console.log(`✅ Order: ${orderToUpdate.orderNumber}`)
+    console.log(`   Status: ${orderToUpdate.status}`)
+    console.log(`   Payment Status: ${orderToUpdate.paymentStatus}`)
+    console.log(`   Total: ${orderToUpdate.total}`)
+    console.log(`✅ Payment: ${payment.paymentNumber}`)
+    console.log(`   Method: ${payment.paymentMethod}`)
+    console.log(`   Amount: ${payment.amount}`)
+    console.log(`   Status: ${payment.status}`)
+    console.log('===================================================\n')
 
     return response.status(201).json({
       success: true,
@@ -1049,7 +1074,10 @@ posLoginRouter.post('/order-with-payment', async (request, response) => {
 
   } catch (error) {
     await session.abortTransaction()
-    console.error('❌ POS Order+Payment error:', error)
+    console.error('\n========== POS ORDER+PAYMENT ERROR ==========')
+    console.error('❌ Error:', error.message)
+    console.error('❌ Stack:', error.stack)
+    console.error('=============================================\n')
 
     if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
       return response.status(401).json({

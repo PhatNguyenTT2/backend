@@ -796,10 +796,11 @@ export const POSMain = () => {
   };
 
   // Handle payment - NEW ATOMIC WORKFLOW
+  // ⭐ UNIFIED: Handle payment for both new orders and held orders
   const handlePaymentMethodSelect = async (paymentMethod) => {
-    console.log('🎯 Payment method selected:', paymentMethod);
-    console.log('📦 Cart items:', cart);
-    console.log('💰 Total:', calculateTotals().total);
+    console.log('💳 Payment method selected:', paymentMethod);
+    console.log('📦 Existing order:', existingOrder ? existingOrder.orderNumber : 'None');
+    console.log('🛒 Cart:', cart.length, 'items');
 
     try {
       // Validate cart
@@ -814,115 +815,160 @@ export const POSMain = () => {
         return;
       }
 
-      // Check if we already have an existing order (from held order)
+      // ============================================
+      // FLOW 1: HELD ORDER (Order Already Exists)
+      // ============================================
       if (existingOrder) {
-        console.log('📋 Using existing order from held order:', existingOrder.orderNumber);
+        console.log('📋 FLOW 1: Processing payment for existing held order');
+        console.log('   Order:', existingOrder.orderNumber);
+        console.log('   Order ID:', existingOrder._id || existingOrder.id);
+        console.log('   Current status:', existingOrder.status);
 
-        // For held orders, update status from draft to delivered (POS direct sale)
+        // Get order ID (MongoDB uses _id)
+        const orderId = existingOrder._id || existingOrder.id;
+
+        if (!orderId) {
+          throw new Error('Order ID is missing from existing order');
+        }
+
+        // Step 1: Update order status (draft → delivered)
         if (existingOrder.status === 'draft') {
-          console.log('🏪 POS: Updating order status from draft to delivered (direct sale)...');
-          const updateResponse = await orderService.updateOrder(existingOrder.id, {
-            status: 'delivered'
+          console.log('🔄 Updating order status: draft → delivered...');
+          console.log('   Using order ID:', orderId);
+
+          const updateResponse = await orderService.updateOrder(orderId, {
+            status: 'delivered',
+            paymentStatus: 'paid'
           });
 
           if (!updateResponse.success) {
             throw new Error('Failed to update order status');
           }
 
-          const updatedOrder = updateResponse.data;
+          console.log('✅ Order status updated to delivered');
+
+          // Update existing order reference
+          const updatedOrder = updateResponse.data.order;
           setExistingOrder(updatedOrder);
 
-          return { order: updatedOrder, paymentMethod };
+          // Step 2: Create payment record
+          console.log('💰 Creating payment record...');
+
+          const totals = calculateTotals();
+          const paymentData = {
+            referenceType: 'Order',
+            referenceId: orderId,
+            amount: totals.total,
+            paymentMethod: paymentMethod,
+            paymentDate: new Date().toISOString(),
+            status: 'completed',
+            notes: `POS Payment - ${updatedOrder.orderNumber}`
+          };
+
+          const paymentResponse = await paymentService.createPayment(paymentData);
+
+          if (!paymentResponse.success) {
+            console.error('❌ Failed to create payment:', paymentResponse.error);
+            showToast('error', 'Failed to create payment record');
+            throw new Error('Failed to create payment');
+          }
+
+          // Backend returns payment in data directly, not data.payment
+          const createdPayment = paymentResponse.data;
+          console.log('✅ Payment created:', createdPayment.paymentNumber);
+
+          // Step 3: Fetch full order with details for invoice
+          console.log('📄 Fetching full order for invoice...');
+          const fullOrderResponse = await orderService.getOrder(orderId);
+          const fullOrder = fullOrderResponse.data.order;
+          fullOrder.paymentMethod = paymentMethod;
+
+          // Step 4: Show invoice
+          setInvoiceOrder(fullOrder);
+          setShowPaymentModal(false);
+          setShowInvoiceModal(true);
+
+          // Step 5: Clear cart and state
+          setCart([]);
+          setSelectedCustomer(null);
+          setExistingOrder(null);
+
+          showToast('success', 'Payment completed successfully!');
+          console.log('✅ FLOW 1 completed successfully!');
+        }
+      }
+      // ============================================
+      // FLOW 2: NEW ORDER (Create Order + Payment Atomically)
+      // ============================================
+      else {
+        console.log('📝 FLOW 2: Creating new order with payment (atomic)');
+
+        // Prepare items
+        const items = cart.map(item => ({
+          product: item.productId || item.id,
+          batch: item.batch?.id || null, // null for auto FEFO
+          quantity: item.quantity,
+          unitPrice: item.price
+        }));
+
+        console.log('📦 Items:', items.length);
+        console.log('👤 Customer:', selectedCustomer.id);
+
+        const orderData = {
+          customer: selectedCustomer.id === 'virtual-guest' ? null : selectedCustomer.id,
+          items: items,
+          deliveryType: 'pickup',
+          paymentMethod: paymentMethod,
+          notes: `POS Payment - ${paymentMethod}`
+        };
+
+        // Call atomic endpoint
+        console.log('🌐 Calling /api/pos-login/order-with-payment...');
+
+        const response = await posLoginService.createOrderWithPayment(orderData);
+
+        if (!response.success) {
+          throw new Error(response.error?.message || 'Failed to create order');
         }
 
-        return { order: existingOrder, paymentMethod };
+        const { order, payment } = response.data;
+        console.log('✅ Order created:', order.orderNumber);
+        console.log('✅ Payment created:', payment.paymentNumber);
+
+        // Add payment method to order for invoice display
+        order.paymentMethod = paymentMethod;
+
+        // Show invoice directly
+        setInvoiceOrder(order);
+        setShowPaymentModal(false);
+        setShowInvoiceModal(true);
+
+        // Clear cart and customer
+        setCart([]);
+        setSelectedCustomer(null);
+
+        showToast('success', 'Order and payment created successfully!');
+        console.log('✅ FLOW 2 completed successfully!');
       }
-
-      // ✅ NEW: Create order + payment in single atomic transaction
-      console.log('📝 Creating order with payment (atomic transaction)...');
-
-      // Prepare items
-      const items = cart.map(item => ({
-        product: item.productId || item.id,
-        batch: item.batch?.id || null, // null for auto FEFO
-        quantity: item.quantity,
-        unitPrice: item.price
-      }));
-
-      const orderData = {
-        customer: selectedCustomer.id === 'virtual-guest' ? null : selectedCustomer.id,
-        items: items,
-        deliveryType: 'pickup',
-        paymentMethod: paymentMethod, // ✅ Include payment method
-        notes: `POS Payment - ${paymentMethod}`
-      };
-
-      // ✅ Call new atomic endpoint
-      const response = await posLoginService.createOrderWithPayment(orderData);
-
-      if (!response.success) {
-        throw new Error(response.error?.message || 'Failed to create order');
-      }
-
-      const { order, payment } = response.data;
-      console.log('✅ Order & Payment created:', { order: order.orderNumber, payment: payment.paymentNumber });
-
-      // Add payment method to order for invoice display
-      order.paymentMethod = paymentMethod;
-
-      // Show invoice directly
-      setInvoiceOrder(order);
-      setShowPaymentModal(false);
-      setShowInvoiceModal(true);
-
-      console.log('✅ Payment workflow completed successfully!');
 
     } catch (error) {
-      console.error('❌ Error processing payment:', error);
-      showToast('error', error.message || 'Failed to process payment');
-      throw error;
-    }
-  };  // Handle payment confirmation for held orders (legacy support)
-  const handlePaymentConfirm = async (paymentMethod, order) => {
-    console.log('📝 Creating payment for existing order...');
+      console.error('❌ Payment error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        response: error.response?.data,
+        stack: error.stack
+      });
 
-    try {
-      const totals = calculateTotals();
+      // Extract error message from response if available
+      const errorMessage = error.response?.data?.error?.message
+        || error.message
+        || 'Failed to process payment';
 
-      const paymentData = {
-        referenceType: 'Order',
-        referenceId: order.id,
-        amount: totals.total,
-        paymentMethod: paymentMethod,
-        paymentDate: new Date().toISOString(),
-        status: 'completed',
-        notes: `POS Payment - ${order.orderNumber}`
-      };
-
-      const paymentResponse = await paymentService.createPayment(paymentData);
-
-      if (!paymentResponse.success) {
-        console.error('❌ Failed to create payment:', paymentResponse.error);
-        showToast('error', 'Failed to create payment record');
-        throw new Error(paymentResponse.error?.message || 'Failed to create payment');
-      }
-
-      console.log('✅ Payment created:', paymentResponse.data);
-
-      const fullOrderResponse = await orderService.getOrder(order.id);
-      const fullOrder = fullOrderResponse.data;
-      fullOrder.paymentMethod = paymentMethod;
-
-      setInvoiceOrder(fullOrder);
-      setShowPaymentModal(false);
-      setShowInvoiceModal(true);
-
-      console.log('✅ Payment workflow completed!');
-    } catch (error) {
-      console.error('❌ Payment confirmation error:', error);
-      throw error;
+      showToast('error', errorMessage);
     }
   };
+  // ⭐ REMOVED: handlePaymentConfirm is no longer needed
+  // All payment logic is now unified in handlePaymentMethodSelect above
 
   // Handle load order from held orders
   const handleLoadHeldOrder = async (order) => {
@@ -1082,9 +1128,14 @@ export const POSMain = () => {
       setCart(cartItems);
 
       // Store existing order so we don't create a new one
-      setExistingOrder(order);
+      // Add id alias for MongoDB _id compatibility
+      setExistingOrder({
+        ...order,
+        id: order._id || order.id
+      });
 
       showToast('success', `Loaded order ${order.orderNumber} to cart`);
+      console.log('💾 Existing order stored with ID:', order._id || order.id);
 
       console.log('✅ Order loaded to cart:', cartItems);
       console.log('✅ Existing order stored:', order.orderNumber);
@@ -1156,7 +1207,7 @@ export const POSMain = () => {
         totals={totals}
         onClose={() => setShowPaymentModal(false)}
         onPaymentMethodSelect={handlePaymentMethodSelect}
-        onPaymentConfirm={handlePaymentConfirm}
+        existingOrder={existingOrder} // ⭐ Pass existing order for held order detection
       />
 
       {/* Batch Selection Modal */}

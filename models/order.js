@@ -303,42 +303,88 @@ orderSchema.pre('save', async function (next) {
  * - pending/shipping → cancelled: Return stock (add to shelf, subtract from reserved)
  */
 orderSchema.pre('save', async function (next) {
+  // ⭐ ENHANCED LOGGING for debugging
+  console.log('\n========== ORDER PRE-SAVE MIDDLEWARE ==========');
+  console.log(`Order ID: ${this._id}`);
+  console.log(`Order Number: ${this.orderNumber || 'N/A'}`);
+  console.log(`isNew: ${this.isNew}`);
+  console.log(`isModified('status'): ${this.isModified('status')}`);
+  console.log(`Current status: ${this.status}`);
+  console.log(`_originalStatus: ${this._originalStatus}`);
+
   // Only process if status is modified and not a new document
   if (!this.isModified('status') || this.isNew) {
+    console.log('❌ SKIP: Status not modified or is new document');
+    console.log('================================================\n');
     return next();
+  }
+
+  // ⭐ NEW: If _originalStatus is not set by controller, try to fetch it from DB
+  if (!this._originalStatus) {
+    console.log('⚠️ _originalStatus not set by controller, fetching from DB...');
+    try {
+      // ⭐ CRITICAL: Use the same session if available (for transactions)
+      const query = this.constructor.findById(this._id);
+
+      // Check if we're in a transaction by looking at the session
+      if (this.$session()) {
+        query.session(this.$session());
+        console.log('  Using transaction session for query');
+      }
+
+      const original = await query.lean();
+      if (original && original.status) {
+        this._originalStatus = original.status;
+        console.log(`✅ Retrieved _originalStatus from DB: ${this._originalStatus}`);
+      } else {
+        console.warn('⚠️ Could not retrieve original document from DB (might be new in transaction)');
+        console.log('================================================\n');
+        return next();
+      }
+    } catch (error) {
+      console.error('❌ Error fetching original document:', error.message);
+      console.log('================================================\n');
+      return next();
+    }
   }
 
   const oldStatus = this._originalStatus;
   const newStatus = this.status;
 
-  // ⭐ CRITICAL: If _originalStatus is not set, this might be first update after creation
-  // Try to infer from the current state
-  if (!oldStatus && this.isModified('status')) {
-    console.warn(`⚠️ Order ${this.orderNumber || this._id}: _originalStatus not set, skipping inventory update`);
-    console.warn(`   Current status: ${newStatus}, consider setting _originalStatus before save`);
-    return next();
-  }
+  console.log(`Status change detected: ${oldStatus} → ${newStatus}`);
 
   // No change in status
   if (oldStatus === newStatus) {
+    console.log('❌ SKIP: No status change');
+    console.log('================================================\n');
     return next();
   }
 
-  console.log(`📦 Order ${this.orderNumber || this._id}: ${oldStatus} → ${newStatus}`);
-
-  try {
+  console.log(`✅ Processing status change: ${oldStatus} → ${newStatus}`); try {
     const OrderDetail = mongoose.model('OrderDetail');
     const DetailInventory = mongoose.model('DetailInventory');
     const InventoryMovementBatch = mongoose.model('InventoryMovementBatch');
     const Employee = mongoose.model('Employee');
 
     // Get order details with batches
-    const details = await OrderDetail.find({ order: this._id })
+    // ⭐ CRITICAL: Use session for transaction-aware query
+    const detailsQuery = OrderDetail.find({ order: this._id })
       .populate('batch')
       .populate('product');
 
+    // Add session if we're in a transaction
+    if (this.$session()) {
+      detailsQuery.session(this.$session());
+      console.log('  Using transaction session for OrderDetail query');
+    }
+
+    const details = await detailsQuery;
+
+    console.log(`Found ${details.length} order detail(s)`);
+
     if (!details || details.length === 0) {
       console.warn('⚠️ No order details found for order:', this._id);
+      console.log('================================================\n');
       return next();
     }
 
@@ -347,17 +393,26 @@ orderSchema.pre('save', async function (next) {
 
     // CASE 1A: DRAFT → PENDING (Reserve stock from shelf - for Admin orders)
     if (oldStatus === 'draft' && newStatus === 'pending') {
-      console.log('✅ Reserving stock from shelf...');
+      console.log('✅ MATCHED CASE: draft → pending (Admin order flow)');
+      console.log('   Action: Reserve stock from shelf\n');
 
       for (const detail of details) {
+        console.log(`  Processing: ${detail.product.name}`);
+        console.log(`    Batch: ${detail.batch.batchCode}`);
+        console.log(`    Quantity: ${detail.quantity}`);
+
         const detailInv = await DetailInventory.findOne({ batchId: detail.batch._id });
 
         if (!detailInv) {
+          console.error(`  ❌ DetailInventory not found for batch ${detail.batch.batchCode}`);
           throw new Error(`DetailInventory not found for batch ${detail.batch.batchCode}`);
         }
 
+        console.log(`    Before: quantityOnShelf=${detailInv.quantityOnShelf}, quantityReserved=${detailInv.quantityReserved}`);
+
         // Check sufficient stock on shelf
         if (detailInv.quantityOnShelf < detail.quantity) {
+          console.error(`  ❌ Insufficient stock on shelf`);
           throw new Error(
             `Insufficient stock on shelf for batch ${detail.batch.batchCode}. ` +
             `Available: ${detailInv.quantityOnShelf}, Needed: ${detail.quantity}`
@@ -369,8 +424,10 @@ orderSchema.pre('save', async function (next) {
         detailInv.quantityReserved += detail.quantity;
         await detailInv.save();
 
+        console.log(`    After: quantityOnShelf=${detailInv.quantityOnShelf}, quantityReserved=${detailInv.quantityReserved}`);
+
         // Log movement
-        await InventoryMovementBatch.create({
+        const movement = await InventoryMovementBatch.create({
           batchId: detail.batch._id,
           inventoryDetail: detailInv._id,
           movementType: 'out',
@@ -381,23 +438,35 @@ orderSchema.pre('save', async function (next) {
           notes: `Order status changed: ${oldStatus} → ${newStatus}. Stock moved from shelf to reserved.`
         });
 
-        console.log(`✅ Reserved ${detail.quantity} units of ${detail.product.name} from batch ${detail.batch.batchCode}`);
+        console.log(`    ✅ Movement created: ${movement.movementNumber}`);
+        console.log(`    ✅ Reserved ${detail.quantity} units successfully\n`);
       }
+
+      console.log('✅ All items reserved successfully');
     }
 
     // CASE 1B: DRAFT → DELIVERED (Direct POS sale - subtract from shelf immediately)
     else if (oldStatus === 'draft' && newStatus === 'delivered') {
-      console.log('🏪 POS direct sale - removing stock from shelf...');
+      console.log('✅ MATCHED CASE: draft → delivered (POS direct sale)');
+      console.log('   Action: Remove stock from shelf immediately\n');
 
       for (const detail of details) {
+        console.log(`  Processing: ${detail.product.name}`);
+        console.log(`    Batch: ${detail.batch.batchCode}`);
+        console.log(`    Quantity: ${detail.quantity}`);
+
         const detailInv = await DetailInventory.findOne({ batchId: detail.batch._id });
 
         if (!detailInv) {
+          console.error(`  ❌ DetailInventory not found for batch ${detail.batch.batchCode}`);
           throw new Error(`DetailInventory not found for batch ${detail.batch.batchCode}`);
         }
 
+        console.log(`    Before: quantityOnShelf=${detailInv.quantityOnShelf}`);
+
         // Check sufficient stock on shelf
         if (detailInv.quantityOnShelf < detail.quantity) {
+          console.error(`  ❌ Insufficient stock on shelf`);
           throw new Error(
             `Insufficient stock on shelf for batch ${detail.batch.batchCode}. ` +
             `Available: ${detailInv.quantityOnShelf}, Needed: ${detail.quantity}`
@@ -408,8 +477,10 @@ orderSchema.pre('save', async function (next) {
         detailInv.quantityOnShelf -= detail.quantity;
         await detailInv.save();
 
+        console.log(`    After: quantityOnShelf=${detailInv.quantityOnShelf}`);
+
         // Log movement (single log for direct sale)
-        await InventoryMovementBatch.create({
+        const movement = await InventoryMovementBatch.create({
           batchId: detail.batch._id,
           inventoryDetail: detailInv._id,
           movementType: 'out',
@@ -420,13 +491,17 @@ orderSchema.pre('save', async function (next) {
           notes: `POS sale completed. Stock sold directly from shelf (no reservation).`
         });
 
-        console.log(`✅ POS sale: ${detail.quantity} units of ${detail.product.name} from batch ${detail.batch.batchCode}`);
+        console.log(`    ✅ Movement created: ${movement.movementNumber}`);
+        console.log(`    ✅ POS sale: ${detail.quantity} units sold successfully\n`);
       }
+
+      console.log('✅ All items sold successfully');
     }
 
     // CASE 2: PENDING/SHIPPING → DELIVERED (Complete sale - remove from reserved)
     else if ((oldStatus === 'pending' || oldStatus === 'shipping') && newStatus === 'delivered') {
-      console.log('✅ Completing sale and removing from reserved...');
+      console.log('✅ MATCHED CASE: pending/shipping → delivered');
+      console.log('   Action: Complete sale, remove from reserved\n');
 
       for (const detail of details) {
         const detailInv = await DetailInventory.findOne({ batchId: detail.batch._id });
@@ -552,9 +627,19 @@ orderSchema.pre('save', async function (next) {
       }
     }
 
+    // CASE: Status change not handled
+    else {
+      console.log(`⚠️ Unhandled status change: ${oldStatus} → ${newStatus}`);
+      console.log('   No inventory movement will be performed');
+    }
+
+    console.log('\n✅ Inventory middleware completed successfully');
+    console.log('================================================\n');
     next();
   } catch (error) {
-    console.error('❌ Error in order status change middleware:', error);
+    console.error('\n❌ Error in order status change middleware:', error);
+    console.error('Stack:', error.stack);
+    console.log('================================================\n');
     next(error);
   }
 });
