@@ -296,6 +296,7 @@ orderSchema.pre('save', async function (next) {
 /**
  * Pre-save hook: Handle inventory changes when order status changes
  * - draft → pending: Reserve stock (subtract from shelf, add to reserved)
+ * - draft → delivered: Direct sale (subtract from shelf) - POS flow
  * - pending → shipping: Keep reserved (no change)
  * - shipping → delivered: Complete sale (subtract from reserved)
  * - shipping → pending: Rollback to reserved (no change needed)
@@ -309,6 +310,14 @@ orderSchema.pre('save', async function (next) {
 
   const oldStatus = this._originalStatus;
   const newStatus = this.status;
+
+  // ⭐ CRITICAL: If _originalStatus is not set, this might be first update after creation
+  // Try to infer from the current state
+  if (!oldStatus && this.isModified('status')) {
+    console.warn(`⚠️ Order ${this.orderNumber || this._id}: _originalStatus not set, skipping inventory update`);
+    console.warn(`   Current status: ${newStatus}, consider setting _originalStatus before save`);
+    return next();
+  }
 
   // No change in status
   if (oldStatus === newStatus) {
@@ -336,7 +345,7 @@ orderSchema.pre('save', async function (next) {
     // Get employee for movement logging
     const employee = this.createdBy;
 
-    // CASE 1: DRAFT → PENDING (Reserve stock from shelf)
+    // CASE 1A: DRAFT → PENDING (Reserve stock from shelf - for Admin orders)
     if (oldStatus === 'draft' && newStatus === 'pending') {
       console.log('✅ Reserving stock from shelf...');
 
@@ -373,6 +382,45 @@ orderSchema.pre('save', async function (next) {
         });
 
         console.log(`✅ Reserved ${detail.quantity} units of ${detail.product.name} from batch ${detail.batch.batchCode}`);
+      }
+    }
+
+    // CASE 1B: DRAFT → DELIVERED (Direct POS sale - subtract from shelf immediately)
+    else if (oldStatus === 'draft' && newStatus === 'delivered') {
+      console.log('🏪 POS direct sale - removing stock from shelf...');
+
+      for (const detail of details) {
+        const detailInv = await DetailInventory.findOne({ batchId: detail.batch._id });
+
+        if (!detailInv) {
+          throw new Error(`DetailInventory not found for batch ${detail.batch.batchCode}`);
+        }
+
+        // Check sufficient stock on shelf
+        if (detailInv.quantityOnShelf < detail.quantity) {
+          throw new Error(
+            `Insufficient stock on shelf for batch ${detail.batch.batchCode}. ` +
+            `Available: ${detailInv.quantityOnShelf}, Needed: ${detail.quantity}`
+          );
+        }
+
+        // Subtract directly from shelf (POS direct sale)
+        detailInv.quantityOnShelf -= detail.quantity;
+        await detailInv.save();
+
+        // Log movement (single log for direct sale)
+        await InventoryMovementBatch.create({
+          batchId: detail.batch._id,
+          inventoryDetail: detailInv._id,
+          movementType: 'out',
+          quantity: -detail.quantity,
+          reason: `POS direct sale - Order ${this.orderNumber || this._id}`,
+          date: new Date(),
+          performedBy: employee,
+          notes: `POS sale completed. Stock sold directly from shelf (no reservation).`
+        });
+
+        console.log(`✅ POS sale: ${detail.quantity} units of ${detail.product.name} from batch ${detail.batch.batchCode}`);
       }
     }
 

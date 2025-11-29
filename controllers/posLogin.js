@@ -550,6 +550,10 @@ async function createPOSOrder(orderData, employeeId, session = null) {
 
   const { customer, items, deliveryType = 'pickup', shippingFee = 0, status = 'draft', paymentStatus = 'pending' } = orderData
 
+  // POS orders should always start as draft
+  const orderStatus = 'draft'
+  const orderPaymentStatus = 'pending'
+
   // Validate items
   if (!items || !Array.isArray(items) || items.length === 0) {
     throw new Error('Order must have at least one item')
@@ -694,14 +698,14 @@ async function createPOSOrder(orderData, employeeId, session = null) {
 
   console.log(`💰 Total: Subtotal=${subtotal}, Discount=${discountAmount} (${autoDiscountPercentage}%), Total=${calculatedTotal}`)
 
-  // Create order
+  // Create order (always draft for POS)
   const order = new Order({
     customer: customerId,
     createdBy: employeeId,
     orderDate: new Date(),
     deliveryType: deliveryType,
-    status: status,
-    paymentStatus: paymentStatus,
+    status: orderStatus,
+    paymentStatus: orderPaymentStatus,
     shippingFee: shippingFee,
     discountPercentage: autoDiscountPercentage,
     total: calculatedTotal
@@ -728,6 +732,9 @@ async function createPOSOrder(orderData, employeeId, session = null) {
       await orderDetail.save()
     }
   }
+
+  // ⭐ CRITICAL: Store original status BEFORE populate for future middleware trigger
+  order._originalStatus = order.status
 
   // Populate and return
   await order.populate([
@@ -961,7 +968,7 @@ posLoginRouter.post('/order-with-payment', async (request, response) => {
       items,
       deliveryType,
       shippingFee: 0,
-      status: 'pending', // ✅ POS order with payment starts as pending
+      status: 'draft', // ✅ POS order starts as draft (will be delivered after payment)
       paymentStatus: 'pending' // Will be updated after payment
     }
 
@@ -983,22 +990,58 @@ posLoginRouter.post('/order-with-payment', async (request, response) => {
 
     await payment.save({ session })
 
-    // ====== STEP 3: Update Order paymentStatus ======
-    order.paymentStatus = 'paid'
-    await order.save({ session })
+    // ====== STEP 3: Update Order to delivered (POS direct sale) ======
+    // ⭐ CRITICAL: Re-fetch order to ensure we have a clean Mongoose document
+    const Order = require('../models/order')
+    const orderToUpdate = await Order.findById(order._id).session(session)
+
+    if (!orderToUpdate) {
+      throw new Error('Order not found after creation')
+    }
+
+    // Store original status and update to delivered
+    orderToUpdate._originalStatus = orderToUpdate.status // Should be 'draft'
+    orderToUpdate.status = 'delivered' // ✅ POS: draft → delivered (triggers inventory movement)
+    orderToUpdate.paymentStatus = 'paid'
+
+    // ⭐ Force Mongoose to detect status change
+    orderToUpdate.markModified('status')
+
+    console.log(`🔄 Updating order ${orderToUpdate.orderNumber}: ${orderToUpdate._originalStatus} → ${orderToUpdate.status}`)
+    console.log(`   isModified('status'): ${orderToUpdate.isModified('status')}`)
+
+    await orderToUpdate.save({ session })
 
     // Commit transaction
     await session.commitTransaction()
 
+    // Populate orderToUpdate with full details for response
+    await orderToUpdate.populate([
+      { path: 'customer', select: 'customerCode fullName phone customerType' },
+      { path: 'createdBy', select: 'fullName' },
+      {
+        path: 'details',
+        populate: [
+          {
+            path: 'product',
+            select: 'productCode name image unitPrice',
+            populate: { path: 'category', select: 'name' }
+          },
+          { path: 'batch', select: 'batchCode expiryDate unitPrice discountPercentage' }
+        ]
+      }
+    ])
+
     // Populate payment
     await payment.populate('createdBy', 'fullName')
 
-    console.log(`✅ POS Order + Payment created: ${order.orderNumber}, Payment: ${payment.paymentNumber}`)
+    console.log(`✅ POS Order + Payment created: ${orderToUpdate.orderNumber}, Payment: ${payment.paymentNumber}`)
+    console.log(`   Final order status: ${orderToUpdate.status}`)
 
     return response.status(201).json({
       success: true,
       data: {
-        order: order,
+        order: orderToUpdate, // ✅ Return updated order, not the old one
         payment: payment
       },
       message: 'Order and payment created successfully'

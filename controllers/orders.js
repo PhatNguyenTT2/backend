@@ -848,7 +848,13 @@ ordersRouter.put('/:id', async (request, response) => {
     }
 
     if (shippingFee !== undefined) order.shippingFee = shippingFee;
-    if (status !== undefined) order.status = status;
+
+    // ⭐ CRITICAL: Store original status before update to trigger middleware
+    if (status !== undefined && status !== order.status) {
+      order._originalStatus = order.status; // Store current status as original
+      order.status = status;
+    }
+
     if (paymentStatus !== undefined) order.paymentStatus = paymentStatus;
     if (notes !== undefined) order.notes = notes;
 
@@ -986,6 +992,8 @@ ordersRouter.delete('/:id', async (request, response) => {
       }
     } else {
       // Soft delete: set status to cancelled
+      // ⭐ CRITICAL: Store original status before update to trigger middleware
+      order._originalStatus = order.status;
       order.status = 'cancelled';
       await order.save();
 

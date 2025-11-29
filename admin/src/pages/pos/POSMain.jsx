@@ -58,7 +58,6 @@ export const POSMain = () => {
   // Invoice modal state
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceOrder, setInvoiceOrder] = useState(null);
-  const [invoiceOrderDetails, setInvoiceOrderDetails] = useState([]);
 
   // Existing order state (from held order)
   const [existingOrder, setExistingOrder] = useState(null);
@@ -819,11 +818,11 @@ export const POSMain = () => {
       if (existingOrder) {
         console.log('📋 Using existing order from held order:', existingOrder.orderNumber);
 
-        // For held orders, still need to create payment separately
+        // For held orders, update status from draft to delivered (POS direct sale)
         if (existingOrder.status === 'draft') {
-          console.log('📝 Updating order status from draft to pending...');
+          console.log('🏪 POS: Updating order status from draft to delivered (direct sale)...');
           const updateResponse = await orderService.updateOrder(existingOrder.id, {
-            status: 'pending'
+            status: 'delivered'
           });
 
           if (!updateResponse.success) {
@@ -873,7 +872,6 @@ export const POSMain = () => {
 
       // Show invoice directly
       setInvoiceOrder(order);
-      setInvoiceOrderDetails(order.details || []);
       setShowPaymentModal(false);
       setShowInvoiceModal(true);
 
@@ -916,7 +914,6 @@ export const POSMain = () => {
       fullOrder.paymentMethod = paymentMethod;
 
       setInvoiceOrder(fullOrder);
-      setInvoiceOrderDetails(order.details || []);
       setShowPaymentModal(false);
       setShowInvoiceModal(true);
 
@@ -1184,11 +1181,9 @@ export const POSMain = () => {
       <POSInvoiceModal
         isOpen={showInvoiceModal}
         order={invoiceOrder}
-        orderDetails={invoiceOrderDetails}
         onClose={() => {
           setShowInvoiceModal(false);
           setInvoiceOrder(null);
-          setInvoiceOrderDetails([]);
         }}
         onComplete={() => {
           // Clear cart and close modal after delivery confirmation
@@ -1197,7 +1192,6 @@ export const POSMain = () => {
           setExistingOrder(null); // Clear existing order
           setShowInvoiceModal(false);
           setInvoiceOrder(null);
-          setInvoiceOrderDetails([]);
           showToast('success', 'Order completed successfully!');
         }}
       />

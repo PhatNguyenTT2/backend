@@ -1,22 +1,94 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import orderService from '../../services/orderService';
+import orderDetailService from '../../services/orderDetailService';
 
 /**
  * POSInvoiceModal Component
  * Hiển thị hóa đơn của order vừa tạo trong POS
- * Cho phép xác nhận giao hàng (chuyển status từ pending -> delivered)
+ * 
+ * Workflow mới (POS direct sale):
+ * - Order tạo với status = 'draft'
+ * - Sau thanh toán, tự động chuyển thành 'delivered'
+ * - Không cần confirm delivery thủ công
  * 
  * Flow:
- * 1. Nhận order và orderDetails từ props (đã được tạo trong handlePayment)
- * 2. Hiển thị invoice với đầy đủ thông tin
- * 3. Cho phép in hóa đơn
- * 4. Cho phép confirm delivery (chuyển status pending -> delivered)
- * 5. Callback onComplete để clear cart và đóng modal
+ * 1. Nhận order từ props
+ * 2. Fetch order details từ orderDetailService.getDetailsByOrder()
+ * 3. Hiển thị invoice với đầy đủ thông tin
+ * 4. Cho phép in hóa đơn
+ * 5. Button "Confirm Delivery" chỉ hiện với held orders (nếu còn pending)
+ * 6. Callback onComplete để clear cart và đóng modal
  */
-export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComplete }) => {
+export const POSInvoiceModal = ({ isOpen, order, orderDetails: propsOrderDetails, onClose, onComplete }) => {
   const [confirmingDelivery, setConfirmingDelivery] = useState(false);
+  const [orderDetails, setOrderDetails] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch order details when order changes
+  useEffect(() => {
+    const fetchOrderDetails = async () => {
+      if (!order || !isOpen) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        console.log('📥 Fetching order details for:', order.orderNumber || order.id);
+
+        // Try to fetch order details from API
+        const detailsResponse = await orderDetailService.getDetailsByOrder(order.id || order._id);
+        console.log('📥 Order details response:', detailsResponse);
+
+        let detailsData = [];
+        if (detailsResponse.success && detailsResponse.data && detailsResponse.data.orderDetails) {
+          detailsData = detailsResponse.data.orderDetails;
+        } else if (Array.isArray(detailsResponse.data)) {
+          detailsData = detailsResponse.data;
+        } else if (Array.isArray(detailsResponse)) {
+          detailsData = detailsResponse;
+        } else if (order.details && Array.isArray(order.details)) {
+          // Fallback to order.details if API call fails
+          detailsData = order.details;
+        } else if (propsOrderDetails && Array.isArray(propsOrderDetails)) {
+          // Fallback to props if all else fails
+          detailsData = propsOrderDetails;
+        }
+
+        console.log('✅ Order details loaded:', detailsData.length, 'items');
+        setOrderDetails(detailsData);
+      } catch (error) {
+        console.error('❌ Error fetching order details:', error);
+        // Fallback to order.details or props
+        const fallbackDetails = order.details || propsOrderDetails || [];
+        console.log('⚠️ Using fallback details:', fallbackDetails.length, 'items');
+        setOrderDetails(fallbackDetails);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOrderDetails();
+  }, [order, isOpen, propsOrderDetails]);
 
   if (!isOpen || !order) return null;
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
+        <div className="bg-white rounded-lg shadow-xl p-8">
+          <div className="flex items-center gap-3">
+            <svg className="animate-spin h-6 w-6 text-emerald-600" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-[14px] font-['Poppins',sans-serif] text-gray-600">Loading invoice...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Format currency VND
   const formatCurrency = (amount) => {
@@ -68,7 +140,7 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
   // Handle confirm delivery
   const handleConfirmDelivery = async () => {
     const confirm = window.confirm(
-      'Confirm that this order has been delivered to the customer?\n\nThis will change the order status from Pending to Delivered.'
+      'Confirm that this order has been delivered to the customer?\n\nThis will change the order status to Delivered.'
     );
 
     if (!confirm) return;
@@ -93,8 +165,8 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
   };
 
   // Calculate totals from orderDetails
-  // Try to get details from order.details first (from API response), fallback to orderDetails prop
-  const details = order.details || orderDetails || [];
+  // Use fetched orderDetails state instead of order.details
+  const details = orderDetails || [];
   const subtotal = details.reduce((sum, detail) => {
     const quantity = parseFloat(detail.quantity) || 0;
     const unitPrice = parseFloat(detail.unitPrice) || 0;
@@ -106,12 +178,21 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
   const shippingFee = parseFloat(order.shippingFee) || 0;
   const total = parseFloat(order.total) || (subtotal - discountAmount + shippingFee);
 
+  console.log('💰 Invoice totals:', {
+    detailsCount: details.length,
+    subtotal,
+    discountPercentage,
+    discountAmount,
+    shippingFee,
+    total
+  });
+
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
-          // Prevent closing if delivery not confirmed
+          // Prevent closing if order is still pending (held order not delivered yet)
           if (order.status === 'pending') {
             alert('Please confirm delivery or cancel the order before closing.');
             return;
@@ -131,6 +212,7 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails, onClose, onComple
           </h3>
           <button
             onClick={() => {
+              // Only block closing if order is pending (held order)
               if (order.status === 'pending') {
                 alert('Please confirm delivery before closing.');
                 return;
