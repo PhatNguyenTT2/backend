@@ -1242,4 +1242,173 @@ posLoginRouter.get('/orders', async (request, response) => {
   }
 })
 
+/**
+ * @route   POST /api/pos-login/payment
+ * @desc    Create payment for existing order (POS only)
+ * @access  Private (POS)
+ * @body    {
+ *            orderId: ObjectId,
+ *            paymentMethod: 'cash' | 'card' | 'bank_transfer',
+ *            notes?: string
+ *          }
+ */
+posLoginRouter.post('/payment', async (request, response) => {
+  try {
+    const authorization = request.get('authorization')
+    if (!authorization || !authorization.toLowerCase().startsWith('bearer ')) {
+      return response.status(401).json({
+        success: false,
+        error: { message: 'Token missing or invalid', code: 'MISSING_TOKEN' }
+      })
+    }
+
+    const token = authorization.substring(7)
+    const decodedToken = jwt.verify(token, process.env.JWT_SECRET)
+
+    if (!decodedToken.isPOS) {
+      return response.status(403).json({
+        success: false,
+        error: { message: 'Invalid POS token', code: 'INVALID_TOKEN_TYPE' }
+      })
+    }
+
+    const employeeId = decodedToken.id
+    const employee = await Employee.findById(employeeId)
+    if (!employee) {
+      return response.status(404).json({
+        success: false,
+        error: { message: 'Employee not found', code: 'EMPLOYEE_NOT_FOUND' }
+      })
+    }
+
+    const { orderId, paymentMethod, notes } = request.body
+
+    // Validate payment method
+    if (!paymentMethod || !['cash', 'card', 'bank_transfer'].includes(paymentMethod)) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Valid payment method is required (cash/card/bank_transfer)',
+          code: 'INVALID_PAYMENT_METHOD'
+        }
+      })
+    }
+
+    // Validate order exists and is draft
+    const Order = require('../models/order')
+    const order = await Order.findById(orderId)
+      .populate('customer', 'customerCode fullName phone customerType')
+      .populate('createdBy', 'fullName')
+
+    if (!order) {
+      return response.status(404).json({
+        success: false,
+        error: { message: 'Order not found', code: 'ORDER_NOT_FOUND' }
+      })
+    }
+
+    // Check if order is in valid state for payment
+    // Accept both 'draft' and 'delivered' status:
+    // - 'draft': Normal case when creating payment for held order
+    // - 'delivered': Retry case when payment failed but order was already updated
+    if (!['draft', 'delivered'].includes(order.status)) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: `Cannot create payment for order in status: ${order.status}. Order must be 'draft' or 'delivered'.`,
+          code: 'INVALID_ORDER_STATUS'
+        }
+      })
+    }
+
+    // Check if payment already exists
+    const Payment = require('../models/payment')
+    const existingPayment = await Payment.findOne({
+      referenceType: 'Order',
+      referenceId: orderId,
+      status: 'completed'
+    })
+
+    if (existingPayment) {
+      return response.status(409).json({
+        success: false,
+        error: {
+          message: 'Payment already exists for this order',
+          code: 'PAYMENT_EXISTS',
+          data: { paymentNumber: existingPayment.paymentNumber }
+        }
+      })
+    }
+
+    console.log('\n========== POS PAYMENT FOR HELD ORDER ==========')
+    console.log(`📝 Order: ${order.orderNumber}`)
+    console.log(`💰 Amount: ${order.total}`)
+    console.log(`💳 Method: ${paymentMethod}`)
+    console.log(`👤 Employee: ${employee.fullName}`)
+    console.log('================================================\n')
+
+    // Create payment (same logic as order-with-payment)
+    const payment = new Payment({
+      referenceType: 'Order',
+      referenceId: order._id,
+      amount: order.total,
+      paymentMethod: paymentMethod,
+      paymentDate: new Date(),
+      status: 'completed', // ✅ POS payment = completed immediately
+      createdBy: employeeId,
+      notes: notes || `POS Payment - ${order.orderNumber}`
+    })
+
+    await payment.save()
+
+    // Populate payment
+    await payment.populate('createdBy', 'fullName')
+
+    console.log(`✅ Payment created: ${payment.paymentNumber}`)
+    console.log(`   Status: ${payment.status}`)
+    console.log(`   Amount: ${payment.amount}`)
+    console.log('===============================================\n')
+
+    return response.status(201).json({
+      success: true,
+      data: {
+        payment: payment,
+        order: order // Return order info for reference
+      },
+      message: 'Payment created successfully'
+    })
+
+  } catch (error) {
+    console.error('\n========== POS PAYMENT ERROR ==========')
+    console.error('❌ Error:', error.message)
+    console.error('=======================================\n')
+
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return response.status(401).json({
+        success: false,
+        error: { message: 'Invalid or expired token', code: 'INVALID_TOKEN' }
+      })
+    }
+
+    if (error.name === 'ValidationError') {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: error.message,
+          code: 'VALIDATION_ERROR'
+        }
+      })
+    }
+
+    return response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to create payment',
+        code: 'SERVER_ERROR',
+        details: error.message
+      }
+    })
+  }
+})
+
 module.exports = posLoginRouter

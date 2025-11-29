@@ -341,6 +341,69 @@ const posLoginService = {
         }
       };
     }
+  },
+
+  /**
+   * Create payment for existing order (held order)
+   * @param {string} orderId - Order ID
+   * @param {string} paymentMethod - Payment method (cash/card/bank_transfer)
+   * @param {string} notes - Optional payment notes
+   * @returns {Promise<{success: boolean, data?: object, error?: object}>}
+   */
+  async createPaymentForOrder(orderId, paymentMethod, notes = '') {
+    try {
+      const token = this.getToken();
+
+      if (!token) {
+        return {
+          success: false,
+          error: {
+            message: 'POS authentication required',
+            code: 'NO_SESSION'
+          }
+        };
+      }
+
+      const response = await api.post('/pos-login/payment', {
+        orderId,
+        paymentMethod,
+        notes
+      }, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (response.data.success) {
+        return {
+          success: true,
+          data: response.data.data
+        };
+      }
+
+      return {
+        success: false,
+        error: response.data.error || 'Failed to create payment'
+      };
+    } catch (error) {
+      console.error('POS Create Payment error:', error);
+
+      if (error.response?.data?.error) {
+        return {
+          success: false,
+          error: error.response.data.error
+        };
+      }
+
+      return {
+        success: false,
+        error: {
+          message: 'Failed to create payment',
+          code: 'SERVER_ERROR',
+          details: error.message
+        }
+      };
+    }
   }
 };
 

@@ -818,84 +818,63 @@ export const POSMain = () => {
       // ============================================
       // FLOW 1: HELD ORDER (Order Already Exists)
       // ============================================
+      // FLOW 1: HELD ORDER (Order Already Exists)
+      // ============================================
       if (existingOrder) {
-        console.log('📋 FLOW 1: Processing payment for existing held order');
-        console.log('   Order:', existingOrder.orderNumber);
-        console.log('   Order ID:', existingOrder._id || existingOrder.id);
-        console.log('   Current status:', existingOrder.status);
-
-        // Get order ID (MongoDB uses _id)
         const orderId = existingOrder._id || existingOrder.id;
+        setShowPaymentModal(false);
 
-        if (!orderId) {
-          throw new Error('Order ID is missing from existing order');
+        console.log(`💳 Processing payment for held order: ${existingOrder.orderNumber}`);
+
+        // Step 1: Create payment FIRST (while order is still draft)
+        console.log('💳 Step 1: Creating payment via POS endpoint...');
+        const paymentResponse = await posLoginService.createPaymentForOrder(
+          orderId,
+          paymentMethod,
+          `POS Payment - ${existingOrder.orderNumber}`
+        );
+
+        if (!paymentResponse.success) {
+          throw new Error(paymentResponse.error?.message || 'Failed to create payment');
         }
 
-        // Step 1: Update order status (draft → delivered)
-        if (existingOrder.status === 'draft') {
-          console.log('🔄 Updating order status: draft → delivered...');
-          console.log('   Using order ID:', orderId);
+        console.log(`✅ Payment created:`, paymentResponse.data.payment);
 
-          const updateResponse = await orderService.updateOrder(orderId, {
-            status: 'delivered',
-            paymentStatus: 'paid'
-          });
+        // Step 2: Update order status (draft → delivered) AFTER payment success
+        console.log('📝 Step 2: Updating order status...');
+        const updateResponse = await orderService.updateOrder(orderId, {
+          status: 'delivered',
+          paymentStatus: 'paid'
+        });
 
-          if (!updateResponse.success) {
-            throw new Error('Failed to update order status');
-          }
-
-          console.log('✅ Order status updated to delivered');
-
-          // Update existing order reference
-          const updatedOrder = updateResponse.data.order;
-          setExistingOrder(updatedOrder);
-
-          // Step 2: Create payment record
-          console.log('💰 Creating payment record...');
-
-          const totals = calculateTotals();
-          const paymentData = {
-            referenceType: 'Order',
-            referenceId: orderId,
-            amount: totals.total,
-            paymentMethod: paymentMethod,
-            paymentDate: new Date().toISOString(),
-            status: 'completed',
-            notes: `POS Payment - ${updatedOrder.orderNumber}`
-          };
-
-          const paymentResponse = await paymentService.createPayment(paymentData);
-
-          if (!paymentResponse.success) {
-            console.error('❌ Failed to create payment:', paymentResponse.error);
-            showToast('error', 'Failed to create payment record');
-            throw new Error('Failed to create payment');
-          }
-
-          // Backend returns payment in data directly, not data.payment
-          const createdPayment = paymentResponse.data;
-          console.log('✅ Payment created:', createdPayment.paymentNumber);
-
-          // Step 3: Fetch full order with details for invoice
-          console.log('📄 Fetching full order for invoice...');
-          const fullOrderResponse = await orderService.getOrder(orderId);
-          const fullOrder = fullOrderResponse.data.order;
-          fullOrder.paymentMethod = paymentMethod;
-
-          // Step 4: Show invoice
-          setInvoiceOrder(fullOrder);
-          setShowPaymentModal(false);
-          setShowInvoiceModal(true);
-
-          // Step 5: Clear cart and state
-          setCart([]);
-          setSelectedCustomer(null);
-          setExistingOrder(null);
-
-          showToast('success', 'Payment completed successfully!');
-          console.log('✅ FLOW 1 completed successfully!');
+        if (!updateResponse.success) {
+          // Note: Payment already created, but order update failed
+          // This is acceptable as payment exists and order can be manually updated
+          console.warn('⚠️ Order status update failed, but payment was created');
         }
+
+        console.log(`✅ Order status updated:`, updateResponse.data.order);
+
+        // Step 3: Fetch full order for invoice
+        console.log('📋 Step 3: Fetching full order details...');
+        const fullOrderResponse = await orderService.getOrderById(orderId);
+
+        if (!fullOrderResponse.success) {
+          throw new Error('Failed to fetch order details');
+        }
+
+        // Step 4: Show invoice & clear cart
+        const fullOrder = fullOrderResponse.data.order;
+        fullOrder.paymentMethod = paymentMethod;
+        setInvoiceOrder(fullOrder);
+        setShowInvoiceModal(true);
+        showToast('success', `Payment completed! Order: ${existingOrder.orderNumber}`);
+
+        console.log(`✅ Held order payment complete:`, {
+          order: existingOrder.orderNumber,
+          payment: paymentResponse.data.payment.paymentNumber,
+          amount: totals.total
+        });
       }
       // ============================================
       // FLOW 2: NEW ORDER (Create Order + Payment Atomically)
@@ -915,11 +894,10 @@ export const POSMain = () => {
         console.log('👤 Customer:', selectedCustomer.id);
 
         const orderData = {
-          customer: selectedCustomer.id === 'virtual-guest' ? null : selectedCustomer.id,
+          customer: selectedCustomer.id === 'virtual-guest' ? 'virtual-guest' : selectedCustomer.id,
           items: items,
           deliveryType: 'pickup',
-          paymentMethod: paymentMethod,
-          notes: `POS Payment - ${paymentMethod}`
+          paymentMethod: paymentMethod
         };
 
         // Call atomic endpoint
@@ -953,18 +931,18 @@ export const POSMain = () => {
 
     } catch (error) {
       console.error('❌ Payment error:', error);
-      console.error('❌ Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        stack: error.stack
-      });
+      setShowPaymentModal(false);
 
       // Extract error message from response if available
       const errorMessage = error.response?.data?.error?.message
+        || error.error?.message
         || error.message
         || 'Failed to process payment';
 
       showToast('error', errorMessage);
+
+      // Show error alert
+      alert(`Payment failed: ${errorMessage}`);
     }
   };
   // ⭐ REMOVED: handlePaymentConfirm is no longer needed
