@@ -1,1 +1,0 @@
-export { SalesChart } from "./SalesChart";
