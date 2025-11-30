@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, AlertCircle, AlertTriangle, Info, Clock } from 'lucide-react';
+import { Bell, AlertCircle, AlertTriangle, Info, Clock, DollarSign } from 'lucide-react';
 import notificationService from '../../../../services/notificationService';
 
 export const NotificationDropdown = () => {
@@ -37,13 +37,17 @@ export const NotificationDropdown = () => {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const response = await notificationService.getInventoryNotifications();
+      console.log('🔔 NotificationDropdown: Fetching all notifications...');
+      const response = await notificationService.getAllNotifications();
+      console.log('📊 NotificationDropdown: Response:', response);
       if (response.success) {
+        console.log('✅ Notifications:', response.data.notifications.length);
+        console.log('✅ Counts:', response.data.counts);
         setNotifications(response.data.notifications);
         setCounts(response.data.counts);
       }
     } catch (error) {
-      console.error('Error fetching notifications:', error);
+      console.error('❌ Error fetching notifications:', error);
     } finally {
       setLoading(false);
     }
@@ -56,7 +60,22 @@ export const NotificationDropdown = () => {
     }
   };
 
-  const getSeverityIcon = (severity) => {
+  const getSeverityIcon = (severity, type) => {
+    // Special icon for supplier credit notifications
+    if (type && type.startsWith('credit_')) {
+      switch (severity) {
+        case 'critical':
+          return <DollarSign className="w-5 h-5 text-red-600" />;
+        case 'high':
+          return <DollarSign className="w-5 h-5 text-orange-600" />;
+        case 'warning':
+          return <DollarSign className="w-5 h-5 text-amber-600" />;
+        default:
+          return <DollarSign className="w-5 h-5 text-blue-600" />;
+      }
+    }
+
+    // Default icons for other notification types
     switch (severity) {
       case 'critical':
         return <AlertCircle className="w-5 h-5 text-red-600" />;
@@ -89,6 +108,79 @@ export const NotificationDropdown = () => {
       month: '2-digit',
       year: 'numeric'
     });
+  };
+
+  const formatCurrency = (amount) => {
+    if (!amount && amount !== 0) return '₫0';
+    return `₫${Number(amount).toLocaleString('vi-VN')}`;
+  };
+
+  const renderNotificationDetails = (notification) => {
+    // Supplier credit notifications
+    if (notification.type && notification.type.startsWith('credit_')) {
+      return (
+        <div className="flex items-center gap-3 text-[11px] text-gray-500">
+          <span className="font-medium">
+            {notification.supplierCode}
+          </span>
+          <span>•</span>
+          <span>
+            Debt: {formatCurrency(notification.currentDebt)}
+          </span>
+          <span>•</span>
+          <span>
+            Limit: {formatCurrency(notification.creditLimit)}
+          </span>
+          <span>•</span>
+          <span className={`font-semibold ${notification.severity === 'critical' ? 'text-red-600' :
+            notification.severity === 'high' ? 'text-orange-600' : 'text-amber-600'
+            }`}>
+            {notification.creditUtilization?.toFixed(1)}%
+          </span>
+        </div>
+      );
+    }
+
+    // Inventory expiry notifications
+    if (notification.type === 'expired_on_shelf' || notification.type === 'expired_in_warehouse') {
+      return (
+        <div className="flex items-center gap-3 text-[11px] text-gray-500">
+          <span className="font-medium text-red-700">
+            Expired: {formatDate(notification.expiryDate)}
+          </span>
+          <span>•</span>
+          <span>{notification.quantity} units</span>
+        </div>
+      );
+    }
+
+    // Expiring soon notifications
+    if (notification.type === 'expiring_soon') {
+      return (
+        <div className="flex items-center gap-3 text-[11px] text-gray-500">
+          <span className="font-medium text-amber-700">
+            Expires: {formatDate(notification.expiryDate)}
+          </span>
+          <span>•</span>
+          <span>{notification.daysUntilExpiry} days left</span>
+          <span>•</span>
+          <span>{notification.quantity} units</span>
+        </div>
+      );
+    }
+
+    // Low stock notifications
+    if (notification.type === 'low_stock') {
+      return (
+        <div className="flex items-center gap-3 text-[11px] text-gray-500">
+          <span>{notification.batchCode}</span>
+          <span>•</span>
+          <span>{notification.quantity} units remaining</span>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   const getNotificationsByType = () => {
@@ -188,7 +280,7 @@ export const NotificationDropdown = () => {
                       >
                         <div className="flex gap-3">
                           <div className="flex-shrink-0 mt-0.5">
-                            {getSeverityIcon(notification.severity)}
+                            {getSeverityIcon(notification.severity, notification.type)}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-[13px] font-semibold text-gray-900 mb-1">
@@ -197,13 +289,7 @@ export const NotificationDropdown = () => {
                             <p className="text-[12px] text-gray-600 mb-2">
                               {notification.message}
                             </p>
-                            <div className="flex items-center gap-3 text-[11px] text-gray-500">
-                              <span className="font-medium text-red-700">
-                                Expired: {formatDate(notification.expiryDate)}
-                              </span>
-                              <span>•</span>
-                              <span>{notification.quantity} units</span>
-                            </div>
+                            {renderNotificationDetails(notification)}
                           </div>
                         </div>
                       </div>
@@ -226,7 +312,7 @@ export const NotificationDropdown = () => {
                       >
                         <div className="flex gap-3">
                           <div className="flex-shrink-0 mt-0.5">
-                            {getSeverityIcon(notification.severity)}
+                            {getSeverityIcon(notification.severity, notification.type)}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-[13px] font-semibold text-gray-900 mb-1">
@@ -235,13 +321,7 @@ export const NotificationDropdown = () => {
                             <p className="text-[12px] text-gray-600 mb-2">
                               {notification.message}
                             </p>
-                            <div className="flex items-center gap-3 text-[11px] text-gray-500">
-                              <span className="font-medium text-orange-700">
-                                Expired: {formatDate(notification.expiryDate)}
-                              </span>
-                              <span>•</span>
-                              <span>{notification.quantity} units</span>
-                            </div>
+                            {renderNotificationDetails(notification)}
                           </div>
                         </div>
                       </div>
@@ -264,7 +344,7 @@ export const NotificationDropdown = () => {
                       >
                         <div className="flex gap-3">
                           <div className="flex-shrink-0 mt-0.5">
-                            {getSeverityIcon(notification.severity)}
+                            {getSeverityIcon(notification.severity, notification.type)}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-[13px] font-semibold text-gray-900 mb-1">
@@ -273,15 +353,7 @@ export const NotificationDropdown = () => {
                             <p className="text-[12px] text-gray-600 mb-2">
                               {notification.message}
                             </p>
-                            <div className="flex items-center gap-3 text-[11px] text-gray-500">
-                              <span className="font-medium text-amber-700">
-                                Expires: {formatDate(notification.expiryDate)}
-                              </span>
-                              <span>•</span>
-                              <span>{notification.daysUntilExpiry} days left</span>
-                              <span>•</span>
-                              <span>{notification.quantity} units</span>
-                            </div>
+                            {renderNotificationDetails(notification)}
                           </div>
                         </div>
                       </div>

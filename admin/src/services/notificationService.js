@@ -149,7 +149,7 @@ const notificationService = {
           notifications.push({
             id: `low-stock-${detail._id || detail.id}`,
             type: 'low_stock',
-            severity: 'info',
+            severity: 'warning',
             title: 'Low Stock Alert',
             message: `${detail.batchId?.batchCode} - ${productName} is running low (${totalStock} units remaining)`,
             batchCode: detail.batchId?.batchCode,
@@ -175,20 +175,158 @@ const notificationService = {
   },
 
   /**
+   * Get supplier credit limit notifications
+   * @returns {Promise<Object>} Supplier credit notification data
+   */
+  getSupplierCreditNotifications: async () => {
+    try {
+      console.log('🔔 Fetching supplier credit notifications...');
+      const response = await api.get('/suppliers', {
+        params: {
+          isActive: true,
+          limit: 1000
+        }
+      })
+
+      console.log('📊 Suppliers response:', response.data);
+
+      if (!response.data.success) {
+        throw new Error('Failed to fetch suppliers')
+      }
+
+      const suppliers = response.data.data.suppliers || []
+      const notifications = []
+
+      console.log(`👥 Processing ${suppliers.length} suppliers for credit notifications...`);
+
+      suppliers.forEach(supplier => {
+        const currentDebt = supplier.currentDebt || 0
+        const creditLimit = supplier.creditLimit || 0
+        const creditUtilization = supplier.creditUtilization || 0
+
+        console.log(`Supplier: ${supplier.companyName}, Debt: ${currentDebt}, Limit: ${creditLimit}, Utilization: ${creditUtilization}%`);
+
+        // Skip if no credit limit set
+        if (creditLimit === 0) {
+          console.log(`  ⏭️ Skipping ${supplier.companyName} - no credit limit set`);
+          return;
+        }
+
+        // Critical: Credit limit exceeded
+        if (currentDebt > creditLimit) {
+          const excessAmount = currentDebt - creditLimit
+          console.log(`  🚨 CRITICAL: ${supplier.companyName} exceeded by ${excessAmount}`);
+          notifications.push({
+            id: `supplier-exceeded-${supplier.id}`,
+            type: 'credit_exceeded',
+            severity: 'critical',
+            title: 'Credit Limit Exceeded',
+            message: `${supplier.companyName} has exceeded credit limit by ₫${excessAmount.toLocaleString('vi-VN')}`,
+            supplierCode: supplier.supplierCode,
+            supplierName: supplier.companyName,
+            currentDebt,
+            creditLimit,
+            excessAmount,
+            creditUtilization,
+            supplierId: supplier.id,
+            timestamp: new Date().toISOString()
+          })
+        }
+        // High: 90-100% credit utilization
+        else if (creditUtilization >= 90) {
+          const remainingCredit = creditLimit - currentDebt
+          console.log(`  ⚠️ HIGH: ${supplier.companyName} at ${creditUtilization}%`);
+          notifications.push({
+            id: `supplier-near-limit-${supplier.id}`,
+            type: 'credit_near_limit',
+            severity: 'high',
+            title: 'Credit Limit Almost Reached',
+            message: `${supplier.companyName} is at ${creditUtilization.toFixed(1)}% credit utilization (₫${remainingCredit.toLocaleString('vi-VN')} remaining)`,
+            supplierCode: supplier.supplierCode,
+            supplierName: supplier.companyName,
+            currentDebt,
+            creditLimit,
+            remainingCredit,
+            creditUtilization,
+            supplierId: supplier.id,
+            timestamp: new Date().toISOString()
+          })
+        }
+        // Warning: 80-89% credit utilization
+        else if (creditUtilization >= 80) {
+          const remainingCredit = creditLimit - currentDebt
+          console.log(`  ⚡ WARNING: ${supplier.companyName} at ${creditUtilization}%`);
+          notifications.push({
+            id: `supplier-high-utilization-${supplier.id}`,
+            type: 'credit_high_utilization',
+            severity: 'warning',
+            title: 'High Credit Utilization',
+            message: `${supplier.companyName} is at ${creditUtilization.toFixed(1)}% credit utilization (₫${remainingCredit.toLocaleString('vi-VN')} remaining)`,
+            supplierCode: supplier.supplierCode,
+            supplierName: supplier.companyName,
+            currentDebt,
+            creditLimit,
+            remainingCredit,
+            creditUtilization,
+            supplierId: supplier.id,
+            timestamp: new Date().toISOString()
+          })
+        }
+      })
+
+      console.log(`✅ Generated ${notifications.length} supplier credit notifications`);
+
+      // Sort by severity and utilization
+      const severityOrder = { critical: 0, high: 1, warning: 2 }
+      notifications.sort((a, b) => {
+        if (severityOrder[a.severity] !== severityOrder[b.severity]) {
+          return severityOrder[a.severity] - severityOrder[b.severity]
+        }
+        return b.creditUtilization - a.creditUtilization
+      })
+
+      return {
+        success: true,
+        data: {
+          notifications,
+          counts: {
+            total: notifications.length,
+            critical: notifications.filter(n => n.severity === 'critical').length,
+            high: notifications.filter(n => n.severity === 'high').length,
+            warning: notifications.filter(n => n.severity === 'warning').length
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching supplier credit notifications:', error)
+      throw error
+    }
+  },
+
+  /**
    * Get all notifications
    * @returns {Promise<Object>} All notification data
    */
   getAllNotifications: async () => {
     try {
-      const [inventoryNotifications, lowStockNotifications] = await Promise.all([
+      console.log('🔔 Fetching all notifications...');
+      const [inventoryNotifications, lowStockNotifications, supplierCreditNotifications] = await Promise.all([
         notificationService.getInventoryNotifications(),
-        notificationService.getLowStockNotifications()
+        notificationService.getLowStockNotifications(),
+        notificationService.getSupplierCreditNotifications()
       ])
+
+      console.log('📦 Inventory notifications:', inventoryNotifications.data.counts);
+      console.log('📉 Low stock notifications:', lowStockNotifications.data.count);
+      console.log('💰 Supplier credit notifications:', supplierCreditNotifications.data.counts);
 
       const allNotifications = [
         ...inventoryNotifications.data.notifications,
-        ...lowStockNotifications.data.notifications
+        ...lowStockNotifications.data.notifications,
+        ...supplierCreditNotifications.data.notifications
       ]
+
+      console.log(`📊 Total notifications: ${allNotifications.length}`);
 
       return {
         success: true,
@@ -196,15 +334,14 @@ const notificationService = {
           notifications: allNotifications,
           counts: {
             total: allNotifications.length,
-            critical: inventoryNotifications.data.counts.critical,
-            high: inventoryNotifications.data.counts.high,
-            warning: inventoryNotifications.data.counts.warning,
-            info: lowStockNotifications.data.count
+            critical: inventoryNotifications.data.counts.critical + supplierCreditNotifications.data.counts.critical,
+            high: inventoryNotifications.data.counts.high + supplierCreditNotifications.data.counts.high,
+            warning: inventoryNotifications.data.counts.warning + supplierCreditNotifications.data.counts.warning + lowStockNotifications.data.count
           }
         }
       }
     } catch (error) {
-      console.error('Error fetching all notifications:', error)
+      console.error('❌ Error fetching all notifications:', error)
       throw error
     }
   }

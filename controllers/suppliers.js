@@ -97,20 +97,50 @@ suppliersRouter.get('/', async (request, response) => {
     if (withPurchaseOrders === 'true') {
       query = query.populate({
         path: 'purchaseOrders',
-        select: 'purchaseOrderCode totalAmount status createdAt',
-        options: { limit: 10, sort: { createdAt: -1 } }
+        select: 'poNumber totalPrice status paymentStatus orderDate',
+        options: { limit: 10, sort: { orderDate: -1 } }
       });
     }
 
     let suppliers = await query;
 
+    // Calculate currentDebt from purchase orders for each supplier
+    const suppliersWithDebt = await Promise.all(
+      suppliers.map(async (supplier) => {
+        const supplierObj = supplier.toObject();
+
+        // Calculate current debt from received purchase orders that are unpaid or partially paid
+        const purchaseOrders = await PurchaseOrder.find({
+          supplier: supplier._id,
+          status: 'received',
+          paymentStatus: { $in: ['unpaid', 'partial'] }
+        }).select('totalPrice');
+
+        const currentDebt = purchaseOrders.reduce((sum, po) => {
+          return sum + (po.totalPrice || 0);
+        }, 0);
+
+        supplierObj.currentDebt = currentDebt;
+
+        // Recalculate virtuals with updated currentDebt
+        const creditLimit = supplierObj.creditLimit || 0;
+        supplierObj.availableCredit = parseFloat((creditLimit - currentDebt).toFixed(2));
+        supplierObj.isCreditExceeded = currentDebt > creditLimit;
+        supplierObj.creditUtilization = creditLimit === 0 ? 0 : parseFloat(((currentDebt / creditLimit) * 100).toFixed(2));
+
+        return supplierObj;
+      })
+    );
+
+    let suppliersToReturn = suppliersWithDebt;
+
     // Post-processing filters (require virtuals)
     if (highDebt === 'true') {
-      suppliers = suppliers.filter(s => s.creditUtilization >= 80);
+      suppliersToReturn = suppliersToReturn.filter(s => s.creditUtilization >= 80);
     }
 
     if (creditExceeded === 'true') {
-      suppliers = suppliers.filter(s => s.isCreditExceeded);
+      suppliersToReturn = suppliersToReturn.filter(s => s.isCreditExceeded);
     }
 
     // Get total count for pagination (before virtual filters)
@@ -119,11 +149,11 @@ suppliersRouter.get('/', async (request, response) => {
     response.json({
       success: true,
       data: {
-        suppliers,
+        suppliers: suppliersToReturn,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),
-          total: highDebt === 'true' || creditExceeded === 'true' ? suppliers.length : total,
+          total: highDebt === 'true' || creditExceeded === 'true' ? suppliersToReturn.length : total,
           pages: Math.ceil(total / parseInt(limit))
         }
       }
@@ -149,8 +179,8 @@ suppliersRouter.get('/:id', async (request, response) => {
     const supplier = await Supplier.findById(request.params.id)
       .populate({
         path: 'purchaseOrders',
-        select: 'purchaseOrderCode totalAmount status deliveryDate createdAt',
-        options: { sort: { createdAt: -1 } }
+        select: 'poNumber totalPrice status paymentStatus orderDate',
+        options: { sort: { orderDate: -1 } }
       });
 
     if (!supplier) {
@@ -163,22 +193,44 @@ suppliersRouter.get('/:id', async (request, response) => {
       });
     }
 
+    // Calculate current debt from received purchase orders that are unpaid or partially paid
+    const unpaidOrPartialOrders = supplier.purchaseOrders?.filter(
+      po => po.status === 'received' && ['unpaid', 'partial'].includes(po.paymentStatus)
+    ) || [];
+
+    const calculatedCurrentDebt = unpaidOrPartialOrders.reduce((sum, po) => {
+      return sum + (po.totalPrice || 0);
+    }, 0);
+
     // Get purchase order statistics
     const totalOrders = supplier.purchaseOrders?.length || 0;
-    const completedOrders = supplier.purchaseOrders?.filter(po => po.status === 'completed').length || 0;
+    const receivedOrders = supplier.purchaseOrders?.filter(po => po.status === 'received').length || 0;
     const pendingOrders = supplier.purchaseOrders?.filter(po => po.status === 'pending').length || 0;
+    const approvedOrders = supplier.purchaseOrders?.filter(po => po.status === 'approved').length || 0;
+
+    // Convert supplier to object and update currentDebt
+    const supplierObj = supplier.toObject();
+    supplierObj.currentDebt = calculatedCurrentDebt;
+
+    // Recalculate virtuals
+    const creditLimit = supplierObj.creditLimit || 0;
+    const availableCredit = parseFloat((creditLimit - calculatedCurrentDebt).toFixed(2));
+    const creditUtilization = creditLimit === 0 ? 0 : parseFloat(((calculatedCurrentDebt / creditLimit) * 100).toFixed(2));
+    const isCreditExceeded = calculatedCurrentDebt > creditLimit;
 
     response.json({
       success: true,
       data: {
-        supplier,
+        supplier: supplierObj,
         statistics: {
           totalOrders,
-          completedOrders,
+          receivedOrders,
           pendingOrders,
-          availableCredit: supplier.availableCredit,
-          creditUtilization: supplier.creditUtilization,
-          isCreditExceeded: supplier.isCreditExceeded
+          approvedOrders,
+          currentDebt: calculatedCurrentDebt,
+          availableCredit,
+          creditUtilization,
+          isCreditExceeded
         }
       }
     });

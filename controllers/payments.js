@@ -4,6 +4,95 @@ const Order = require('../models/order');
 const PurchaseOrder = require('../models/purchaseOrder');
 
 /**
+ * Helper function to update payment status of PurchaseOrder
+ * based on total payments vs total price
+ */
+const updatePurchaseOrderPaymentStatus = async (purchaseOrderId) => {
+  try {
+    const purchaseOrder = await PurchaseOrder.findById(purchaseOrderId);
+    if (!purchaseOrder) return;
+
+    // Get all completed payments for this purchase order
+    const payments = await Payment.find({
+      referenceType: 'PurchaseOrder',
+      referenceId: purchaseOrderId,
+      status: 'completed'
+    });
+
+    const totalPaid = payments.reduce((sum, payment) => {
+      return sum + (payment.amount || 0);
+    }, 0);
+
+    const totalPrice = purchaseOrder.totalPrice || 0;
+
+    // Determine payment status
+    let newPaymentStatus;
+    if (totalPaid === 0) {
+      newPaymentStatus = 'unpaid';
+    } else if (totalPaid >= totalPrice) {
+      newPaymentStatus = 'paid';
+    } else {
+      newPaymentStatus = 'partial';
+    }
+
+    // Update if changed
+    if (purchaseOrder.paymentStatus !== newPaymentStatus) {
+      purchaseOrder.paymentStatus = newPaymentStatus;
+      await purchaseOrder.save();
+      console.log(`✅ Updated PurchaseOrder ${purchaseOrder.poNumber} paymentStatus: ${newPaymentStatus} (paid: ${totalPaid}/${totalPrice})`);
+    }
+  } catch (error) {
+    console.error('Error updating purchase order payment status:', error);
+    throw error;
+  }
+};
+
+/**
+ * Helper function to update payment status of Order
+ * based on total payments vs total price
+ */
+const updateOrderPaymentStatus = async (orderId) => {
+  try {
+    const order = await Order.findById(orderId);
+    if (!order) return;
+
+    // Get all completed payments for this order
+    const payments = await Payment.find({
+      referenceType: 'Order',
+      referenceId: orderId,
+      status: 'completed'
+    });
+
+    const totalPaid = payments.reduce((sum, payment) => {
+      return sum + (payment.amount || 0);
+    }, 0);
+
+    const totalPrice = order.total || 0;
+
+    // Determine payment status
+    let newPaymentStatus;
+    if (totalPaid === 0) {
+      newPaymentStatus = 'pending';
+    } else if (totalPaid >= totalPrice) {
+      newPaymentStatus = 'paid';
+    } else {
+      // Order model doesn't have 'partial' status, use 'pending'
+      newPaymentStatus = 'pending';
+    }
+
+    // Update if changed
+    if (order.paymentStatus !== newPaymentStatus) {
+      order.paymentStatus = newPaymentStatus;
+      await order.save();
+      console.log(`✅ Updated Order ${order.orderNumber} paymentStatus: ${newPaymentStatus} (paid: ${totalPaid}/${totalPrice})`);
+    }
+  } catch (error) {
+    console.error('Error updating order payment status:', error);
+    throw error;
+  }
+};
+
+/**
  * Payments Controller - Minimal CRUD Approach
  * 
  * Only 5 basic CRUD endpoints:
@@ -272,6 +361,15 @@ paymentsRouter.post('/', async (request, response) => {
     await payment.populate('createdBy', 'employeeName userAccount');
     await payment.populate('referenceId');
 
+    // Update payment status of reference document (PurchaseOrder or Order)
+    if (payment.status === 'completed') {
+      if (referenceType === 'PurchaseOrder') {
+        await updatePurchaseOrderPaymentStatus(referenceId);
+      } else if (referenceType === 'Order') {
+        await updateOrderPaymentStatus(referenceId);
+      }
+    }
+
     response.status(201).json({
       success: true,
       message: 'Payment created successfully',
@@ -309,6 +407,10 @@ paymentsRouter.put('/:id', async (request, response) => {
       });
     }
 
+    // Track if status changed to/from completed
+    const statusChanged = status !== undefined && status !== payment.status;
+    const oldStatus = payment.status;
+
     // Update fields
     if (amount !== undefined) payment.amount = amount;
     if (paymentMethod !== undefined) payment.paymentMethod = paymentMethod;
@@ -321,6 +423,15 @@ paymentsRouter.put('/:id', async (request, response) => {
     // Populate before returning
     await payment.populate('createdBy', 'employeeName userAccount');
     await payment.populate('referenceId');
+
+    // Update payment status of reference document if status changed or amount changed
+    if (statusChanged || amount !== undefined) {
+      if (payment.referenceType === 'PurchaseOrder') {
+        await updatePurchaseOrderPaymentStatus(payment.referenceId);
+      } else if (payment.referenceType === 'Order') {
+        await updateOrderPaymentStatus(payment.referenceId);
+      }
+    }
 
     response.json({
       success: true,
@@ -368,7 +479,18 @@ paymentsRouter.delete('/:id', async (request, response) => {
       });
     }
 
+    // Store reference info before deletion
+    const referenceType = payment.referenceType;
+    const referenceId = payment.referenceId;
+
     await payment.deleteOne();
+
+    // Update payment status of reference document after deletion
+    if (referenceType === 'PurchaseOrder') {
+      await updatePurchaseOrderPaymentStatus(referenceId);
+    } else if (referenceType === 'Order') {
+      await updateOrderPaymentStatus(referenceId);
+    }
 
     response.json({
       success: true,

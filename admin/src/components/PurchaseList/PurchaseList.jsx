@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Eye, Package } from 'lucide-react';
 import { ViewPurchaseDetailsModal } from './ViewPurchaseDetailsModal';
 
 export const PurchaseList = ({ purchaseData = [], summary = null, loading = false }) => {
@@ -15,11 +16,22 @@ export const PurchaseList = ({ purchaseData = [], summary = null, loading = fals
     setSelectedProduct(null);
   };
 
+  const formatCurrency = (amount) => {
+    if (!amount && amount !== 0) return '₫0';
+
+    // Handle Mongoose Decimal128
+    if (typeof amount === 'object' && amount.$numberDecimal) {
+      return `₫${Number(amount.$numberDecimal).toLocaleString('vi-VN')}`;
+    }
+
+    return `₫${Number(amount).toLocaleString('vi-VN')}`;
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-sm py-12 text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-[13px] text-gray-500 font-['Poppins',sans-serif]">
+        <p className="mt-4 text-[13px] text-gray-500">
           Loading purchase data...
         </p>
       </div>
@@ -29,23 +41,11 @@ export const PurchaseList = ({ purchaseData = [], summary = null, loading = fals
   if (!purchaseData || purchaseData.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm py-16 text-center">
-        <svg
-          className="mx-auto h-16 w-16 text-gray-400"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-          />
-        </svg>
-        <h3 className="mt-4 text-[16px] font-semibold text-gray-900 font-['Poppins',sans-serif]">
+        <Package className="mx-auto h-16 w-16 text-gray-400" />
+        <h3 className="mt-4 text-[16px] font-semibold text-gray-900">
           No purchase data found
         </h3>
-        <p className="mt-2 text-[13px] text-gray-500 font-['Poppins',sans-serif]">
+        <p className="mt-2 text-[13px] text-gray-500">
           There are no purchase orders in the selected date range
         </p>
       </div>
@@ -60,113 +60,136 @@ export const PurchaseList = ({ purchaseData = [], summary = null, loading = fals
           {/* Table Header */}
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-6 py-3 text-left text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                Product
+              <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                Product Code
               </th>
-              <th className="px-6 py-3 text-left text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                SKU
+              <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                Product Name
               </th>
-              <th className="px-6 py-3 text-right text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                Quantity Purchased
+              <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                Category
               </th>
-              <th className="px-6 py-3 text-right text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                Unit Price
+              <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                Qty Purchased
               </th>
-              <th className="px-6 py-3 text-right text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                Total Amount
+              <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                Avg Cost
               </th>
-              <th className="px-6 py-3 text-center text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
+              <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                Total Cost
+              </th>
+              <th className="px-6 py-3 text-center text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                Orders
+              </th>
+              <th className="px-6 py-3 text-center text-[11px] font-medium text-gray-700 uppercase tracking-wider">
                 Actions
               </th>
             </tr>
           </thead>
 
           {/* Table Body */}
-          <tbody>
-            {purchaseData.map((item, index) => (
+          <tbody className="divide-y divide-gray-100">
+            {purchaseData.map((product, index) => (
               <tr
-                key={index}
-                className={`hover:bg-gray-50 transition-colors ${index !== purchaseData.length - 1 ? 'border-b border-gray-100' : ''
-                  }`}
+                key={product.productId || index}
+                className="hover:bg-gray-50 transition-colors"
               >
+                {/* Product Code */}
+                <td className="px-6 py-4">
+                  <p className="text-[13px] font-medium text-gray-900">
+                    {product.productCode}
+                  </p>
+                </td>
+
                 {/* Product Name */}
                 <td className="px-6 py-4">
-                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529]">
-                    {item.name || 'N/A'}
+                  <p className="text-[13px] font-medium text-gray-900">
+                    {product.productName}
                   </p>
                 </td>
 
-                {/* SKU */}
+                {/* Category */}
                 <td className="px-6 py-4">
-                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#6c757d]">
-                    {item.sku || 'N/A'}
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-purple-100 text-purple-800">
+                    {product.categoryName}
+                  </span>
+                </td>
+
+                {/* Quantity Purchased */}
+                <td className="px-6 py-4 text-right">
+                  <p className="text-[13px] font-semibold text-purple-600">
+                    {product.totalQuantity.toLocaleString()}
                   </p>
                 </td>
 
-                {/* Quantity */}
+                {/* Average Cost */}
                 <td className="px-6 py-4 text-right">
-                  <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-purple-600">
-                    {item.quantity || 0}
+                  <p className="text-[13px] text-gray-700">
+                    {formatCurrency(product.averageCost)}
                   </p>
                 </td>
 
-                {/* Unit Price */}
+                {/* Total Cost */}
                 <td className="px-6 py-4 text-right">
-                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529]">
-                    ${(item.unitPrice || 0).toFixed(2)}
+                  <p className="text-[14px] font-semibold text-blue-600">
+                    {formatCurrency(product.totalCost)}
                   </p>
                 </td>
 
-                {/* Total Amount */}
-                <td className="px-6 py-4 text-right">
-                  <p className="text-[14px] font-semibold font-['Poppins',sans-serif] text-blue-600">
-                    ${(item.totalAmount || 0).toFixed(2)}
-                  </p>
+                {/* Total Orders */}
+                <td className="px-6 py-4 text-center">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-[12px] font-semibold text-gray-700">
+                    {product.totalOrders}
+                  </span>
                 </td>
 
                 {/* Actions */}
                 <td className="px-6 py-4 text-center">
                   <button
-                    onClick={() => handleViewDetails(item)}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 rounded-lg transition-colors text-[12px] font-['Poppins',sans-serif] font-medium"
-                    title="View purchase order details"
+                    onClick={() => handleViewDetails(product)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 rounded-lg transition-colors text-[12px] font-medium"
+                    title="View details"
                   >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M8 3C4.5 3 1.7 5.6 1 8c.7 2.4 3.5 5 7 5s6.3-2.6 7-5c-.7-2.4-3.5-5-7-5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                      <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                    </svg>
-                    View Details
+                    <Eye className="w-4 h-4" />
+                    Details
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
 
-          {/* Table Footer with Total */}
+          {/* Table Footer with Summary */}
           {summary && (
-            <tfoot className="bg-gray-50 border-t-2 border-gray-200">
+            <tfoot className="bg-gray-50 border-t-2 border-gray-300">
               <tr>
                 <td colSpan="3" className="px-6 py-4">
-                  <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#6c757d]">
-                    Total Products: {purchaseData.length}
+                  <div className="space-y-1">
+                    <p className="text-[13px] font-semibold text-gray-900">
+                      Summary Statistics
+                    </p>
+                    <p className="text-[12px] text-gray-600">
+                      {summary.totalProducts} products • {summary.totalOrders} purchase orders
+                    </p>
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <p className="text-[11px] text-gray-500 uppercase">Total Qty</p>
+                  <p className="text-[14px] font-bold text-purple-600">
+                    {summary.totalQuantity.toLocaleString()}
                   </p>
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-purple-600">
-                    {summary.totalQuantity || 0}
+                  <p className="text-[11px] text-gray-500 uppercase">Avg PO</p>
+                  <p className="text-[13px] font-semibold text-gray-700">
+                    {formatCurrency(summary.averageOrderValue)}
                   </p>
                 </td>
-                <td className="px-6 py-4 text-right">
-                  <p className="text-[14px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-                    Total Cost:
+                <td colSpan="3" className="px-6 py-4 text-right">
+                  <p className="text-[11px] text-gray-500 uppercase mb-1">Total Cost</p>
+                  <p className="text-[18px] font-bold text-blue-600">
+                    {formatCurrency(summary.totalCost)}
                   </p>
                 </td>
-                <td className="px-6 py-4 text-right">
-                  <p className="text-[18px] font-bold font-['Poppins',sans-serif] text-blue-600">
-                    ${(summary.totalCost || 0).toFixed(2)}
-                  </p>
-                </td>
-                <td></td>
               </tr>
             </tfoot>
           )}
@@ -174,11 +197,12 @@ export const PurchaseList = ({ purchaseData = [], summary = null, loading = fals
       </div>
 
       {/* View Purchase Details Modal */}
-      <ViewPurchaseDetailsModal
-        product={selectedProduct}
-        purchaseOrders={selectedProduct?.purchaseOrders || []}
-        onClose={handleCloseModal}
-      />
+      {viewDetailsModal && (
+        <ViewPurchaseDetailsModal
+          product={selectedProduct}
+          onClose={handleCloseModal}
+        />
+      )}
     </div>
   );
 };

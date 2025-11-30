@@ -122,12 +122,33 @@ customersRouter.get('/', async (request, response) => {
     if (withOrders === 'true') {
       query = query.populate({
         path: 'orders',
-        select: 'orderCode totalAmount status paymentStatus createdAt',
-        options: { limit: 10, sort: { createdAt: -1 } }
+        select: 'orderNumber total status paymentStatus orderDate',
+        options: { limit: 10, sort: { orderDate: -1 } }
       });
     }
 
     const customers = await query;
+
+    // Calculate totalSpent from delivered + paid orders for each customer
+    const customersWithSpent = await Promise.all(
+      customers.map(async (customer) => {
+        const customerObj = customer.toObject();
+
+        // Calculate total spent from delivered and paid orders
+        const orders = await Order.find({
+          customer: customer._id,
+          status: 'delivered',
+          paymentStatus: 'paid'
+        }).select('total');
+
+        const totalSpent = orders.reduce((sum, order) => {
+          return sum + (order.total || 0);
+        }, 0);
+
+        customerObj.totalSpent = totalSpent;
+        return customerObj;
+      })
+    );
 
     // Get total count for pagination
     const total = await Customer.countDocuments(filter);
@@ -135,7 +156,7 @@ customersRouter.get('/', async (request, response) => {
     response.json({
       success: true,
       data: {
-        customers,
+        customers: customersWithSpent,
         pagination: {
           currentPage: parseInt(page),
           limit: parseInt(limit),
@@ -210,8 +231,8 @@ customersRouter.get('/:id', async (request, response) => {
     const customer = await Customer.findById(request.params.id)
       .populate({
         path: 'orders',
-        select: 'orderCode totalAmount status paymentStatus paymentMethod createdAt',
-        options: { sort: { createdAt: -1 } }
+        select: 'orderNumber total status paymentStatus orderDate',
+        options: { sort: { orderDate: -1 } }
       });
 
     if (!customer) {
@@ -224,22 +245,35 @@ customersRouter.get('/:id', async (request, response) => {
       });
     }
 
+    // Calculate total spent from delivered and paid orders
+    const deliveredPaidOrders = customer.orders?.filter(
+      order => order.status === 'delivered' && order.paymentStatus === 'paid'
+    ) || [];
+
+    const calculatedTotalSpent = deliveredPaidOrders.reduce((sum, order) => {
+      return sum + (order.total || 0);
+    }, 0);
+
     // Get order statistics
     const totalOrders = customer.orders?.length || 0;
-    const completedOrders = customer.orders?.filter(order => order.status === 'completed').length || 0;
+    const deliveredOrders = customer.orders?.filter(order => order.status === 'delivered').length || 0;
     const pendingOrders = customer.orders?.filter(order => order.status === 'pending').length || 0;
     const cancelledOrders = customer.orders?.filter(order => order.status === 'cancelled').length || 0;
+
+    // Convert customer to object and update totalSpent
+    const customerObj = customer.toObject();
+    customerObj.totalSpent = calculatedTotalSpent;
 
     response.json({
       success: true,
       data: {
-        customer,
+        customer: customerObj,
         statistics: {
           totalOrders,
-          completedOrders,
+          deliveredOrders,
           pendingOrders,
           cancelledOrders,
-          totalSpent: customer.totalSpent,
+          totalSpent: calculatedTotalSpent,
           isVIP: customer.isVIP,
           qualifiesForUpgrade: customer.qualifiesForUpgrade
         }

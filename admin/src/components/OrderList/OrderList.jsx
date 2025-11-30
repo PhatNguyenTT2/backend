@@ -240,17 +240,28 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
 
                 {/* Status - Dropdown */}
                 <div className="w-[110px] px-3 flex items-center flex-shrink-0">
-                  <button
-                    onClick={(e) => toggleDropdown(order.id, 'status', e)}
-                    className={`${getStatusColor(order.status)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
-                  >
-                    <span className="text-[9px] font-bold font-['Poppins',sans-serif] leading-[10px] uppercase truncate">
-                      {order.status || 'pending'}
+                  {['delivered', 'cancelled', 'refunded'].includes(order.status) ? (
+                    <span
+                      className={`${getStatusColor(order.status)} px-2 py-1 rounded inline-flex items-center gap-1`}
+                      title="Final status - cannot be changed"
+                    >
+                      <span className="text-[9px] font-bold font-['Poppins',sans-serif] leading-[10px] uppercase truncate">
+                        {order.status}
+                      </span>
                     </span>
-                    <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M1 1L4 4L7 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
+                  ) : (
+                    <button
+                      onClick={(e) => toggleDropdown(order.id, 'status', e)}
+                      className={`${getStatusColor(order.status)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
+                    >
+                      <span className="text-[9px] font-bold font-['Poppins',sans-serif] leading-[10px] uppercase truncate">
+                        {order.status || 'pending'}
+                      </span>
+                      <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M1 1L4 4L7 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
 
                 {/* Payment Status - Read Only (synced from Payment model) */}

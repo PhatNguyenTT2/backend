@@ -1,185 +1,331 @@
-import React from 'react';
+import React, { useState } from 'react';
+import ReactDOM from 'react-dom';
+import { X, Package, ShoppingCart, Layers } from 'lucide-react';
 
-export const ViewSalesDetailsModal = ({ product, orders, onClose }) => {
+export const ViewSalesDetailsModal = ({ product, onClose }) => {
+  const [activeTab, setActiveTab] = useState('batches'); // 'batches' or 'orders'
+
   if (!product) return null;
 
-  return (
+  const formatCurrency = (amount) => {
+    if (!amount && amount !== 0) return '₫0';
+
+    // Handle Mongoose Decimal128
+    if (typeof amount === 'object' && amount.$numberDecimal) {
+      return `₫${Number(amount.$numberDecimal).toLocaleString('vi-VN')}`;
+    }
+
+    if (typeof amount === 'object') {
+      console.error('formatCurrency received unexpected object:', amount);
+      return '₫0';
+    }
+
+    return `₫${Number(amount).toLocaleString('vi-VN')}`;
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('vi-VN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  };
+
+  const getStatusBadge = (status) => {
+    const statusMap = {
+      pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Pending' },
+      processing: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Processing' },
+      shipping: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Shipping' },
+      delivered: { bg: 'bg-green-100', text: 'text-green-800', label: 'Delivered' },
+      cancelled: { bg: 'bg-red-100', text: 'text-red-800', label: 'Cancelled' },
+    };
+    const config = statusMap[status?.toLowerCase()] || { bg: 'bg-gray-100', text: 'text-gray-800', label: status };
+    return (
+      <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase ${config.bg} ${config.text}`}>
+        {config.label}
+      </span>
+    );
+  };
+
+  const modalContent = (
     <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[80vh] overflow-hidden"
+        className="bg-white rounded-lg shadow-xl max-w-6xl w-full mx-4 max-h-[85vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-blue-50">
-          <div>
-            <h3 className="text-[18px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-              Sales Details: {product.name}
-            </h3>
-            <div className="flex items-center gap-4 mt-2">
-              <p className="text-[12px] text-[#6c757d] font-['Poppins',sans-serif]">
-                SKU: <span className="font-semibold text-gray-700">{product.sku}</span>
-              </p>
-              <span className="text-gray-300">|</span>
-              <p className="text-[12px] text-[#6c757d] font-['Poppins',sans-serif]">
-                Total Sold: <span className="font-semibold text-blue-600">{product.quantity}</span>
-              </p>
-              <span className="text-gray-300">|</span>
-              <p className="text-[12px] text-[#6c757d] font-['Poppins',sans-serif]">
-                Total Revenue: <span className="font-semibold text-emerald-600">${product.totalAmount?.toFixed(2)}</span>
-              </p>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white rounded-lg shadow-sm">
+              <Package className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div>
+              <h3 className="text-[18px] font-semibold text-gray-900">
+                Sales Details
+              </h3>
+              <div className="flex items-center gap-4 mt-1">
+                <p className="text-[12px] text-gray-600">
+                  <span className="font-medium">{product.productCode}</span> • {product.productName}
+                </p>
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[11px] font-medium rounded">
+                  {product.categoryName}
+                </span>
+              </div>
             </div>
           </div>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
           >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M15 5L5 15M5 5L15 15" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+            <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="overflow-y-auto max-h-[calc(80vh-180px)]">
-          {orders && orders.length > 0 ? (
-            <table className="w-full">
-              <thead className="bg-gray-50 sticky top-0 z-10">
-                <tr>
-                  <th className="px-6 py-3 text-left text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                    Order Number
-                  </th>
-                  <th className="px-6 py-3 text-left text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                    Customer
-                  </th>
-                  <th className="px-6 py-3 text-left text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-center text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-right text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                    Quantity
-                  </th>
-                  <th className="px-6 py-3 text-right text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                    Unit Price
-                  </th>
-                  <th className="px-6 py-3 text-right text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px]">
-                    Subtotal
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order, idx) => {
-                  // Get status badge color
-                  const getStatusColor = (status) => {
-                    const statusMap = {
-                      pending: 'bg-yellow-100 text-yellow-800',
-                      processing: 'bg-blue-100 text-blue-800',
-                      shipping: 'bg-purple-100 text-purple-800',
-                      delivered: 'bg-green-100 text-green-800',
-                      cancelled: 'bg-red-100 text-red-800',
-                    };
-                    return statusMap[status?.toLowerCase()] || 'bg-gray-100 text-gray-800';
-                  };
+        {/* Summary Cards */}
+        <div className="grid grid-cols-4 gap-4 px-6 py-4 bg-gray-50 border-b border-gray-200">
+          <div className="bg-white rounded-lg p-3 shadow-sm">
+            <p className="text-[11px] text-gray-500 uppercase tracking-wide">Total Sold</p>
+            <p className="text-[20px] font-bold text-blue-600 mt-1">
+              {product.totalQuantity?.toLocaleString() || 0}
+            </p>
+          </div>
+          <div className="bg-white rounded-lg p-3 shadow-sm">
+            <p className="text-[11px] text-gray-500 uppercase tracking-wide">Avg Price</p>
+            <p className="text-[16px] font-bold text-gray-900 mt-1">
+              {formatCurrency(product.averagePrice || 0)}
+            </p>
+          </div>
+          <div className="bg-white rounded-lg p-3 shadow-sm">
+            <p className="text-[11px] text-gray-500 uppercase tracking-wide">Total Revenue</p>
+            <p className="text-[18px] font-bold text-emerald-600 mt-1">
+              {formatCurrency(product.totalRevenue || 0)}
+            </p>
+          </div>
+          <div className="bg-white rounded-lg p-3 shadow-sm">
+            <p className="text-[11px] text-gray-500 uppercase tracking-wide">Total Orders</p>
+            <p className="text-[20px] font-bold text-purple-600 mt-1">
+              {product.totalOrders || 0}
+            </p>
+          </div>
+        </div>
 
-                  return (
-                    <tr key={idx} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-emerald-600">
-                          {order.orderNumber}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529]">
-                          {order.customerName || 'N/A'}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#6c757d]">
-                          {new Date(order.orderDate).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric'
-                          })}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`px-2 py-1 rounded-full text-[10px] font-semibold font-['Poppins',sans-serif] uppercase ${getStatusColor(order.status)}`}>
-                          {order.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-blue-600">
-                          {order.quantity}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529]">
-                          ${order.unitPrice?.toFixed(2)}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <p className="text-[14px] font-semibold font-['Poppins',sans-serif] text-emerald-600">
-                          ${order.subtotal?.toFixed(2)}
-                        </p>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          ) : (
-            <div className="px-6 py-16 text-center">
-              <svg
-                className="mx-auto h-16 w-16 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-              <p className="mt-4 text-[13px] text-[#6c757d] font-['Poppins',sans-serif]">
-                No order details found for this product
-              </p>
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200 px-6 bg-white">
+          <button
+            onClick={() => setActiveTab('batches')}
+            className={`flex items-center gap-2 px-4 py-3 text-[13px] font-medium transition-colors relative ${activeTab === 'batches'
+              ? 'text-emerald-600 border-b-2 border-emerald-600'
+              : 'text-gray-600 hover:text-gray-900'
+              }`}
+          >
+            <Layers className="w-4 h-4" />
+            Batch Breakdown
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${activeTab === 'batches' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
+              }`}>
+              {product.batches?.length || 0}
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`flex items-center gap-2 px-4 py-3 text-[13px] font-medium transition-colors relative ${activeTab === 'orders'
+              ? 'text-emerald-600 border-b-2 border-emerald-600'
+              : 'text-gray-600 hover:text-gray-900'
+              }`}
+          >
+            <ShoppingCart className="w-4 h-4" />
+            Order History
+            <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${activeTab === 'orders' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'
+              }`}>
+              {product.orders?.length || 0}
+            </span>
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Batch Breakdown Tab */}
+          {activeTab === 'batches' && (
+            <div className="p-6">
+              {product.batches && product.batches.length > 0 ? (
+                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Batch Code
+                        </th>
+                        <th className="px-4 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Qty Sold
+                        </th>
+                        <th className="px-4 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Unit Price
+                        </th>
+                        <th className="px-4 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Discount
+                        </th>
+                        <th className="px-4 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Revenue
+                        </th>
+                        <th className="px-4 py-3 text-center text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Orders
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {product.batches.map((batch, idx) => (
+                        <tr key={batch.batchId || idx} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <span className="text-[13px] font-medium text-gray-900">
+                              {batch.batchCode}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className="text-[13px] font-semibold text-blue-600">
+                              {batch.quantitySold.toLocaleString()}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className="text-[13px] text-gray-700">
+                              {formatCurrency(batch.unitPrice)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className={`text-[13px] font-medium ${batch.discountPercentage > 0 ? 'text-red-600' : 'text-gray-400'
+                              }`}>
+                              {batch.discountPercentage}%
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className="text-[14px] font-semibold text-emerald-600">
+                              {formatCurrency(batch.revenue)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-[12px] font-semibold text-purple-700">
+                              {batch.orderCount}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-16 text-center">
+                  <Layers className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="mt-4 text-[13px] text-gray-500">
+                    No batch data available
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Order History Tab */}
+          {activeTab === 'orders' && (
+            <div className="p-6">
+              {product.orders && product.orders.length > 0 ? (
+                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Order Number
+                        </th>
+                        <th className="px-4 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Customer
+                        </th>
+                        <th className="px-4 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Date
+                        </th>
+                        <th className="px-4 py-3 text-center text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Batch
+                        </th>
+                        <th className="px-4 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Qty
+                        </th>
+                        <th className="px-4 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Unit Price
+                        </th>
+                        <th className="px-4 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                          Subtotal
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {product.orders.map((order, idx) => (
+                        <tr key={order.orderId || idx} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-4 py-3">
+                            <span className="text-[13px] font-semibold text-emerald-600">
+                              {order.orderNumber}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div>
+                              <p className="text-[13px] font-medium text-gray-900">
+                                {order.customerName}
+                              </p>
+                              <p className="text-[11px] text-gray-500">
+                                {order.customerPhone}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-[12px] text-gray-600">
+                              {formatDate(order.orderDate)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {getStatusBadge(order.status)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-[12px] font-mono text-gray-700 bg-gray-100 px-2 py-1 rounded">
+                              {order.batchCode}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className="text-[13px] font-semibold text-blue-600">
+                              {order.quantitySold}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className="text-[13px] text-gray-700">
+                              {formatCurrency(order.unitPrice)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className="text-[14px] font-semibold text-emerald-600">
+                              {formatCurrency(order.subtotal)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-16 text-center">
+                  <ShoppingCart className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="mt-4 text-[13px] text-gray-500">
+                    No order history available
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
-
-        {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex justify-between items-center">
-            <div className="text-[13px] text-[#6c757d] font-['Poppins',sans-serif]">
-              Total Orders: <span className="font-semibold text-gray-700">{orders?.length || 0}</span>
-            </div>
-            <div className="flex items-center gap-6">
-              <div className="text-right">
-                <p className="text-[11px] text-[#6c757d] font-['Poppins',sans-serif] uppercase tracking-[0.5px]">
-                  Total Quantity
-                </p>
-                <p className="text-[16px] font-bold font-['Poppins',sans-serif] text-blue-600">
-                  {product.quantity}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-[11px] text-[#6c757d] font-['Poppins',sans-serif] uppercase tracking-[0.5px]">
-                  Total Revenue
-                </p>
-                <p className="text-[18px] font-bold font-['Poppins',sans-serif] text-emerald-600">
-                  ${product.totalAmount?.toFixed(2)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
+  );
+
+  return ReactDOM.createPortal(
+    modalContent,
+    document.body
   );
 };
