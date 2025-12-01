@@ -17,5 +17,4 @@ export { default as Settings } from "./Settings";
 export { default as NoAccess } from "./NoAccess";
 
 // Reports
-export { default as SalesReports } from "./reports/Sales";
 export { default as PurchaseReports } from "./reports/Purchase";
