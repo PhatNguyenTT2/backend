@@ -1,6 +1,7 @@
 const userAccountsRouter = require('express').Router()
 const UserAccount = require('../models/userAccount')
 const bcrypt = require('bcrypt')
+const { generateResetToken, hashResetToken, getResetTokenExpiration } = require('../utils/resetPasswordHelpers')
 
 /**
  * @route   GET /api/user-accounts
@@ -421,6 +422,234 @@ userAccountsRouter.delete('/:id', async (request, response) => {
       success: false,
       error: {
         message: 'Failed to delete user account',
+        details: error.message
+      }
+    })
+  }
+})
+
+/**
+ * @route   POST /api/user-accounts/forgot-password
+ * @desc    Request password reset - generates reset token
+ * @access  Public
+ * @body    { email }
+ */
+userAccountsRouter.post('/forgot-password', async (request, response) => {
+  try {
+    const { email } = request.body
+
+    if (!email) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Email is required',
+          code: 'MISSING_EMAIL'
+        }
+      })
+    }
+
+    // Find user by email
+    const user = await UserAccount.findOne({
+      email: email.toLowerCase()
+    }).populate('role', 'roleName')
+
+    if (!user) {
+      // Don't reveal if email exists or not for security
+      return response.json({
+        success: true,
+        message: 'If the email exists, a reset link will be sent'
+      })
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      return response.status(403).json({
+        success: false,
+        error: {
+          message: 'Account is inactive. Please contact administrator.',
+          code: 'ACCOUNT_INACTIVE'
+        }
+      })
+    }
+
+    // Generate reset token
+    const resetToken = generateResetToken()
+    const hashedToken = hashResetToken(resetToken)
+
+    // Save hashed token and expiration to database
+    user.resetPasswordToken = hashedToken
+    user.resetPasswordExpire = getResetTokenExpiration()
+    await user.save()
+
+    // In production, you would send an email here
+    // For now, return the token in response (DEV ONLY)
+    console.log('Password reset token for', user.email, ':', resetToken)
+
+    response.json({
+      success: true,
+      message: 'If the email exists, a reset link will be sent',
+      // TODO: Remove this in production - only for development
+      devOnly: {
+        resetToken,
+        userId: user._id,
+        expiresAt: user.resetPasswordExpire
+      }
+    })
+  } catch (error) {
+    console.error('Error in forgot-password:', error)
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to process password reset request',
+        details: error.message
+      }
+    })
+  }
+})
+
+/**
+ * @route   POST /api/user-accounts/reset-password
+ * @desc    Reset password using reset token
+ * @access  Public
+ * @body    { resetToken, newPassword }
+ */
+userAccountsRouter.post('/reset-password', async (request, response) => {
+  try {
+    const { resetToken, newPassword } = request.body
+
+    // Validate input
+    if (!resetToken || !newPassword) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Reset token and new password are required',
+          code: 'MISSING_FIELDS'
+        }
+      })
+    }
+
+    if (newPassword.length < 6) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Password must be at least 6 characters long',
+          code: 'INVALID_PASSWORD'
+        }
+      })
+    }
+
+    // Hash the provided token to compare with stored hash
+    const hashedToken = hashResetToken(resetToken)
+
+    // Find user with valid reset token
+    const user = await UserAccount.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    })
+
+    if (!user) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Invalid or expired reset token',
+          code: 'INVALID_TOKEN'
+        }
+      })
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      return response.status(403).json({
+        success: false,
+        error: {
+          message: 'Account is inactive. Please contact administrator.',
+          code: 'ACCOUNT_INACTIVE'
+        }
+      })
+    }
+
+    // Hash new password
+    const saltRounds = 10
+    const passwordHash = await bcrypt.hash(newPassword, saltRounds)
+
+    // Update password and clear reset token fields
+    user.passwordHash = passwordHash
+    user.resetPasswordToken = null
+    user.resetPasswordExpire = null
+
+    // Clear all existing tokens (logout from all devices)
+    user.tokens = []
+
+    await user.save()
+
+    response.json({
+      success: true,
+      message: 'Password has been reset successfully. Please login with your new password.'
+    })
+  } catch (error) {
+    console.error('Error in reset-password:', error)
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to reset password',
+        details: error.message
+      }
+    })
+  }
+})
+
+/**
+ * @route   POST /api/user-accounts/verify-reset-token
+ * @desc    Verify if reset token is valid
+ * @access  Public
+ * @body    { resetToken }
+ */
+userAccountsRouter.post('/verify-reset-token', async (request, response) => {
+  try {
+    const { resetToken } = request.body
+
+    if (!resetToken) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Reset token is required',
+          code: 'MISSING_TOKEN'
+        }
+      })
+    }
+
+    // Hash the provided token
+    const hashedToken = hashResetToken(resetToken)
+
+    // Find user with valid reset token
+    const user = await UserAccount.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    }).select('email username')
+
+    if (!user) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Invalid or expired reset token',
+          code: 'INVALID_TOKEN'
+        }
+      })
+    }
+
+    response.json({
+      success: true,
+      data: {
+        email: user.email,
+        username: user.username
+      }
+    })
+  } catch (error) {
+    console.error('Error in verify-reset-token:', error)
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to verify reset token',
         details: error.message
       }
     })

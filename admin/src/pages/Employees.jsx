@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { EmployeeList, EmployeeListHeader, AddEmployeeModal, EditEmployeeModal, UserAccountModal, ViewAccountModal } from '../components/EmployeeList';
+import { EmployeeList, EmployeeListHeader, AddEmployeeModal, EditEmployeeModal, UserAccountModal, ViewAccountModal, AdminResetPasswordModal } from '../components/EmployeeList';
 import employeeService from '../services/employeeService';
 
 export const Employees = () => {
@@ -22,6 +22,7 @@ export const Employees = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   // Fetch employees on mount
@@ -161,6 +162,20 @@ export const Employees = () => {
     setShowViewModal(true);
   };
 
+  // Handle reset password
+  const handleResetPassword = (employee) => {
+    console.log('Reset password:', employee);
+    setSelectedEmployee(employee);
+    setShowResetPasswordModal(true);
+  };
+
+  // Handle reset password success
+  const handleResetPasswordSuccess = () => {
+    console.log('Password reset successfully');
+    // Optionally refresh the list
+    fetchEmployees();
+  };
+
   // Handle delete employee
   const handleDeleteEmployee = async (employeeId) => {
     if (!window.confirm('Are you sure you want to delete this employee?')) {
@@ -228,6 +243,7 @@ export const Employees = () => {
               onDelete={handleDeleteEmployee}
               onManageAccount={handleManageAccount}
               onViewDetails={handleViewDetails}
+              onResetPassword={handleResetPassword}
               onSort={handleSort}
               sortField={sortField}
               sortOrder={sortOrder}
@@ -278,6 +294,14 @@ export const Employees = () => {
         <ViewAccountModal
           isOpen={showViewModal}
           onClose={() => setShowViewModal(false)}
+          employee={selectedEmployee}
+        />
+
+        {/* Admin Reset Password Modal */}
+        <AdminResetPasswordModal
+          isOpen={showResetPasswordModal}
+          onClose={() => setShowResetPasswordModal(false)}
+          onSuccess={handleResetPasswordSuccess}
           employee={selectedEmployee}
         />
       </div>

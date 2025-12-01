@@ -158,6 +158,53 @@ const userAccountService = {
       console.error('Error fetching inactive users:', error)
       throw error
     }
+  },
+
+  /**
+   * Request password reset
+   * @param {string} email - User email
+   * @returns {Promise<Object>} Reset request response
+   */
+  forgotPassword: async (email) => {
+    try {
+      const response = await api.post('/user-accounts/forgot-password', { email })
+      return response.data
+    } catch (error) {
+      console.error('Error requesting password reset:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Reset password using reset token
+   * @param {Object} resetData - Reset data
+   * @param {string} resetData.resetToken - Reset token
+   * @param {string} resetData.newPassword - New password
+   * @returns {Promise<Object>} Reset response
+   */
+  resetPassword: async (resetData) => {
+    try {
+      const response = await api.post('/user-accounts/reset-password', resetData)
+      return response.data
+    } catch (error) {
+      console.error('Error resetting password:', error)
+      throw error
+    }
+  },
+
+  /**
+   * Verify reset token validity
+   * @param {string} resetToken - Reset token
+   * @returns {Promise<Object>} Token verification response
+   */
+  verifyResetToken: async (resetToken) => {
+    try {
+      const response = await api.post('/user-accounts/verify-reset-token', { resetToken })
+      return response.data
+    } catch (error) {
+      console.error('Error verifying reset token:', error)
+      throw error
+    }
   }
 }
 

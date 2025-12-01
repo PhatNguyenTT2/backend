@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export const EmployeeList = ({ employees = [], onEdit, onDelete, onManageAccount, onViewDetails, onSort, sortField, sortOrder }) => {
+export const EmployeeList = ({ employees = [], onEdit, onDelete, onManageAccount, onViewDetails, onResetPassword, onSort, sortField, sortOrder }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
@@ -278,6 +278,22 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onManageAccount
               </span>
             </button>
 
+            <button
+              onClick={() => {
+                onResetPassword && onResetPassword(employee);
+                setActiveDropdown(null);
+              }}
+              className="w-full px-4 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M11.3333 7.33333H4.66667C3.93029 7.33333 3.33334 7.93029 3.33334 8.66667V12.6667C3.33334 13.403 3.93029 14 4.66667 14H11.3333C12.0697 14 12.6667 13.403 12.6667 12.6667V8.66667C12.6667 7.93029 12.0697 7.33333 11.3333 7.33333Z" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M5.33334 7.33333V4.66667C5.33334 3.95942 5.61429 3.28115 6.11438 2.78105C6.61448 2.28095 7.29276 2 8.00001 2C8.70725 2 9.38553 2.28095 9.88563 2.78105C10.3857 3.28115 10.6667 3.95942 10.6667 4.66667V7.33333" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="text-[12px] font-['Poppins',sans-serif] text-[#212529]">
+                Reset Password
+              </span>
+            </button>
+
             <div className="border-t border-gray-200 my-1"></div>
 
             <button
@@ -294,8 +310,8 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onManageAccount
               }}
               disabled={employee.isActive}
               className={`w-full px-4 py-2 text-left transition-colors flex items-center gap-2 ${employee.isActive
-                  ? 'opacity-50 cursor-not-allowed bg-gray-50'
-                  : 'hover:bg-red-50 cursor-pointer'
+                ? 'opacity-50 cursor-not-allowed bg-gray-50'
+                : 'hover:bg-red-50 cursor-pointer'
                 }`}
               title={employee.isActive ? 'Employee must be inactive before deletion' : 'Delete employee'}
             >
