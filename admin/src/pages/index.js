@@ -19,3 +19,4 @@ export { default as NoAccess } from "./NoAccess";
 // Reports
 export { default as PurchaseReports } from "./reports/Purchase";
 export { default as SalesReports } from "./reports/Sales";
+export { default as ProfitReports } from "./reports/Profit";

@@ -717,4 +717,280 @@ statisticsRouter.get('/purchases', async (request, response) => {
   }
 })
 
+/**
+ * GET /api/statistics/profit
+ * Get profit analysis by comparing revenue (sales) vs costs (purchases)
+ * Query params: year (required), productId (optional), categoryId (optional)
+ */
+statisticsRouter.get('/profit', async (request, response) => {
+  try {
+    const { year, productId, categoryId } = request.query
+
+    // Validate required parameters
+    if (!year) {
+      return response.status(400).json({
+        success: false,
+        error: 'year parameter is required'
+      })
+    }
+
+    const selectedYear = parseInt(year)
+    if (isNaN(selectedYear) || selectedYear < 2000 || selectedYear > 2100) {
+      return response.status(400).json({
+        success: false,
+        error: 'Invalid year. Must be between 2000 and 2100'
+      })
+    }
+
+    logger.info('Fetching profit statistics', { year: selectedYear, productId, categoryId })
+
+    // Define year date range
+    const startDate = new Date(selectedYear, 0, 1) // Jan 1
+    const endDate = new Date(selectedYear, 11, 31, 23, 59, 59, 999) // Dec 31
+
+    // ==================== FETCH SALES DATA ====================
+    const salesQuery = {
+      orderDate: { $gte: startDate, $lte: endDate },
+      status: 'delivered',
+      paymentStatus: 'paid'
+    }
+
+    const salesOrders = await Order.find(salesQuery)
+      .populate('customer', 'fullName phone')
+      .sort({ orderDate: 1 })
+
+    const salesOrderIds = salesOrders.map(order => order._id)
+
+    let salesDetailsQuery = { order: { $in: salesOrderIds } }
+    if (productId) {
+      salesDetailsQuery.product = productId
+    }
+
+    const salesDetails = await OrderDetail.find(salesDetailsQuery)
+      .populate({
+        path: 'product',
+        populate: { path: 'category', select: 'name' }
+      })
+      .populate('batch', 'batchCode costPrice')
+
+    // Filter by category if specified
+    let filteredSalesDetails = salesDetails
+    if (categoryId) {
+      filteredSalesDetails = salesDetails.filter(
+        detail => detail.product?.category?._id.toString() === categoryId
+      )
+    }
+
+    // ==================== FETCH PURCHASE DATA ====================
+    const purchaseQuery = {
+      orderDate: { $gte: startDate, $lte: endDate },
+      status: { $in: ['approved', 'received'] }
+    }
+
+    const purchaseOrders = await PurchaseOrder.find(purchaseQuery)
+      .populate('supplier', 'companyName')
+      .sort({ orderDate: 1 })
+
+    const purchaseOrderIds = purchaseOrders.map(po => po._id)
+
+    let purchaseDetailsQuery = { purchaseOrder: { $in: purchaseOrderIds } }
+    if (productId) {
+      purchaseDetailsQuery.product = productId
+    }
+
+    const purchaseDetails = await DetailPurchaseOrder.find(purchaseDetailsQuery)
+      .populate({
+        path: 'product',
+        populate: { path: 'category', select: 'name' }
+      })
+      .populate('batch', 'batchCode')
+
+    // Filter by category if specified
+    let filteredPurchaseDetails = purchaseDetails
+    if (categoryId) {
+      filteredPurchaseDetails = purchaseDetails.filter(
+        detail => detail.product?.category?._id.toString() === categoryId
+      )
+    }
+
+    // ==================== AGGREGATE BY PRODUCT ====================
+    const productProfitMap = new Map()
+
+    // Process sales data
+    filteredSalesDetails.forEach(detail => {
+      const product = detail.product
+      if (!product) return
+
+      const productId = product._id.toString()
+      const order = salesOrders.find(o => o._id.toString() === detail.order.toString())
+      if (!order) return
+
+      if (!productProfitMap.has(productId)) {
+        productProfitMap.set(productId, {
+          productId: product._id,
+          productCode: product.productCode,
+          productName: product.name,
+          categoryName: product.category?.name || 'N/A',
+          image: product.image,
+          // Sales metrics
+          quantitySold: 0,
+          totalRevenue: 0,
+          salesOrders: new Set(),
+          // Purchase metrics
+          quantityPurchased: 0,
+          totalCost: 0,
+          purchaseOrders: new Set()
+        })
+      }
+
+      const productData = productProfitMap.get(productId)
+      productData.quantitySold += detail.quantity
+      productData.totalRevenue += detail.total
+      productData.salesOrders.add(order._id.toString())
+    })
+
+    // Process purchase data
+    filteredPurchaseDetails.forEach(detail => {
+      const product = detail.product
+      if (!product) return
+
+      const productId = product._id.toString()
+      const po = purchaseOrders.find(p => p._id.toString() === detail.purchaseOrder.toString())
+      if (!po) return
+
+      if (!productProfitMap.has(productId)) {
+        productProfitMap.set(productId, {
+          productId: product._id,
+          productCode: product.productCode,
+          productName: product.name,
+          categoryName: product.category?.name || 'N/A',
+          image: product.image,
+          // Sales metrics
+          quantitySold: 0,
+          totalRevenue: 0,
+          salesOrders: new Set(),
+          // Purchase metrics
+          quantityPurchased: 0,
+          totalCost: 0,
+          purchaseOrders: new Set()
+        })
+      }
+
+      const productData = productProfitMap.get(productId)
+      productData.quantityPurchased += detail.quantity
+      productData.totalCost += detail.total
+      productData.purchaseOrders.add(po._id.toString())
+    })
+
+    // ==================== CALCULATE PROFIT METRICS ====================
+    const products = Array.from(productProfitMap.values()).map(data => {
+      const revenue = data.totalRevenue
+      const cost = data.totalCost
+      const profit = revenue - cost
+      const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0
+      const averageSellingPrice = data.quantitySold > 0 ? revenue / data.quantitySold : 0
+      const averageCostPrice = data.quantityPurchased > 0 ? cost / data.quantityPurchased : 0
+      const profitPerUnit = averageSellingPrice - averageCostPrice
+
+      return {
+        productId: data.productId,
+        productCode: data.productCode,
+        productName: data.productName,
+        categoryName: data.categoryName,
+        image: data.image,
+        // Sales
+        quantitySold: data.quantitySold,
+        totalRevenue: revenue,
+        salesOrders: data.salesOrders.size,
+        averageSellingPrice: averageSellingPrice,
+        // Purchase
+        quantityPurchased: data.quantityPurchased,
+        totalCost: cost,
+        purchaseOrders: data.purchaseOrders.size,
+        averageCostPrice: averageCostPrice,
+        // Profit
+        profit: profit,
+        profitMargin: profitMargin,
+        profitPerUnit: profitPerUnit
+      }
+    })
+
+    // Sort by profit descending
+    products.sort((a, b) => b.profit - a.profit)
+
+    // ==================== MONTHLY BREAKDOWN ====================
+    const monthlyData = Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      monthName: new Date(selectedYear, i, 1).toLocaleString('en-US', { month: 'long' }),
+      revenue: 0,
+      cost: 0,
+      profit: 0,
+      profitMargin: 0,
+      salesOrders: 0,
+      purchaseOrders: 0
+    }))
+
+    // Aggregate sales by month
+    salesOrders.forEach(order => {
+      const month = order.orderDate.getMonth()
+      monthlyData[month].revenue += order.total
+      monthlyData[month].salesOrders += 1
+    })
+
+    // Aggregate purchases by month
+    purchaseOrders.forEach(po => {
+      const month = po.orderDate.getMonth()
+      monthlyData[month].cost += po.totalPrice
+      monthlyData[month].purchaseOrders += 1
+    })
+
+    // Calculate monthly profit
+    monthlyData.forEach(month => {
+      month.profit = month.revenue - month.cost
+      month.profitMargin = month.revenue > 0 ? (month.profit / month.revenue) * 100 : 0
+    })
+
+    // ==================== SUMMARY STATISTICS ====================
+    const summary = {
+      totalRevenue: products.reduce((sum, p) => sum + p.totalRevenue, 0),
+      totalCost: products.reduce((sum, p) => sum + p.totalCost, 0),
+      grossProfit: 0,
+      profitMargin: 0,
+      totalProductsSold: products.filter(p => p.quantitySold > 0).length,
+      totalProductsPurchased: products.filter(p => p.quantityPurchased > 0).length,
+      totalSalesOrders: salesOrders.length,
+      totalPurchaseOrders: purchaseOrders.length
+    }
+
+    summary.grossProfit = summary.totalRevenue - summary.totalCost
+    summary.profitMargin = summary.totalRevenue > 0
+      ? (summary.grossProfit / summary.totalRevenue) * 100
+      : 0
+
+    logger.info('Profit statistics calculated', {
+      year: selectedYear,
+      totalProducts: products.length,
+      grossProfit: summary.grossProfit,
+      profitMargin: summary.profitMargin
+    })
+
+    response.json({
+      success: true,
+      data: {
+        year: selectedYear,
+        summary,
+        products,
+        monthlyBreakdown: monthlyData
+      }
+    })
+  } catch (error) {
+    logger.error('Error getting profit statistics:', error)
+    response.status(500).json({
+      success: false,
+      error: 'Failed to get profit statistics',
+      message: error.message
+    })
+  }
+})
+
 module.exports = statisticsRouter
