@@ -496,7 +496,225 @@ statisticsRouter.get('/sales', async (request, response) => {
  * Query params: startDate, endDate, productId (optional), categoryId (optional), supplierId (optional)
  */
 statisticsRouter.get('/purchases', async (request, response) => {
-  // Implementation would go here
+  try {
+    const { startDate, endDate, productId, categoryId, supplierId } = request.query
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return response.status(400).json({
+        success: false,
+        error: 'startDate and endDate are required'
+      })
+    }
+
+    // Build query for purchase orders
+    const poQuery = {
+      orderDate: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      },
+      status: { $in: ['approved', 'received'] } // Only approved or received POs
+    }
+
+    if (supplierId) {
+      poQuery.supplier = supplierId
+    }
+
+    logger.info('Fetching purchase statistics', { startDate, endDate, productId, categoryId, supplierId })
+
+    // Find all approved/received purchase orders in date range
+    const purchaseOrders = await PurchaseOrder.find(poQuery)
+      .populate('supplier', 'supplierCode companyName contactPerson')
+      .populate('createdBy', 'name')
+      .sort({ orderDate: -1 })
+
+    if (purchaseOrders.length === 0) {
+      return response.json({
+        success: true,
+        data: {
+          summary: {
+            totalCost: 0,
+            totalOrders: 0,
+            totalQuantity: 0,
+            totalProducts: 0,
+            averageOrderValue: 0
+          },
+          products: []
+        }
+      })
+    }
+
+    const poIds = purchaseOrders.map(po => po._id)
+
+    // Find all detail purchase orders for these POs
+    let detailsQuery = { purchaseOrder: { $in: poIds } }
+    if (productId) {
+      detailsQuery.product = productId
+    }
+
+    const poDetails = await DetailPurchaseOrder.find(detailsQuery)
+      .populate({
+        path: 'product',
+        populate: { path: 'category', select: 'name' }
+      })
+      .populate('batch', 'batchCode expiryDate')
+
+    // Filter by category if specified
+    let filteredDetails = poDetails
+    if (categoryId) {
+      filteredDetails = poDetails.filter(
+        detail => detail.product?.category?._id.toString() === categoryId
+      )
+    }
+
+    // Map to organize data by product
+    const productPurchaseMap = new Map()
+
+    filteredDetails.forEach(detail => {
+      const product = detail.product
+      const batch = detail.batch
+      const po = purchaseOrders.find(p => p._id.toString() === detail.purchaseOrder.toString())
+
+      if (!product || !po) return
+
+      const productId = product._id.toString()
+
+      // Initialize product entry if not exists
+      if (!productPurchaseMap.has(productId)) {
+        productPurchaseMap.set(productId, {
+          productId: product._id,
+          productCode: product.productCode,
+          productName: product.name,
+          categoryName: product.category?.name || 'N/A',
+          image: product.image,
+          totalQuantity: 0,
+          totalCost: 0,
+          orderCount: new Set(),
+          batches: new Map(),
+          purchaseOrders: []
+        })
+      }
+
+      const productData = productPurchaseMap.get(productId)
+
+      // Add to product totals
+      productData.totalQuantity += detail.quantity
+      productData.totalCost += detail.total
+      productData.orderCount.add(po._id.toString())
+
+      // Add to batch breakdown
+      if (batch) {
+        const batchId = batch._id.toString()
+        if (!productData.batches.has(batchId)) {
+          productData.batches.set(batchId, {
+            batchId: batch._id,
+            batchCode: batch.batchCode,
+            quantityPurchased: 0,
+            cost: 0,
+            costPrice: detail.costPrice,
+            expiryDate: batch.expiryDate,
+            orderCount: new Set()
+          })
+        }
+
+        const batchData = productData.batches.get(batchId)
+        batchData.quantityPurchased += detail.quantity
+        batchData.cost += detail.total
+        batchData.orderCount.add(po._id.toString())
+      } else {
+        // Handle case where batch is not assigned yet (pending receipt)
+        const pendingKey = 'pending'
+        if (!productData.batches.has(pendingKey)) {
+          productData.batches.set(pendingKey, {
+            batchId: null,
+            batchCode: 'Pending Receipt',
+            quantityPurchased: 0,
+            cost: 0,
+            costPrice: detail.costPrice,
+            expiryDate: null,
+            orderCount: new Set()
+          })
+        }
+
+        const batchData = productData.batches.get(pendingKey)
+        batchData.quantityPurchased += detail.quantity
+        batchData.cost += detail.total
+        batchData.orderCount.add(po._id.toString())
+      }
+
+      // Add purchase order details for this product
+      productData.purchaseOrders.push({
+        purchaseOrderId: po._id,
+        poNumber: po.poNumber,
+        orderDate: po.orderDate,
+        supplierName: po.supplier?.companyName || 'N/A',
+        supplierCode: po.supplier?.supplierCode || 'N/A',
+        contactPerson: po.supplier?.contactPerson || 'N/A',
+        status: po.status,
+        paymentStatus: po.paymentStatus,
+        quantityPurchased: detail.quantity,
+        costPrice: detail.costPrice,
+        subtotal: detail.total,
+        batchCode: batch?.batchCode || 'N/A'
+      })
+    })
+
+    // Format response - convert Map to Array
+    const products = Array.from(productPurchaseMap.values()).map(data => ({
+      productId: data.productId,
+      productCode: data.productCode,
+      productName: data.productName,
+      categoryName: data.categoryName,
+      image: data.image,
+      totalQuantity: data.totalQuantity,
+      totalCost: data.totalCost,
+      totalOrders: data.orderCount.size,
+      averageCost: data.totalCost / data.totalQuantity,
+      batches: Array.from(data.batches.values()).map(batch => ({
+        batchId: batch.batchId,
+        batchCode: batch.batchCode,
+        quantityPurchased: batch.quantityPurchased,
+        cost: batch.cost,
+        costPrice: batch.costPrice,
+        expiryDate: batch.expiryDate,
+        orderCount: batch.orderCount.size
+      })),
+      purchaseOrders: data.purchaseOrders
+    }))
+
+    // Sort by total cost descending
+    products.sort((a, b) => b.totalCost - a.totalCost)
+
+    // Calculate summary statistics
+    const summary = {
+      totalCost: products.reduce((sum, p) => sum + p.totalCost, 0),
+      totalOrders: purchaseOrders.length,
+      totalQuantity: products.reduce((sum, p) => sum + p.totalQuantity, 0),
+      totalProducts: products.length,
+      averageOrderValue: purchaseOrders.reduce((sum, po) => sum + po.totalPrice, 0) / purchaseOrders.length
+    }
+
+    logger.info('Purchase statistics calculated', {
+      totalProducts: products.length,
+      totalOrders: summary.totalOrders,
+      totalCost: summary.totalCost
+    })
+
+    response.json({
+      success: true,
+      data: {
+        summary,
+        products
+      }
+    })
+  } catch (error) {
+    logger.error('Error getting purchase statistics:', error)
+    response.status(500).json({
+      success: false,
+      error: 'Failed to get purchase statistics',
+      message: error.message
+    })
+  }
 })
 
 module.exports = statisticsRouter

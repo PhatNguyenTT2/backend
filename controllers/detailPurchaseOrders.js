@@ -402,16 +402,19 @@ detailPurchaseOrdersRouter.post('/', userExtractor, async (request, response) =>
  * Requires authentication
  * 
  * Note: This endpoint handles updates including:
- * - Quantity changes
- * - Unit price changes
+ * - Quantity changes (only for pending/approved POs)
+ * - Unit price changes (only for pending/approved POs)
+ * - Batch assignment (allowed during receiving goods workflow)
  * - Total is auto-calculated
- * - Cannot update if purchase order is received or cancelled
+ * - Cannot update quantity/price if purchase order is received or cancelled
+ * - Can update batch field during receiving goods process
  */
 detailPurchaseOrdersRouter.put('/:id', userExtractor, async (request, response) => {
   try {
     const {
       quantity,
-      unitPrice
+      unitPrice,
+      batch
     } = request.body;
 
     // Find detail purchase order
@@ -428,25 +431,30 @@ detailPurchaseOrdersRouter.put('/:id', userExtractor, async (request, response) 
       });
     }
 
-    // Check if purchase order is editable
-    if (detailPurchaseOrder.purchaseOrder.status === 'received') {
-      return response.status(400).json({
-        success: false,
-        error: {
-          message: 'Cannot update items in a received purchase order',
-          code: 'PURCHASE_ORDER_RECEIVED'
-        }
-      });
-    }
+    // Check if purchase order is editable (batch can be updated during receiving, so check separately)
+    const isReceivingBatch = batch !== undefined && !quantity && !unitPrice;
 
-    if (detailPurchaseOrder.purchaseOrder.status === 'cancelled') {
-      return response.status(400).json({
-        success: false,
-        error: {
-          message: 'Cannot update items in a cancelled purchase order',
-          code: 'PURCHASE_ORDER_CANCELLED'
-        }
-      });
+    if (!isReceivingBatch) {
+      // Only enforce status restrictions for non-batch updates
+      if (detailPurchaseOrder.purchaseOrder.status === 'received') {
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'Cannot update items in a received purchase order',
+            code: 'PURCHASE_ORDER_RECEIVED'
+          }
+        });
+      }
+
+      if (detailPurchaseOrder.purchaseOrder.status === 'cancelled') {
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'Cannot update items in a cancelled purchase order',
+            code: 'PURCHASE_ORDER_CANCELLED'
+          }
+        });
+      }
     }
 
     // Update fields
@@ -474,6 +482,36 @@ detailPurchaseOrdersRouter.put('/:id', userExtractor, async (request, response) 
         });
       }
       detailPurchaseOrder.unitPrice = unitPrice;
+    }
+
+    // ✅ Allow updating batch field (for receiving goods workflow)
+    if (batch !== undefined) {
+      // Validate batch exists if provided
+      if (batch) {
+        const batchExists = await ProductBatch.findById(batch);
+        if (!batchExists) {
+          return response.status(404).json({
+            success: false,
+            error: {
+              message: 'Batch not found',
+              code: 'BATCH_NOT_FOUND'
+            }
+          });
+        }
+
+        // Validate batch belongs to the same product
+        if (batchExists.product.toString() !== detailPurchaseOrder.product.toString()) {
+          return response.status(400).json({
+            success: false,
+            error: {
+              message: 'Batch does not belong to this product',
+              code: 'BATCH_PRODUCT_MISMATCH'
+            }
+          });
+        }
+      }
+
+      detailPurchaseOrder.batch = batch;
     }
 
     const updatedDetail = await detailPurchaseOrder.save();

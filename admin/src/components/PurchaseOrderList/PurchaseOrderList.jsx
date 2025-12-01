@@ -177,7 +177,7 @@ const PurchaseOrderList = ({
     if (newStatus === 'approved' || newStatus === 'received') {
       const action = newStatus === 'approved' ? 'approve' : 'mark as received';
       const confirmed = window.confirm(
-        `Are you sure you want to ${action} Purchase Order ${po.poNumber}?${newStatus === 'approved' ? '\n\n✅ This will confirm the order.\nNext step: Use "Receive Goods" to create batches and stock in.' :
+        `Are you sure you want to ${action} Purchase Order ${po.poNumber}?${newStatus === 'approved' ? '\n This will confirm the order.\nNext step: Use "Receive Goods" to create batches and stock in.' :
           newStatus === 'received' ? '\n\nThis will mark all items as received.' : ''
         }`
       );

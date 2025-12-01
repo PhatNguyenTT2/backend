@@ -1,6 +1,5 @@
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { TrendingUp } from 'lucide-react';
 
 export const OrderTrendChart = ({ data, loading, periodLabel, comparisonLabel }) => {
   if (loading) {
@@ -45,9 +44,6 @@ export const OrderTrendChart = ({ data, loading, periodLabel, comparisonLabel })
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-emerald-100 rounded-lg">
-            <TrendingUp className="w-5 h-5 text-emerald-600" />
-          </div>
           <div>
             <h3 className="text-[16px] font-semibold text-gray-900">
               Order Summary
