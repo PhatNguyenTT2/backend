@@ -121,9 +121,6 @@ const PurchaseReports = () => {
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <ShoppingCart className="w-6 h-6 text-blue-600" />
-            </div>
             <div>
               <h1 className="text-[24px] font-semibold text-gray-900">
                 Purchase Reports
@@ -211,8 +208,7 @@ const PurchaseReports = () => {
                     </>
                   ) : (
                     <>
-                      <ShoppingCart className="w-4 h-4" />
-                      Generate Report
+                      View Report
                     </>
                   )}
                 </button>
@@ -245,7 +241,7 @@ const PurchaseReports = () => {
               </p>
             </div>
             <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-indigo-500">
-              <p className="text-[11px] text-gray-600 font-medium uppercase tracking-wider">Total POs</p>
+              <p className="text-[11px] text-gray-600 font-medium uppercase tracking-wider">Total PO</p>
               <p className="text-[20px] font-bold text-indigo-600 mt-1">
                 {summary.totalOrders?.toLocaleString() || 0}
               </p>

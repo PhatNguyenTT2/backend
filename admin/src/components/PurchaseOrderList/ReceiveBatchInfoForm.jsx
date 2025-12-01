@@ -187,14 +187,6 @@ export const ReceiveBatchInfoForm = ({
           </p>
         )}
       </div>
-
-      {/* Batch Information from Package */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-        <p className="text-[12px] font-medium font-['Poppins',sans-serif] text-blue-700 mb-2">
-          📦 Enter batch information from product packaging
-        </p>
-      </div>
-
       {/* Manufacturing Date & Expiry Date */}
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -238,7 +230,7 @@ export const ReceiveBatchInfoForm = ({
           )}
           {formData.mfgDate && formData.expiryDate && !errors.expiryDate && (
             <p className="mt-1 text-[11px] text-emerald-600 font-['Poppins',sans-serif]">
-              ✓ Shelf life: {Math.ceil((new Date(formData.expiryDate) - new Date(formData.mfgDate)) / (1000 * 60 * 60 * 24))} days
+              Shelf life: {Math.ceil((new Date(formData.expiryDate) - new Date(formData.mfgDate)) / (1000 * 60 * 60 * 24))} days
             </p>
           )}
         </div>

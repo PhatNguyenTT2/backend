@@ -121,9 +121,6 @@ const SalesReports = () => {
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6">
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-100 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-emerald-600" />
-            </div>
             <div>
               <h1 className="text-[24px] font-semibold text-gray-900">
                 Sales Reports
@@ -156,7 +153,7 @@ const SalesReports = () => {
                     key={period.value}
                     type="button"
                     className={`px-4 py-2 rounded-lg border text-[13px] font-medium transition-colors ${periodType === period.value
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                      ? 'bg-green-600 text-white border-green-600 shadow-sm'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                       }`}
                     onClick={() => handlePeriodTypeChange(period.value)}
@@ -179,7 +176,7 @@ const SalesReports = () => {
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
                   max={new Date().toISOString().split('T')[0]}
-                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 />
               </div>
               <div>
@@ -192,14 +189,14 @@ const SalesReports = () => {
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                   max={new Date().toISOString().split('T')[0]}
-                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
                 />
               </div>
               <div className="flex items-end">
                 <button
                   onClick={fetchSalesReport}
                   disabled={loading || !startDate || !endDate}
-                  className="w-full px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-[13px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+                  className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-[13px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
                 >
                   {loading ? (
                     <>
@@ -211,8 +208,7 @@ const SalesReports = () => {
                     </>
                   ) : (
                     <>
-                      <TrendingUp className="w-4 h-4" />
-                      Generate Report
+                      View Report
                     </>
                   )}
                 </button>
@@ -232,9 +228,9 @@ const SalesReports = () => {
         {/* Summary Cards */}
         {summary && (
           <div className="grid grid-cols-5 gap-4">
-            <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-emerald-500">
+            <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-green-500">
               <p className="text-[11px] text-gray-600 font-medium uppercase tracking-wider">Total Revenue</p>
-              <p className="text-[20px] font-bold text-emerald-600 mt-1">
+              <p className="text-[20px] font-bold text-green-600 mt-1">
                 ₫{summary.totalRevenue?.toLocaleString('vi-VN')}
               </p>
             </div>
@@ -244,9 +240,9 @@ const SalesReports = () => {
                 {summary.totalQuantity?.toLocaleString() || 0}
               </p>
             </div>
-            <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-purple-500">
+            <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-indigo-500">
               <p className="text-[11px] text-gray-600 font-medium uppercase tracking-wider">Total Orders</p>
-              <p className="text-[20px] font-bold text-purple-600 mt-1">
+              <p className="text-[20px] font-bold text-indigo-600 mt-1">
                 {summary.totalOrders?.toLocaleString() || 0}
               </p>
             </div>

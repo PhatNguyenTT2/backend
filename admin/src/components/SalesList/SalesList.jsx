@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Eye, Package } from 'lucide-react';
-import { ViewPurchaseDetailsModal } from './ViewPurchaseDetailsModal';
+import { Eye, TrendingUp } from 'lucide-react';
+import { ViewSalesDetailsModal } from './ViewSalesDetailsModal';
 
-export const PurchaseList = ({ purchaseData = [], summary = null, loading = false }) => {
+export const SalesList = ({ salesData = [], summary = null, loading = false }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [viewDetailsModal, setViewDetailsModal] = useState(false);
 
@@ -32,21 +32,21 @@ export const PurchaseList = ({ purchaseData = [], summary = null, loading = fals
       <div className="bg-white rounded-lg shadow-sm py-12 text-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
         <p className="mt-4 text-[13px] text-gray-500">
-          Loading purchase data...
+          Loading sales data...
         </p>
       </div>
     );
   }
 
-  if (!purchaseData || purchaseData.length === 0) {
+  if (!salesData || salesData.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm py-16 text-center">
-        <Package className="mx-auto h-16 w-16 text-gray-400" />
+        <TrendingUp className="mx-auto h-16 w-16 text-gray-400" />
         <h3 className="mt-4 text-[16px] font-semibold text-gray-900">
-          No purchase data found
+          No sales data found
         </h3>
         <p className="mt-2 text-[13px] text-gray-500">
-          There are no purchase orders in the selected date range
+          There are no orders in the selected date range
         </p>
       </div>
     );
@@ -70,13 +70,13 @@ export const PurchaseList = ({ purchaseData = [], summary = null, loading = fals
                 Category
               </th>
               <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                Qty Purchased
+                Qty Sold
               </th>
               <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                Cost
+                Price
               </th>
               <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                Total Cost
+                Total Revenue
               </th>
               <th className="px-6 py-3 text-center text-[11px] font-medium text-gray-700 uppercase tracking-wider">
                 Orders
@@ -89,7 +89,7 @@ export const PurchaseList = ({ purchaseData = [], summary = null, loading = fals
 
           {/* Table Body */}
           <tbody className="divide-y divide-gray-100">
-            {purchaseData.map((product, index) => (
+            {salesData.map((product, index) => (
               <tr
                 key={product.productId || index}
                 className="hover:bg-gray-50 transition-colors"
@@ -110,29 +110,29 @@ export const PurchaseList = ({ purchaseData = [], summary = null, loading = fals
 
                 {/* Category */}
                 <td className="px-6 py-4">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-purple-100 text-purple-800">
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-800">
                     {product.categoryName}
                   </span>
                 </td>
 
-                {/* Quantity Purchased */}
+                {/* Quantity Sold */}
                 <td className="px-6 py-4 text-right">
-                  <p className="text-[13px] font-semibold text-purple-600">
+                  <p className="text-[13px] font-semibold text-green-600">
                     {product.totalQuantity.toLocaleString()}
                   </p>
                 </td>
 
-                {/* Average Cost */}
+                {/* Average Price */}
                 <td className="px-6 py-4 text-right">
                   <p className="text-[13px] text-gray-700">
-                    {formatCurrency(product.averageCost)}
+                    {formatCurrency(product.averagePrice)}
                   </p>
                 </td>
 
-                {/* Total Cost */}
+                {/* Total Revenue */}
                 <td className="px-6 py-4 text-right">
                   <p className="text-[14px] font-semibold text-blue-600">
-                    {formatCurrency(product.totalCost)}
+                    {formatCurrency(product.totalRevenue)}
                   </p>
                 </td>
 
@@ -168,26 +168,26 @@ export const PurchaseList = ({ purchaseData = [], summary = null, loading = fals
                       Summary Statistics
                     </p>
                     <p className="text-[12px] text-gray-600">
-                      {summary.totalProducts} products • {summary.totalOrders} purchase orders
+                      {summary.totalProducts} products • {summary.totalOrders} orders
                     </p>
                   </div>
                 </td>
                 <td className="px-6 py-4 text-right">
                   <p className="text-[11px] text-gray-500 uppercase">Total Qty</p>
-                  <p className="text-[14px] font-bold text-purple-600">
+                  <p className="text-[14px] font-bold text-green-600">
                     {summary.totalQuantity.toLocaleString()}
                   </p>
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <p className="text-[11px] text-gray-500 uppercase">PO</p>
+                  <p className="text-[11px] text-gray-500 uppercase">Order</p>
                   <p className="text-[13px] font-semibold text-gray-700">
                     {formatCurrency(summary.averageOrderValue)}
                   </p>
                 </td>
                 <td colSpan="3" className="px-6 py-4 text-right">
-                  <p className="text-[11px] text-gray-500 uppercase mb-1">Total Cost</p>
+                  <p className="text-[11px] text-gray-500 uppercase mb-1">Total Revenue</p>
                   <p className="text-[18px] font-bold text-blue-600">
-                    {formatCurrency(summary.totalCost)}
+                    {formatCurrency(summary.totalRevenue)}
                   </p>
                 </td>
               </tr>
@@ -196,9 +196,9 @@ export const PurchaseList = ({ purchaseData = [], summary = null, loading = fals
         </table>
       </div>
 
-      {/* View Purchase Details Modal */}
+      {/* View Sales Details Modal */}
       {viewDetailsModal && (
-        <ViewPurchaseDetailsModal
+        <ViewSalesDetailsModal
           product={selectedProduct}
           onClose={handleCloseModal}
         />

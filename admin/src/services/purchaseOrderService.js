@@ -590,6 +590,32 @@ const purchaseOrderService = {
       console.error('Error fetching orders count by payment status:', error)
       throw error
     }
+  },
+
+  /**
+   * Receive purchase order with batch information
+   * Uses the /receive endpoint with complete transaction
+   * @param {string} purchaseOrderId - Purchase order ID
+   * @param {Array} items - Array of batch items to receive
+   * @param {string} items[].detailPurchaseOrderId - DetailPurchaseOrder ID
+   * @param {number} items[].actualQuantity - Actual quantity received (optional, defaults to ordered quantity)
+   * @param {number} items[].actualCostPrice - Actual cost price (optional, defaults to ordered costPrice)
+   * @param {number} items[].unitPrice - Selling price (required)
+   * @param {string} items[].batchCode - Batch code (required)
+   * @param {string} items[].mfgDate - Manufacturing date (optional)
+   * @param {string} items[].expiryDate - Expiry date (optional)
+   * @param {string} items[].warehouseLocation - Warehouse location (optional)
+   * @param {string} items[].notes - Notes (optional)
+   * @returns {Promise<Object>} Received purchase order with batch details
+   */
+  receivePurchaseOrderWithBatches: async (purchaseOrderId, items) => {
+    try {
+      const response = await api.post(`/purchase-orders/${purchaseOrderId}/receive`, { items })
+      return response.data
+    } catch (error) {
+      console.error('Error receiving purchase order with batches:', error)
+      throw error
+    }
   }
 }
 
