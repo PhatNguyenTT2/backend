@@ -5,7 +5,7 @@ import productService from '../../services/productService';
 import productBatchService from '../../services/productBatchService';
 import authService from '../../services/authService';
 import employeeService from '../../services/employeeService';
-import settingsService from '../../services/settingsService';
+import customerDiscountSettingsService from '../../services/customerDiscountSettingsService';
 
 /**
  * AddOrderModal Component
@@ -85,11 +85,13 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
   // Load customer discount settings from system configuration
   const loadCustomerDiscounts = async () => {
     try {
-      const response = await settingsService.getCustomerDiscounts();
+      const response = await customerDiscountSettingsService.getActiveDiscounts();
       if (response.success && response.data) {
         setCustomerDiscounts(response.data);
+        console.log('✅ Loaded customer discounts:', response.data);
       }
     } catch (error) {
+      console.error('❌ Error loading customer discounts:', error);
       // Keep default values if fetch fails
     }
   };
@@ -739,42 +741,6 @@ export const AddOrderModal = ({ isOpen, onClose, onSuccess }) => {
               {errors.employee}
             </div>
           )}
-
-          {/* Employee Info Display */}
-          {currentEmployee && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" className="text-blue-600">
-                  <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                </svg>
-                <h3 className="text-[13px] font-semibold text-blue-900">Order Created By</h3>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] text-blue-700 mb-1">Employee Name</label>
-                  <input
-                    type="text"
-                    value={currentEmployee.fullName || 'N/A'}
-                    disabled
-                    className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-[13px] bg-blue-100 text-blue-900 cursor-not-allowed font-semibold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] text-blue-700 mb-1">User Code</label>
-                  <input
-                    type="text"
-                    value={currentUser?.userCode || 'N/A'}
-                    disabled
-                    className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-[13px] bg-blue-100 text-blue-900 cursor-not-allowed font-semibold"
-                  />
-                </div>
-              </div>
-              <p className="text-[10px] text-blue-700 mt-2">
-                Current logged in employee
-              </p>
-            </div>
-          )}
-
           {/* Customer Selection */}
           <div>
             <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">

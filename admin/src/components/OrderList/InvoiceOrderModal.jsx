@@ -212,9 +212,9 @@ export const InvoiceOrderModal = ({ order, onClose, onViewItems }) => {
               <p className="text-[13px] font-['Poppins',sans-serif]">
                 <span className="font-semibold text-blue-600">Customer Type:</span>
                 <span className={`ml-2 capitalize font-medium ${ord.customer.customerType === 'vip' ? 'text-purple-600' :
-                    ord.customer.customerType === 'wholesale' ? 'text-emerald-600' :
-                      ord.customer.customerType === 'retail' ? 'text-blue-600' :
-                        'text-gray-600'
+                  ord.customer.customerType === 'wholesale' ? 'text-emerald-600' :
+                    ord.customer.customerType === 'retail' ? 'text-blue-600' :
+                      'text-gray-600'
                   }`}>
                   {ord.customer.customerType}
                 </span>
@@ -236,10 +236,10 @@ export const InvoiceOrderModal = ({ order, onClose, onViewItems }) => {
             <p className="text-[13px] font-['Poppins',sans-serif]">
               <span className="font-semibold text-blue-600">Status:</span>
               <span className={`ml-2 capitalize font-medium ${ord.status === 'pending' ? 'text-amber-600' :
-                  ord.status === 'processing' ? 'text-blue-600' :
-                    ord.status === 'shipping' ? 'text-purple-600' :
-                      ord.status === 'delivered' ? 'text-emerald-600' :
-                        'text-red-600'
+                ord.status === 'processing' ? 'text-blue-600' :
+                  ord.status === 'shipping' ? 'text-purple-600' :
+                    ord.status === 'delivered' ? 'text-emerald-600' :
+                      'text-red-600'
                 }`}>
                 {ord.status || 'N/A'}
               </span>
@@ -363,8 +363,8 @@ export const InvoiceOrderModal = ({ order, onClose, onViewItems }) => {
               <div className="flex justify-between items-center text-[13px] font-['Poppins',sans-serif]">
                 <span className="font-semibold text-gray-700">Payment Status:</span>
                 <span className={`font-semibold uppercase ${ord.paymentStatus === 'paid' ? 'text-green-600' :
-                    ord.paymentStatus === 'partial' ? 'text-amber-600' :
-                      'text-red-600'
+                  ord.paymentStatus === 'partial' ? 'text-amber-600' :
+                    'text-red-600'
                   }`}>
                   {ord.paymentStatus}
                 </span>
@@ -414,20 +414,6 @@ export const InvoiceOrderModal = ({ order, onClose, onViewItems }) => {
             Close
           </button>
           <div className="flex gap-3">
-            {onViewItems && (
-              <button
-                onClick={() => {
-                  onViewItems(ord);
-                  onClose();
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-[13px] font-['Poppins',sans-serif] font-medium transition-colors flex items-center gap-2"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M2 4H14M2 8H14M2 12H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-                View Items
-              </button>
-            )}
             <button
               onClick={handlePrintInvoice}
               className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-[13px] font-['Poppins',sans-serif] font-medium transition-colors flex items-center gap-2"

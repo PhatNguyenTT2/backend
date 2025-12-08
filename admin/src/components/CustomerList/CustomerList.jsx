@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AddCustomerModal } from './AddCustomerModal';
 import { EditCustomerModal } from './EditCustomerModal';
+import { ViewOrdersModal } from './ViewOrdersModal';
 
 export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, addModalOpen = false, onCloseAddModal, onAddSuccess, editModalOpen = false, editCustomer = null, onCloseEditModal, onEditSuccess, onEdit, onDelete, onToggleActive }) => {
   const [activeDropdown, setActiveDropdown] = useState(null); // Format: 'action-{customerId}' or 'active-{customerId}'
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
+  const [viewOrdersModalOpen, setViewOrdersModalOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
 
   // Handle sort click
   const handleSortClick = (field) => {
@@ -384,6 +387,22 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, add
                 Edit
               </button>
 
+              <button
+                onClick={() => {
+                  setSelectedCustomer(customer);
+                  setViewOrdersModalOpen(true);
+                  setActiveDropdown(null);
+                }}
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center gap-2"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M1.33301 1.33337H3.33301L4.66634 9.33337H12.6663L14.6663 3.33337H5.33301" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="5.33301" cy="12.6667" r="1" stroke="currentColor" strokeWidth="1.5" />
+                  <circle cx="12" cy="12.6667" r="1" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+                View Orders
+              </button>
+
               <div className="border-t border-gray-200 my-1"></div>
 
               <button
@@ -422,6 +441,17 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, add
         onSuccess={onEditSuccess}
         customer={editCustomer}
       />
+
+      {/* View Orders Modal */}
+      {viewOrdersModalOpen && (
+        <ViewOrdersModal
+          customer={selectedCustomer}
+          onClose={() => {
+            setViewOrdersModalOpen(false);
+            setSelectedCustomer(null);
+          }}
+        />
+      )}
     </div>
   );
 };

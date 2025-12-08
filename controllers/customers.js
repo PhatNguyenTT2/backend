@@ -565,4 +565,73 @@ customersRouter.delete('/:id', userExtractor, async (request, response) => {
   }
 });
 
+/**
+ * GET /api/customers/:id/orders
+ * Get all orders for a specific customer (optimized for speed)
+ * 
+ * Query parameters:
+ * - withDetails: boolean - Include order details (default: false)
+ * - limit: number - Items per page (default: 1000, max: 1000)
+ */
+customersRouter.get('/:id/orders', async (request, response) => {
+  try {
+    const customerId = request.params.id;
+    const { withDetails, limit = 1000 } = request.query;
+
+    // Verify customer exists (lean query for speed)
+    const customer = await Customer.findById(customerId)
+      .select('customerCode fullName customerType')
+      .lean();
+
+    if (!customer) {
+      return response.status(404).json({
+        success: false,
+        error: {
+          message: 'Customer not found',
+          code: 'CUSTOMER_NOT_FOUND'
+        }
+      });
+    }
+
+    // Build optimized query - sorted by orderDate desc, limited to 1000 records
+    let query = Order.find({ customer: customerId })
+      .select('orderNumber orderDate status paymentStatus deliveryType discountPercentage shippingFee total createdBy')
+      .populate('createdBy', 'employeeCode fullName')
+      .sort({ orderDate: -1 })
+      .limit(Math.min(parseInt(limit), 1000))
+      .lean();
+
+    // Only populate details if explicitly requested (heavy operation)
+    if (withDetails === 'true') {
+      query = query.populate({
+        path: 'details',
+        select: 'product batch quantity unitPrice',
+        populate: [
+          { path: 'product', select: 'productCode name' },
+          { path: 'batch', select: 'batchCode' }
+        ]
+      });
+    }
+
+    const orders = await query;
+
+    response.json({
+      success: true,
+      data: {
+        orders,
+        count: orders.length
+      }
+    });
+  } catch (error) {
+    console.error('Get customer orders error:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to get customer orders',
+        details: error.message
+      }
+    });
+  }
+});
+
 module.exports = customersRouter;

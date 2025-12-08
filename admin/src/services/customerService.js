@@ -498,6 +498,24 @@ const customerService = {
       console.error('Error creating customer from POS:', error)
       throw error
     }
+  },
+
+  /**
+   * Get all orders for a specific customer (optimized for speed)
+   * @param {string} customerId - Customer ID
+   * @param {Object} params - Query parameters
+   * @param {boolean} params.withDetails - Include order details (default: false)
+   * @param {number} params.limit - Items limit (default: 1000, max: 1000)
+   * @returns {Promise<Object>} Response with orders array
+   */
+  getCustomerOrders: async (customerId, params = {}) => {
+    try {
+      const response = await api.get(`/customers/${customerId}/orders`, { params })
+      return response.data
+    } catch (error) {
+      console.error('Error fetching customer orders:', error)
+      throw error
+    }
   }
 }
 

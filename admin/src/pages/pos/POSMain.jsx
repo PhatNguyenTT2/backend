@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import posLoginService from '../../services/posLoginService';
 import productService from '../../services/productService';
 import categoryService from '../../services/categoryService';
-import settingsService from '../../services/settingsService';
+import customerDiscountSettingsService from '../../services/customerDiscountSettingsService';
 import {
   POSHeader,
   POSSearchBar,
@@ -123,7 +123,7 @@ export const POSMain = () => {
 
     const fetchDiscountConfig = async () => {
       try {
-        const response = await settingsService.getCustomerDiscounts();
+        const response = await customerDiscountSettingsService.getActiveDiscounts();
         if (response.success && response.data) {
           setCustomerDiscounts({
             guest: 0, // Guest customers always 0% discount
@@ -131,10 +131,10 @@ export const POSMain = () => {
             wholesale: response.data.wholesale || 15,
             vip: response.data.vip || 20
           });
-          console.log('Loaded discount configuration:', response.data);
+          console.log('✅ Loaded customer discount configuration:', response.data);
         }
       } catch (error) {
-        console.error('Error fetching discount configuration:', error);
+        console.error('❌ Error fetching discount configuration:', error);
         // Keep default values if fetch fails
       }
     };

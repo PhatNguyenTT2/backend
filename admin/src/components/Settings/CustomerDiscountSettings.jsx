@@ -49,7 +49,7 @@ export const CustomerDiscountSettings = () => {
       // Get user from authService (same as BulkModal)
       const user = authService.getUser();
       if (!user) {
-        console.warn('⚠️ No user found in localStorage');
+        console.warn('No user found in localStorage');
         setError('Please log in to manage discount settings');
         return;
       }
@@ -60,7 +60,7 @@ export const CustomerDiscountSettings = () => {
       const employeeId = user.employeeId || user._id;
 
       if (!employeeId) {
-        console.warn('⚠️ No employeeId found in user object');
+        console.warn('No employeeId found in user object');
         setError('Employee ID not found. Please log in again.');
         return;
       }
@@ -73,13 +73,13 @@ export const CustomerDiscountSettings = () => {
         // AddOrderModal uses employeeResponse.data.employee (nested structure)
         const employee = employeeResponse.data.employee;
         setCurrentEmployee(employee);
-        console.log('✅ Current employee loaded:', employee?.fullName);
+        console.log('Current employee loaded:', employee?.fullName);
       } else {
-        console.warn('⚠️ Employee not found for user:', user);
+        console.warn('Employee not found for user:', user);
         setError('No active employee found. Please create an employee first.');
       }
     } catch (error) {
-      console.error('❌ Error loading current employee:', error);
+      console.error('Error loading current employee:', error);
       setError('Failed to load employee information');
     }
   };
@@ -336,177 +336,6 @@ export const CustomerDiscountSettings = () => {
             </div>
           </div>
         )}
-
-        {/* Employee Info Display */}
-        {currentEmployee && (
-          <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <User className="w-4 h-4 text-blue-600" />
-              <h3 className="text-sm font-semibold text-blue-900 font-['Poppins',sans-serif]">Changes By</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-blue-700 mb-1 font-['Poppins',sans-serif]">Employee Name</label>
-                <input
-                  type="text"
-                  value={currentEmployee.fullName || 'N/A'}
-                  disabled
-                  className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-sm bg-blue-100 text-blue-900 cursor-not-allowed font-semibold font-['Poppins',sans-serif]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-blue-700 mb-1 font-['Poppins',sans-serif]">User Code</label>
-                <input
-                  type="text"
-                  value={currentUser?.userCode || 'N/A'}
-                  disabled
-                  className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-sm bg-blue-100 text-blue-900 cursor-not-allowed font-semibold font-['Poppins',sans-serif]"
-                />
-              </div>
-            </div>
-            <p className="text-xs text-blue-700 mt-2 font-['Poppins',sans-serif]">
-              Current logged in employee
-            </p>
-          </div>
-        )}
-
-        {/* Info Alert */}
-        <div className="mx-6 mt-4 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg">
-          <div className="flex items-start space-x-2">
-            <Info className="w-5 h-5 mt-0.5 flex-shrink-0" />
-            <div className="text-sm font-['Poppins',sans-serif]">
-              <strong>Important:</strong> Changes only apply to NEW orders created after this update.
-              Existing orders retain their original discount rates.
-            </div>
-          </div>
-        </div>
-
-        {/* Settings Form */}
-        <div className="p-6 space-y-6">
-          {/* Reason Input */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <label className="block text-sm font-semibold text-gray-800 mb-2 font-['Poppins',sans-serif]">
-              Reason for Change (Optional)
-            </label>
-            <input
-              type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g., Seasonal promotion, Market adjustment, etc."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-['Poppins',sans-serif] text-sm"
-            />
-            <p className="text-xs text-gray-600 mt-1 font-['Poppins',sans-serif]">
-              This will be recorded in the audit trail for future reference
-            </p>
-          </div>
-          {/* Retail Discount */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div className="flex-1">
-              <label className="block text-sm font-semibold text-gray-800 mb-1 font-['Poppins',sans-serif]">
-                Retail Customers
-              </label>
-              <p className="text-xs text-gray-600 font-['Poppins',sans-serif]">
-                Default discount for individual/retail customers
-              </p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.5"
-                value={discounts.retail}
-                onChange={(e) => handleChange('retail', e.target.value)}
-                className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-center font-semibold font-['Poppins',sans-serif]"
-              />
-              <span className="text-gray-700 font-semibold text-lg">%</span>
-            </div>
-          </div>
-
-          {/* Wholesale Discount */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div className="flex-1">
-              <label className="block text-sm font-semibold text-gray-800 mb-1 font-['Poppins',sans-serif]">
-                Wholesale Customers
-              </label>
-              <p className="text-xs text-gray-600 font-['Poppins',sans-serif]">
-                Default discount for wholesale/bulk buyers
-              </p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.5"
-                value={discounts.wholesale}
-                onChange={(e) => handleChange('wholesale', e.target.value)}
-                className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-center font-semibold font-['Poppins',sans-serif]"
-              />
-              <span className="text-gray-700 font-semibold text-lg">%</span>
-            </div>
-          </div>
-
-          {/* VIP Discount */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div className="flex-1">
-              <label className="block text-sm font-semibold text-gray-800 mb-1 font-['Poppins',sans-serif]">
-                VIP Customers
-              </label>
-              <p className="text-xs text-gray-600 font-['Poppins',sans-serif]">
-                Default discount for VIP/premium customers
-              </p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.5"
-                value={discounts.vip}
-                onChange={(e) => handleChange('vip', e.target.value)}
-                className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-center font-semibold font-['Poppins',sans-serif]"
-              />
-              <span className="text-gray-700 font-semibold text-lg">%</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
-          <button
-            type="button"
-            onClick={handleReset}
-            disabled={saving}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors font-['Poppins',sans-serif] text-sm font-medium"
-          >
-            Reset
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center space-x-2 font-['Poppins',sans-serif] text-sm font-medium"
-          >
-            {saving ? (
-              <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <span>Saving...</span>
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Save Changes</span>
-              </>
-            )}
-          </button>
-        </div>
-
         {/* History Panel */}
         {showHistory && (
           <div className="border-t border-gray-200 bg-gray-50">
@@ -641,6 +470,131 @@ export const CustomerDiscountSettings = () => {
             </div>
           </div>
         )}
+        {/* Settings Form */}
+        <div className="p-6 space-y-6">
+          {/* Reason Input */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <label className="block text-sm font-semibold text-gray-800 mb-2 font-['Poppins',sans-serif]">
+              Reason for Change (Optional)
+            </label>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g., Seasonal promotion, Market adjustment, etc."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent font-['Poppins',sans-serif] text-sm"
+            />
+            <p className="text-xs text-gray-600 mt-1 font-['Poppins',sans-serif]">
+              This will be recorded in the audit trail for future reference
+            </p>
+          </div>
+          {/* Retail Discount */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="flex-1">
+              <label className="block text-sm font-semibold text-gray-800 mb-1 font-['Poppins',sans-serif]">
+                Retail Customers
+              </label>
+              <p className="text-xs text-gray-600 font-['Poppins',sans-serif]">
+                Default discount for individual/retail customers
+              </p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={discounts.retail}
+                onChange={(e) => handleChange('retail', e.target.value)}
+                className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-center font-semibold font-['Poppins',sans-serif]"
+              />
+              <span className="text-gray-700 font-semibold text-lg">%</span>
+            </div>
+          </div>
+
+          {/* Wholesale Discount */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="flex-1">
+              <label className="block text-sm font-semibold text-gray-800 mb-1 font-['Poppins',sans-serif]">
+                Wholesale Customers
+              </label>
+              <p className="text-xs text-gray-600 font-['Poppins',sans-serif]">
+                Default discount for wholesale/bulk buyers
+              </p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={discounts.wholesale}
+                onChange={(e) => handleChange('wholesale', e.target.value)}
+                className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-center font-semibold font-['Poppins',sans-serif]"
+              />
+              <span className="text-gray-700 font-semibold text-lg">%</span>
+            </div>
+          </div>
+
+          {/* VIP Discount */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="flex-1">
+              <label className="block text-sm font-semibold text-gray-800 mb-1 font-['Poppins',sans-serif]">
+                VIP Customers
+              </label>
+              <p className="text-xs text-gray-600 font-['Poppins',sans-serif]">
+                Default discount for VIP/premium customers
+              </p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={discounts.vip}
+                onChange={(e) => handleChange('vip', e.target.value)}
+                className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-center font-semibold font-['Poppins',sans-serif]"
+              />
+              <span className="text-gray-700 font-semibold text-lg">%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
+          <button
+            type="button"
+            onClick={handleReset}
+            disabled={saving}
+            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors font-['Poppins',sans-serif] text-sm font-medium"
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center space-x-2 font-['Poppins',sans-serif] text-sm font-medium"
+          >
+            {saving ? (
+              <>
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>Saving...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Save Changes</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
