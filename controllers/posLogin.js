@@ -596,9 +596,9 @@ async function createPOSOrder(orderData, employeeId, session = null) {
   }
 
   // Auto-calculate discount percentage based on customer type
-  // Get discount rates from SystemSettings (configurable)
-  const SystemSettings = require('../models/systemSettings')
-  const customerDiscounts = await SystemSettings.getCustomerDiscounts()
+  // Get discount rates from CustomerDiscountSettings (versioned with audit trail)
+  const CustomerDiscountSettings = require('../models/customerDiscountSettings')
+  const customerDiscounts = await CustomerDiscountSettings.getActiveDiscounts()
   const discountPercentageMap = {
     'guest': 0,
     'retail': customerDiscounts.retail || 10,

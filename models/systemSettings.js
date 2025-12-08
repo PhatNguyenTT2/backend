@@ -21,31 +21,6 @@ const mongoose = require('mongoose');
  * - Static methods for easy access to specific sections
  */
 const systemSettingsSchema = new mongoose.Schema({
-  // Customer discount configuration
-  customerDiscounts: {
-    retail: {
-      type: Number,
-      default: 10,
-      min: [0, 'Discount cannot be negative'],
-      max: [100, 'Discount cannot exceed 100%'],
-      description: 'Discount percentage for retail customers'
-    },
-    wholesale: {
-      type: Number,
-      default: 15,
-      min: [0, 'Discount cannot be negative'],
-      max: [100, 'Discount cannot exceed 100%'],
-      description: 'Discount percentage for wholesale customers'
-    },
-    vip: {
-      type: Number,
-      default: 20,
-      min: [0, 'Discount cannot be negative'],
-      max: [100, 'Discount cannot exceed 100%'],
-      description: 'Discount percentage for VIP customers'
-    }
-  },
-
   // POS Security configuration
   posSecurity: {
     maxFailedAttempts: {
@@ -94,23 +69,12 @@ const systemSettingsSchema = new mongoose.Schema({
       description: 'Apply promotion to batches expiring within 48 hours'
     }
   },
-
-  // Future: Business info (currently not implemented)
-  // businessInfo: {
-  //   companyName: String,
-  //   address: String,
-  //   phone: String,
-  //   email: String,
-  //   taxId: String
-  // },
-
   // Last updated tracking
   updatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Employee',
     description: 'Employee who last updated any setting'
   }
-
 }, {
   timestamps: true,
   toJSON: { virtuals: true, getters: true },
@@ -133,11 +97,6 @@ systemSettingsSchema.statics.getSettings = async function () {
   // Create default document if not exists
   if (!settings) {
     settings = await this.create({
-      customerDiscounts: {
-        retail: 10,
-        wholesale: 15,
-        vip: 20
-      },
       posSecurity: {
         maxFailedAttempts: 5,
         lockDurationMinutes: 15
@@ -147,93 +106,6 @@ systemSettingsSchema.statics.getSettings = async function () {
   }
 
   return settings;
-};
-
-/**
- * Get customer discount rates
- * @returns {Promise<Object>} { retail: Number, wholesale: Number, vip: Number }
- */
-systemSettingsSchema.statics.getCustomerDiscounts = async function () {
-  try {
-    const settings = await this.getSettings();
-    return {
-      retail: settings.customerDiscounts.retail,
-      wholesale: settings.customerDiscounts.wholesale,
-      vip: settings.customerDiscounts.vip
-    };
-  } catch (error) {
-    console.error('❌ Error getting customer discounts:', error);
-    // Return defaults on error
-    return {
-      retail: 10,
-      wholesale: 15,
-      vip: 20
-    };
-  }
-};
-
-/**
- * Update customer discount rates
- * @param {Object} discounts - { retail, wholesale, vip }
- * @param {ObjectId} employeeId - Employee making the update
- * @returns {Promise<SystemSettings>} Updated settings document
- */
-systemSettingsSchema.statics.updateCustomerDiscounts = async function (discounts, employeeId) {
-  const { retail, wholesale, vip } = discounts;
-
-  // Validate values
-  for (const [type, value] of Object.entries(discounts)) {
-    if (value < 0 || value > 100) {
-      throw new Error(`${type} discount must be between 0 and 100`);
-    }
-  }
-
-  const settings = await this.getSettings();
-  settings.customerDiscounts = {
-    retail: parseFloat(retail),
-    wholesale: parseFloat(wholesale),
-    vip: parseFloat(vip)
-  };
-  settings.updatedBy = employeeId;
-  await settings.save();
-
-  console.log('✅ Customer discounts updated:', settings.customerDiscounts);
-  return settings;
-};
-
-/**
- * Get default values for all settings
- * @returns {Object} Default configuration values
- */
-systemSettingsSchema.statics.getDefaults = function () {
-  return {
-    customerDiscounts: {
-      retail: 10,
-      wholesale: 15,
-      vip: 20
-    },
-    posSecurity: {
-      maxFailedAttempts: 5,
-      lockDurationMinutes: 15
-    },
-    freshProductPromotion: {
-      autoPromotionEnabled: false,
-      promotionStartTime: '17:00',
-      discountPercentage: 20,
-      applyToExpiringToday: true,
-      applyToExpiringTomorrow: false
-    }
-  };
-};
-
-/**
- * Reset customer discounts to default values
- * @param {ObjectId} employeeId - Employee making the reset
- * @returns {Promise<SystemSettings>} Updated settings document
- */
-systemSettingsSchema.statics.resetCustomerDiscounts = async function (employeeId) {
-  const defaults = this.getDefaults();
-  return await this.updateCustomerDiscounts(defaults.customerDiscounts, employeeId);
 };
 
 /**

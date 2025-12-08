@@ -5,7 +5,7 @@ const Customer = require('../models/customer');
 const Employee = require('../models/employee');
 const Product = require('../models/product');
 const ProductBatch = require('../models/productBatch');
-const SystemSettings = require('../models/systemSettings');
+const CustomerDiscountSettings = require('../models/customerDiscountSettings');
 const { selectBatchFEFO, allocateQuantityFEFO } = require('../utils/batchHelpers');
 const mongoose = require('mongoose');
 
@@ -360,8 +360,8 @@ ordersRouter.post('/', async (request, response) => {
     }
 
     // Auto-calculate discount percentage based on customer type
-    // Get discount rates from SystemSettings (configurable)
-    const customerDiscounts = await SystemSettings.getCustomerDiscounts();
+    // Get discount rates from CustomerDiscountSettings (versioned with audit trail)
+    const customerDiscounts = await CustomerDiscountSettings.getActiveDiscounts();
     const discountPercentageMap = {
       'guest': 0,
       'retail': customerDiscounts.retail || 10,
@@ -620,13 +620,13 @@ ordersRouter.post('/', async (request, response) => {
 });
 
 /**
- * Helper: Get customer discount percentage from SystemSettings
+ * Helper: Get customer discount percentage from CustomerDiscountSettings
  * @param {String} customerType - Customer type (guest/retail/wholesale/vip)
  * @returns {Promise<Number>} Discount percentage
  */
 async function getCustomerDiscountPercentage(customerType) {
   try {
-    const customerDiscounts = await SystemSettings.getCustomerDiscounts();
+    const customerDiscounts = await CustomerDiscountSettings.getActiveDiscounts();
     const discountPercentageMap = {
       'guest': 0,
       'retail': customerDiscounts.retail || 10,
@@ -840,7 +840,7 @@ ordersRouter.put('/:id', async (request, response) => {
         );
         console.log('✅ Created new details:', orderDetails.length);
 
-        // Get customer for discount calculation from SystemSettings
+        // Get customer for discount calculation from CustomerDiscountSettings
         const customer = await Customer.findById(order.customer);
         const discountPercentage = await getCustomerDiscountPercentage(customer?.customerType);
 

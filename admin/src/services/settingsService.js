@@ -60,51 +60,6 @@ const settingsService = {
     }
   },
 
-  // ========== CUSTOMER DISCOUNTS ==========
-
-  /**
-   * Get customer discount rates
-   * Available to all authenticated users
-   * @returns {Promise<Object>} Discount rates by customer type
-   * @example
-   * const response = await settingsService.getCustomerDiscounts()
-   * // { success: true, data: { retail: 10, wholesale: 15, vip: 20 } }
-   */
-  getCustomerDiscounts: async () => {
-    try {
-      const response = await api.get('/settings/customer-discounts')
-      return response.data
-    } catch (error) {
-      console.error('Error fetching customer discounts:', error)
-      throw error
-    }
-  },
-
-  /**
-   * Update customer discount rates (Admin only)
-   * @param {Object} discounts - Discount percentages
-   * @param {number} discounts.retail - Retail customer discount (0-100)
-   * @param {number} discounts.wholesale - Wholesale customer discount (0-100)
-   * @param {number} discounts.vip - VIP customer discount (0-100)
-   * @returns {Promise<Object>} Updated discount data
-   * @example
-   * const response = await settingsService.updateCustomerDiscounts({
-   *   retail: 12,
-   *   wholesale: 18,
-   *   vip: 25
-   * })
-   * // { success: true, message: '...', data: { retail: 12, wholesale: 18, vip: 25 } }
-   */
-  updateCustomerDiscounts: async (discounts) => {
-    try {
-      const response = await api.put('/settings/customer-discounts', discounts)
-      return response.data
-    } catch (error) {
-      console.error('Error updating customer discounts:', error)
-      throw error
-    }
-  },
-
   // ========== POS SECURITY ==========
 
   /**
@@ -151,23 +106,6 @@ const settingsService = {
   },
 
   /**
-   * Reset customer discounts to default values
-   * @returns {Promise<Object>} Reset discount data
-   * @example
-   * const response = await settingsService.resetCustomerDiscounts()
-   * // { success: true, message: '...', data: { retail: 10, wholesale: 15, vip: 20 } }
-   */
-  resetCustomerDiscounts: async () => {
-    try {
-      const response = await api.post('/settings/customer-discounts/reset')
-      return response.data
-    } catch (error) {
-      console.error('Error resetting customer discounts:', error)
-      throw error
-    }
-  },
-
-  /**
    * Reset POS security to default values
    * @returns {Promise<Object>} Reset security configuration
    * @example
@@ -184,78 +122,11 @@ const settingsService = {
     }
   },
 
-  // ========== CONVENIENCE METHODS ==========
-
-  /**
-   * Get discount percentage for specific customer type
-   * @param {string} customerType - Customer type (retail/wholesale/vip)
-   * @returns {Promise<number>} Discount percentage for that type
-   * @example
-   * const discount = await settingsService.getDiscountByType('vip')
-   * // 20
-   */
-  getDiscountByType: async (customerType) => {
-    try {
-      const response = await settingsService.getCustomerDiscounts()
-      const discounts = response.data || {}
-      return discounts[customerType] || 0
-    } catch (error) {
-      console.error('Error fetching discount by type:', error)
-      return 0 // Return 0 if error
-    }
-  },
-
-  /**
-   * Update single discount rate (Admin only)
-   * @param {string} customerType - Customer type (retail/wholesale/vip)
-   * @param {number} percentage - Discount percentage (0-100)
-   * @returns {Promise<Object>} Updated discounts
-   * @example
-   * await settingsService.updateSingleDiscount('retail', 15)
-   */
-  updateSingleDiscount: async (customerType, percentage) => {
-    try {
-      // Get current discounts
-      const response = await settingsService.getCustomerDiscounts()
-      const currentDiscounts = response.data || { retail: 10, wholesale: 15, vip: 20 }
-
-      // Update specific type
-      const updatedDiscounts = {
-        ...currentDiscounts,
-        [customerType]: parseFloat(percentage)
-      }
-
-      // Save updated discounts
-      return await settingsService.updateCustomerDiscounts(updatedDiscounts)
-    } catch (error) {
-      console.error('Error updating single discount:', error)
-      throw error
-    }
-  },
-
-  /**
-   * Reset discounts to defaults (Admin only)
-   * @returns {Promise<Object>} Reset discounts
-   * @example
-   * await settingsService.resetDiscountsToDefaults()
-   */
-  resetDiscountsToDefaults: async () => {
-    try {
-      const defaultDiscounts = {
-        retail: 10,
-        wholesale: 15,
-        vip: 20
-      }
-      return await settingsService.updateCustomerDiscounts(defaultDiscounts)
-    } catch (error) {
-      console.error('Error resetting discounts:', error)
-      throw error
-    }
-  },
+  // ========== POS SECURITY CONVENIENCE METHODS ==========
 
   /**
    * Update single POS security setting (Admin only)
-   * @param {string} settingKey - Setting key (maxFailedAttempts/lockDurationMinutes/pinLength)
+   * @param {string} settingKey - Setting key (maxFailedAttempts/lockDurationMinutes)
    * @param {number} value - Setting value
    * @returns {Promise<Object>} Updated POS security config
    * @example
@@ -301,40 +172,6 @@ const settingsService = {
   },
 
   /**
-   * Validate discount values
-   * @param {Object} discounts - Discount object to validate
-   * @returns {Object} Validation result { valid: boolean, errors: Array }
-   */
-  validateDiscounts: (discounts) => {
-    const errors = []
-    const types = ['retail', 'wholesale', 'vip']
-
-    types.forEach(type => {
-      const value = discounts[type]
-
-      if (value === undefined || value === null) {
-        errors.push(`${type} discount is required`)
-        return
-      }
-
-      const numValue = parseFloat(value)
-      if (isNaN(numValue)) {
-        errors.push(`${type} discount must be a number`)
-        return
-      }
-
-      if (numValue < 0 || numValue > 100) {
-        errors.push(`${type} discount must be between 0 and 100`)
-      }
-    })
-
-    return {
-      valid: errors.length === 0,
-      errors
-    }
-  },
-
-  /**
    * Validate POS security settings
    * @param {Object} security - Security object to validate
    * @returns {Object} Validation result { valid: boolean, errors: Array }
@@ -362,18 +199,6 @@ const settingsService = {
       valid: errors.length === 0,
       errors
     }
-  },
-
-  /**
-   * Format discount percentage for display
-   * @param {number} value - Discount value
-   * @returns {string} Formatted percentage
-   * @example
-   * settingsService.formatDiscount(15.5) // "15.5%"
-   */
-  formatDiscount: (value) => {
-    const num = parseFloat(value)
-    return isNaN(num) ? '0%' : `${num}%`
   },
 
   /**
