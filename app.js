@@ -41,7 +41,6 @@ mongoose
   .connect(config.MONGODB_URI)
   .then(async () => {
     logger.info('connected to MongoDB')
-    // Auto-create default admin if none exists
 
     // Initialize fresh product promotion scheduler
     await promotionScheduler.init()

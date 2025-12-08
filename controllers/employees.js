@@ -359,7 +359,8 @@ employeesRouter.delete('/:id', async (request, response) => {
       { session }
     )
 
-    // Soft delete associated user account if exists (deactivate instead of hard delete)
+    // Soft delete associated user account (deactivate instead of hard delete)
+    // This prevents orphaned Employee records
     if (employee.userAccount) {
       await UserAccount.findByIdAndUpdate(
         employee.userAccount._id,
@@ -379,7 +380,7 @@ employeesRouter.delete('/:id', async (request, response) => {
 
     response.json({
       success: true,
-      message: 'Employee and associated data deleted successfully'
+      message: 'Employee deleted and associated user account deactivated successfully'
     })
   } catch (error) {
     await session.abortTransaction()
@@ -395,9 +396,69 @@ employeesRouter.delete('/:id', async (request, response) => {
   }
 })
 
-// ============================================
-// POS ACCESS MANAGEMENT ROUTES (Admin)
-// ============================================
+/**
+ * @route   GET /api/employees/orphan-check
+ * @desc    Check for orphaned Employee records (Employee without valid UserAccount)
+ * @access  Private (Admin only)
+ * @note    Returns list of employees whose userAccount doesn't exist
+ */
+employeesRouter.get('/orphan-check', async (request, response) => {
+  try {
+    console.log('🔍 Checking for orphaned Employee records...');
+
+    // Get all employees
+    const employees = await Employee.find().lean();
+    const orphans = [];
+
+    // Check each employee's userAccount
+    for (const emp of employees) {
+      if (emp.userAccount) {
+        const userExists = await UserAccount.findById(emp.userAccount);
+        if (!userExists) {
+          orphans.push({
+            employeeId: emp._id,
+            fullName: emp.fullName,
+            phone: emp.phone,
+            missingUserAccountId: emp.userAccount,
+            createdAt: emp.createdAt
+          });
+        }
+      } else {
+        orphans.push({
+          employeeId: emp._id,
+          fullName: emp.fullName,
+          phone: emp.phone,
+          missingUserAccountId: null,
+          createdAt: emp.createdAt,
+          reason: 'No userAccount reference'
+        });
+      }
+    }
+
+    console.log(`✅ Orphan check complete: Found ${orphans.length} orphaned record(s)`);
+
+    response.json({
+      success: true,
+      data: {
+        orphans,
+        count: orphans.length,
+        totalEmployees: employees.length
+      },
+      message: orphans.length > 0
+        ? `Found ${orphans.length} orphaned Employee record(s)`
+        : 'No orphaned records found'
+    });
+  } catch (error) {
+    console.error('❌ Error in orphan check:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to check for orphans',
+        details: error.message
+      }
+    });
+  }
+});
 
 /**
  * @route   GET /api/employees/pos-access

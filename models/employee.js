@@ -54,6 +54,22 @@ employeeSchema.virtual('age').get(function () {
   return age;
 });
 
+// 🔒 ORPHAN CHECK: Warn if UserAccount doesn't exist for this Employee
+employeeSchema.post('save', async function (doc) {
+  try {
+    if (doc.userAccount) {
+      const UserAccount = mongoose.model('UserAccount');
+      const userExists = await UserAccount.findById(doc.userAccount);
+
+      if (!userExists) {
+        console.warn(`⚠️ ORPHAN WARNING: Employee ${doc._id} references non-existent UserAccount ${doc.userAccount}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error in orphan check:', error);
+  }
+});
+
 employeeSchema.set('toJSON', {
   virtuals: true,
   transform: (document, returnedObject) => {

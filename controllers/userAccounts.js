@@ -383,6 +383,25 @@ userAccountsRouter.delete('/:id', async (request, response) => {
       })
     }
 
+    // 🔒 Check if any Employee references this UserAccount
+    const Employee = require('../models/employee')
+    const linkedEmployee = await Employee.findOne({ userAccount: user._id })
+
+    if (linkedEmployee) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: `Cannot delete user account - Employee "${linkedEmployee.fullName}" still references it`,
+          code: 'EMPLOYEE_REFERENCE_EXISTS',
+          details: {
+            employeeId: linkedEmployee._id,
+            employeeName: linkedEmployee.fullName,
+            suggestion: 'Please delete or deactivate the Employee first'
+          }
+        }
+      })
+    }
+
     // 🔒 Check if this is a super admin
     const isSuperAdmin = user.role &&
       user.role.permissions &&
@@ -418,10 +437,113 @@ userAccountsRouter.delete('/:id', async (request, response) => {
     })
   } catch (error) {
     console.error('Error in delete user:', error)
+
+    // Handle reference constraint errors from model middleware
+    if (error.name === 'ReferenceConstraintError') {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: error.message,
+          code: error.code,
+          details: {
+            employeeId: error.employeeId,
+            employeeName: error.employeeName
+          }
+        }
+      })
+    }
+
     response.status(500).json({
       success: false,
       error: {
         message: 'Failed to delete user account',
+        details: error.message
+      }
+    })
+  }
+})
+
+/**
+ * @route   DELETE /api/user-accounts/:id/hard-delete
+ * @desc    Hard delete user account (DANGEROUS - only for admin/testing)
+ * @access  Private (Admin only)
+ * @query   force=true (required for confirmation)
+ * @note    This will be blocked by model middleware if Employee still references it
+ */
+userAccountsRouter.delete('/:id/hard-delete', async (request, response) => {
+  try {
+    const { force } = request.query
+
+    // Require explicit confirmation
+    if (force !== 'true') {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Hard delete requires explicit confirmation',
+          code: 'CONFIRMATION_REQUIRED',
+          details: {
+            hint: 'Add ?force=true to the URL to confirm hard delete'
+          }
+        }
+      })
+    }
+
+    const user = await UserAccount.findById(request.params.id)
+      .populate('role', 'roleName permissions')
+
+    if (!user) {
+      return response.status(404).json({
+        success: false,
+        error: {
+          message: 'User account not found',
+          code: 'USER_NOT_FOUND'
+        }
+      })
+    }
+
+    // 🔒 Check if protected (extra safety)
+    if (user.isProtected) {
+      return response.status(403).json({
+        success: false,
+        error: {
+          message: 'Cannot hard delete protected super admin account',
+          code: 'PROTECTED_ACCOUNT'
+        }
+      })
+    }
+
+    // Attempt hard delete - middleware will check Employee references
+    await UserAccount.findByIdAndDelete(request.params.id)
+
+    console.log(`✅ Hard deleted UserAccount ${request.params.id} (${user.username})`)
+
+    response.json({
+      success: true,
+      message: 'User account permanently deleted'
+    })
+  } catch (error) {
+    console.error('Error in hard delete user:', error)
+
+    // Handle reference constraint errors from model middleware
+    if (error.name === 'ReferenceConstraintError') {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: error.message,
+          code: error.code,
+          details: {
+            employeeId: error.employeeId,
+            employeeName: error.employeeName,
+            suggestion: 'Delete the Employee record first, then retry hard delete'
+          }
+        }
+      })
+    }
+
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to hard delete user account',
         details: error.message
       }
     })

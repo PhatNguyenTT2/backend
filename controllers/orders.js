@@ -5,6 +5,7 @@ const Customer = require('../models/customer');
 const Employee = require('../models/employee');
 const Product = require('../models/product');
 const ProductBatch = require('../models/productBatch');
+const SystemSettings = require('../models/systemSettings');
 const { selectBatchFEFO, allocateQuantityFEFO } = require('../utils/batchHelpers');
 const mongoose = require('mongoose');
 
@@ -359,13 +360,18 @@ ordersRouter.post('/', async (request, response) => {
     }
 
     // Auto-calculate discount percentage based on customer type
+    // Get discount rates from SystemSettings (configurable)
+    const customerDiscounts = await SystemSettings.getCustomerDiscounts();
     const discountPercentageMap = {
       'guest': 0,
-      'retail': 10,
-      'wholesale': 15,
-      'vip': 20
+      'retail': customerDiscounts.retail || 10,
+      'wholesale': customerDiscounts.wholesale || 15,
+      'vip': customerDiscounts.vip || 20
     };
     const autoDiscountPercentage = discountPercentageMap[customerDoc.customerType?.toLowerCase()] || 0;
+
+    console.log('📊 Customer discount rates from settings:', customerDiscounts);
+    console.log(`💰 Customer type: ${customerDoc.customerType}, Discount: ${autoDiscountPercentage}%`);
 
     // Validate employee if provided
     let validatedCreatedBy = createdBy;
@@ -614,6 +620,29 @@ ordersRouter.post('/', async (request, response) => {
 });
 
 /**
+ * Helper: Get customer discount percentage from SystemSettings
+ * @param {String} customerType - Customer type (guest/retail/wholesale/vip)
+ * @returns {Promise<Number>} Discount percentage
+ */
+async function getCustomerDiscountPercentage(customerType) {
+  try {
+    const customerDiscounts = await SystemSettings.getCustomerDiscounts();
+    const discountPercentageMap = {
+      'guest': 0,
+      'retail': customerDiscounts.retail || 10,
+      'wholesale': customerDiscounts.wholesale || 15,
+      'vip': customerDiscounts.vip || 20
+    };
+    return discountPercentageMap[customerType?.toLowerCase()] || 0;
+  } catch (error) {
+    console.error('⚠️ Error getting customer discount, using defaults:', error);
+    // Fallback to defaults if error
+    const defaults = { guest: 0, retail: 10, wholesale: 15, vip: 20 };
+    return defaults[customerType?.toLowerCase()] || 0;
+  }
+}
+
+/**
  * PUT /api/orders/:id
  * Update order
  * 
@@ -811,17 +840,11 @@ ordersRouter.put('/:id', async (request, response) => {
         );
         console.log('✅ Created new details:', orderDetails.length);
 
-        // Get customer for discount calculation
+        // Get customer for discount calculation from SystemSettings
         const customer = await Customer.findById(order.customer);
-        const discountPercentageMap = {
-          'guest': 0,
-          'retail': 10,
-          'wholesale': 15,
-          'vip': 20
-        };
-        const discountPercentage = discountPercentageMap[customer?.customerType?.toLowerCase()] || 0;
+        const discountPercentage = await getCustomerDiscountPercentage(customer?.customerType);
 
-        console.log('🎁 Discount percentage:', discountPercentage);
+        console.log('🎁 Discount percentage from settings:', discountPercentage, `(${customer?.customerType})`);
 
         // Update order discount percentage (total will be auto-calculated in pre-save hook)
         order.discountPercentage = discountPercentage;

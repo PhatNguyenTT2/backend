@@ -273,6 +273,105 @@ userAccountSchema.pre('findOneAndUpdate', async function (next) {
   }
 });
 
+// 🔒 PREVENT DELETE if Employee still references this UserAccount
+// This prevents orphaned Employee records
+userAccountSchema.pre('findOneAndDelete', async function (next) {
+  try {
+    const userAccountId = this.getQuery()._id;
+
+    if (!userAccountId) {
+      return next();
+    }
+
+    // Check if any Employee references this UserAccount
+    const Employee = mongoose.model('Employee');
+    const linkedEmployee = await Employee.findOne({ userAccount: userAccountId });
+
+    if (linkedEmployee) {
+      const error = new Error(
+        `Cannot delete UserAccount - Employee "${linkedEmployee.fullName}" (ID: ${linkedEmployee._id}) still references it. ` +
+        `Please delete or deactivate the Employee first.`
+      );
+      error.name = 'ReferenceConstraintError';
+      error.code = 'EMPLOYEE_REFERENCE_EXISTS';
+      error.employeeId = linkedEmployee._id;
+      error.employeeName = linkedEmployee.fullName;
+      throw error;
+    }
+
+    console.log(`✅ UserAccount ${userAccountId} can be safely deleted (no Employee references)`);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 🔒 PREVENT DELETE (document method) if Employee still references this UserAccount
+userAccountSchema.pre('deleteOne', { document: true, query: false }, async function (next) {
+  try {
+    // Check if any Employee references this UserAccount
+    const Employee = mongoose.model('Employee');
+    const linkedEmployee = await Employee.findOne({ userAccount: this._id });
+
+    if (linkedEmployee) {
+      const error = new Error(
+        `Cannot delete UserAccount - Employee "${linkedEmployee.fullName}" (ID: ${linkedEmployee._id}) still references it. ` +
+        `Please delete or deactivate the Employee first.`
+      );
+      error.name = 'ReferenceConstraintError';
+      error.code = 'EMPLOYEE_REFERENCE_EXISTS';
+      error.employeeId = linkedEmployee._id;
+      error.employeeName = linkedEmployee.fullName;
+      throw error;
+    }
+
+    console.log(`✅ UserAccount ${this._id} can be safely deleted (no Employee references)`);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 🔒 PREVENT HARD DELETE via deleteMany
+userAccountSchema.pre('deleteMany', async function (next) {
+  try {
+    const filter = this.getFilter();
+
+    // Get all UserAccounts that would be deleted
+    const userAccountsToDelete = await this.model.find(filter).select('_id');
+
+    if (userAccountsToDelete.length === 0) {
+      return next();
+    }
+
+    const userAccountIds = userAccountsToDelete.map(u => u._id);
+
+    // Check if any Employee references these UserAccounts
+    const Employee = mongoose.model('Employee');
+    const linkedEmployees = await Employee.find({
+      userAccount: { $in: userAccountIds }
+    });
+
+    if (linkedEmployees.length > 0) {
+      const employeeNames = linkedEmployees.map(e => e.fullName).join(', ');
+      const error = new Error(
+        `Cannot delete ${userAccountIds.length} UserAccount(s) - ${linkedEmployees.length} Employee(s) still reference them: ${employeeNames}. ` +
+        `Please delete or deactivate the Employees first.`
+      );
+      error.name = 'ReferenceConstraintError';
+      error.code = 'EMPLOYEE_REFERENCES_EXIST';
+      error.affectedCount = linkedEmployees.length;
+      error.employeeIds = linkedEmployees.map(e => e._id);
+      throw error;
+    }
+
+    console.log(`✅ ${userAccountIds.length} UserAccount(s) can be safely deleted (no Employee references)`);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
 userAccountSchema.set('toJSON', {
   virtuals: true,
   transform: (document, returnedObject) => {

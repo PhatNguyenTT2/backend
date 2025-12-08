@@ -595,14 +595,20 @@ async function createPOSOrder(orderData, employeeId, session = null) {
     }
   }
 
-  // Auto-calculate discount percentage
+  // Auto-calculate discount percentage based on customer type
+  // Get discount rates from SystemSettings (configurable)
+  const SystemSettings = require('../models/systemSettings')
+  const customerDiscounts = await SystemSettings.getCustomerDiscounts()
   const discountPercentageMap = {
     'guest': 0,
-    'retail': 10,
-    'wholesale': 15,
-    'vip': 20
+    'retail': customerDiscounts.retail || 10,
+    'wholesale': customerDiscounts.wholesale || 15,
+    'vip': customerDiscounts.vip || 20
   }
   const autoDiscountPercentage = discountPercentageMap[customerDoc.customerType?.toLowerCase()] || 0
+
+  console.log('📊 POS Customer discount rates from settings:', customerDiscounts)
+  console.log(`💰 POS Customer type: ${customerDoc.customerType}, Discount: ${autoDiscountPercentage}%`)
 
   // Validate items and process with FEFO or manual batch selection
   const processedItems = []
