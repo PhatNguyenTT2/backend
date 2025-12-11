@@ -207,6 +207,58 @@ Mỗi test file tuân theo pattern:
 
 ---
 
+### 9. products.test.js
+**Controller**: Products CRUD (với Category, Batch, Inventory)  
+**Endpoints tested**:
+- `GET /api/products` - List products with filters
+- `GET /api/products/:id` - Get single product
+- `POST /api/products` - Create product
+- `PUT /api/products/:id` - Update product
+- `DELETE /api/products/:id` - Delete product
+
+**Test cases** (14 tests):
+- GET: Pagination with filters, database errors
+- GET/:id: Success with populated category, 404
+- POST: Missing required fields, category not found, duplicate product name, validation errors
+- PUT: 404, duplicate name in category, update success
+- DELETE: 404, active product constraint, has active batches constraint
+
+**Đặc điểm**:
+- Mock Category.findById, Product.findOne với jest.fn()
+- Product name uniqueness per category
+- Soft delete logic (isActive = false required)
+- Cannot delete if has active batches or inventory
+- Mock save() return object with populate method
+- Skip FEFO discount calculation (too complex)
+
+---
+
+### 10. productBatches.test.js
+**Controller**: Product Batches CRUD (với Product, DetailInventory)  
+**Endpoints tested**:
+- `GET /api/product-batches` - List batches with filters
+- `GET /api/product-batches/:id` - Get single batch
+- `POST /api/product-batches` - Create batch
+- `PUT /api/product-batches/:id` - Update batch
+- `DELETE /api/product-batches/:id` - Delete batch
+
+**Test cases** (15 tests):
+- GET: Pagination with filters, database errors
+- GET/:id: Success with populated product, 404
+- POST: Missing required fields, product not found, invalid dates (mfg >= expiry), missing discount percentage, validation errors
+- PUT: 404, invalid discount percentage, update success
+- DELETE: 404, has inventory constraint, has remaining quantity constraint
+
+**Đặc điểm**:
+- Mock Product.findById, DetailInventory.findOne với jest.fn()
+- Date validation: mfgDate must be before expiryDate
+- Discount promotion validation: requires discountPercentage > 0
+- Cannot delete if has inventory (quantityOnHand > 0) or remaining quantity
+- Mock save() return object with populate method
+- promotionApplied enum: ['none', 'discount']
+
+---
+
 ## Cách chạy tests
 
 ### Chạy tất cả tests
@@ -224,6 +276,8 @@ npm test -- test/employees.test.js
 npm test -- test/purchaseOrders.test.js
 npm test -- test/payments.test.js
 npm test -- test/inventoryMovementBatches.test.js
+npm test -- test/products.test.js
+npm test -- test/productBatches.test.js
 ```
 
 ### Chạy test với output chi tiết
@@ -282,7 +336,9 @@ Dựa theo `TEST_WRITING_GUIDE.md`, các test tuân theo:
 | purchaseOrders.test.js | 13 | ✅ PASS | ~4.3s |
 | payments.test.js | 13 | ✅ PASS | ~2.1s |
 | inventoryMovementBatches.test.js | 11 | ✅ PASS | ~2.2s |
-| **TOTAL** | **94** | **✅ ALL PASS** | **~21.7s** |
+| products.test.js | 14 | ✅ PASS | ~1.4s |
+| productBatches.test.js | 15 | ✅ PASS | ~1.6s |
+| **TOTAL** | **123** | **✅ ALL PASS** | **~24.7s** |
 
 ## Common Test Utilities
 
@@ -356,13 +412,13 @@ Các controller chưa có tests (có thể thêm sau):
 - purchaseOrders.js ✅
 - payments.js ✅
 - inventoryMovementBatches.js ✅
+- products.js ✅
+- productBatches.js ✅
 - detailInventories.js ⏳
 - detailPurchaseOrders.js ⏳
 - inventories.js ⏳
 - orderDetails.js ⏳
 - permissions.js ⏳
-- productBatches.js ⏳
-- products.js ⏳
 - roles.js ⏳
 - settings.js ⏳
 - statistics.js ⏳
