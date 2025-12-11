@@ -1,0 +1,142 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor "Admin hệ thống" as Admin
+
+rectangle "Use Case Quản trị hệ thống (Admin)" {
+
+  ' --- Auth ---
+  usecase UC_Login as "Đăng nhập"
+  usecase UC_Register as "Đăng ký admin đầu"
+  usecase UC_Auth as "Xác thực"
+
+  ' --- User & Role Management ---
+  usecase UC_User as "Quản lý tài khoản người dùng"
+  usecase UC_CreateUser as "Tạo tài khoản"
+  usecase UC_UpdateUser as "Cập nhật tài khoản"
+  usecase UC_DeleteUser as "Xóa tài khoản"
+
+  usecase UC_Role as "Quản lý vai trò & phân quyền"
+  usecase UC_CreateRole as "Tạo vai trò"
+  usecase UC_UpdateRole as "Cập nhật vai trò"
+  usecase UC_DeleteRole as "Xóa vai trò"
+
+  usecase UC_Department as "Quản lý phòng ban"
+  usecase UC_CreateDept as "Tạo phòng ban"
+  usecase UC_UpdateDept as "Cập nhật phòng ban"
+  usecase UC_DeleteDept as "Xóa phòng ban"
+
+  ' --- Catalog ---
+  usecase UC_Category as "Quản lý danh mục (Category)"
+
+  usecase UC_Product as "Quản lý sản phẩm"
+  usecase UC_CreateProd as "Tạo sản phẩm"
+  usecase UC_UpdateProd as "Cập nhật sản phẩm"
+  usecase UC_DeleteProd as "Xóa sản phẩm"
+  usecase UC_ProductBatch as "Quản lý lô hàng"
+
+  ' --- Suppliers & Purchasing ---
+  usecase UC_Supplier as "Quản lý nhà cung cấp"
+  usecase UC_CreateSupplier as "Tạo nhà cung cấp"
+  usecase UC_UpdateSupplier as "Cập nhật nhà cung cấp"
+  usecase UC_DeleteSupplier as "Xóa nhà cung cấp"
+
+  usecase UC_PO as "Quản lý đơn đặt hàng (PO)"
+  usecase UC_CreatePO as "Tạo PO"
+  usecase UC_UpdatePO as "Cập nhật PO"
+  usecase UC_DeletePO as "Xóa PO"
+
+  ' --- Inventory & Movements ---
+  usecase UC_Inventory as "Quản lý tồn kho"
+  usecase UC_CreateInv as "Tạo Inventory"
+  usecase UC_UpdateInv as "Cập nhật Inventory"
+  usecase UC_DeleteInv as "Xóa Inventory"
+
+  usecase UC_InvMovement as "Quản lý luân chuyển kho"
+  usecase UC_CreateInvMv as "Tạo phiếu luân chuyển"
+  usecase UC_UpdateInvMv as "Cập nhật phiếu luân chuyển"
+  usecase UC_DeleteInvMv as "Xóa phiếu luân chuyển"
+
+  usecase UC_StockOut as "Quản lý phiếu xuất kho"
+  usecase UC_CreateStockOut as "Tạo phiếu xuất kho"
+  usecase UC_UpdateStockOut as "Cập nhật phiếu xuất kho"
+  usecase UC_DeleteStockOut as "Xóa phiếu xuất kho"
+
+  ' --- Sales Docs ---
+  usecase UC_Order as "Quản lý đơn hàng"
+  usecase UC_Payment as "Quản lý thanh toán"
+
+  ' --- Reporting ---
+  usecase UC_Reports as "Báo cáo tổng hợp"
+  usecase UC_ReportFinance as "Báo cáo tài chính"
+  usecase UC_ReportInventory as "Báo cáo tồn kho"
+  usecase UC_ReportSales as "Báo cáo doanh thu"
+
+  ' --- Settings ---
+  usecase UC_Settings as "Cấu hình hệ thống"
+}
+
+' Connect actor to high-level use cases
+Admin --> UC_Login
+Admin --> UC_User
+Admin --> UC_Role
+Admin --> UC_Department
+Admin --> UC_Category
+Admin --> UC_Product
+Admin --> UC_Supplier
+Admin --> UC_PO
+Admin --> UC_Inventory
+Admin --> UC_InvMovement
+Admin --> UC_StockOut
+Admin --> UC_Order
+Admin --> UC_Payment
+Admin --> UC_Reports
+Admin --> UC_Settings
+
+' Includes / Relations
+UC_Login --> UC_Register : <<include>>
+UC_Login --> UC_Auth : <<include>>
+
+UC_User --> UC_CreateUser : <<include>>
+UC_User --> UC_UpdateUser : <<include>>
+UC_User --> UC_DeleteUser : <<include>>
+
+UC_Role --> UC_CreateRole : <<include>>
+UC_Role --> UC_UpdateRole : <<include>>
+UC_Role --> UC_DeleteRole : <<include>>
+
+UC_Department --> UC_CreateDept : <<include>>
+UC_Department --> UC_UpdateDept : <<include>>
+UC_Department --> UC_DeleteDept : <<include>>
+
+UC_Product --> UC_CreateProd : <<include>>
+UC_Product --> UC_UpdateProd : <<include>>
+UC_Product --> UC_DeleteProd : <<include>>
+UC_Product --> UC_ProductBatch : <<include>>
+
+UC_Supplier --> UC_CreateSupplier : <<include>>
+UC_Supplier --> UC_UpdateSupplier : <<include>>
+UC_Supplier --> UC_DeleteSupplier : <<include>>
+
+UC_PO --> UC_CreatePO : <<include>>
+UC_PO --> UC_UpdatePO : <<include>>
+UC_PO --> UC_DeletePO : <<include>>
+
+UC_Inventory --> UC_CreateInv : <<include>>
+UC_Inventory --> UC_UpdateInv : <<include>>
+UC_Inventory --> UC_DeleteInv : <<include>>
+
+UC_InvMovement --> UC_CreateInvMv : <<include>>
+UC_InvMovement --> UC_UpdateInvMv : <<include>>
+UC_InvMovement --> UC_DeleteInvMv : <<include>>
+
+UC_StockOut --> UC_CreateStockOut : <<include>>
+UC_StockOut --> UC_UpdateStockOut : <<include>>
+UC_StockOut --> UC_DeleteStockOut : <<include>>
+
+UC_Reports --> UC_ReportFinance : <<include>>
+UC_Reports --> UC_ReportInventory : <<include>>
+UC_Reports --> UC_ReportSales : <<include>>
+
+@enduml

@@ -1,0 +1,106 @@
+@startuml
+left to right direction
+skinparam actorStyle awesome
+skinparam usecase {
+  Shadowing false
+}
+
+actor "Manager" as Manager
+
+rectangle "Use Case Quản lý cửa hàng (Manager)" as System {
+  ' --- Auth ---
+  usecase "Đăng nhập Admin" as UC_Login
+  usecase "Đăng xuất" as UC_Logout
+
+  ' --- HR / Staff ---
+  usecase "Xem danh sách Sales" as UC_ViewSales
+  usecase "Tạo Sales (Employee + PIN)" as UC_CreateSales
+  usecase "Cập nhật thông tin Sales" as UC_UpdateSales
+  usecase "Reset PIN cho Sales" as UC_ResetPIN
+  usecase "Khóa/Mở khóa tài khoản Sales" as UC_LockSales
+
+  ' --- Supplier Management ---
+  usecase "Xem danh sách nhà cung cấp" as UC_ViewSup
+  usecase "Tạo nhà cung cấp" as UC_CreateSup
+  usecase "Cập nhật nhà cung cấp" as UC_UpdateSup
+  usecase "Quản lý công nợ nhà cung cấp" as UC_APSup
+
+  ' --- Inventory / Warehouse ---
+  usecase "Tạo đơn đặt hàng (PO)" as UC_CreatePO
+  usecase "Duyệt PO" as UC_ApprovePO
+  usecase "Nhập kho (receive)" as UC_Receive
+  usecase "Kiểm kê tồn kho" as UC_Stocktake
+  usecase "Xử lý hàng loại bỏ" as UC_Dispose
+  usecase "Xem tồn kho" as UC_ViewInv
+
+  ' --- Product (limited) ---
+  usecase "Xem sản phẩm" as UC_ViewProd
+  usecase "Cập nhật giá bán" as UC_UpdatePrice
+  usecase "Cập nhật trạng thái sản phẩm" as UC_UpdateStatus
+
+  ' --- Reports ---
+  usecase "Báo cáo doanh thu" as UC_ReportSales
+  usecase "Báo cáo hiệu suất Sales" as UC_ReportStaff
+  usecase "Báo cáo tồn kho" as UC_ReportInv
+  usecase "Báo cáo nhà cung cấp" as UC_ReportSup
+
+  ' --- POS optional assist ---
+  usecase "Đăng nhập POS (PIN) - tùy chọn" as UC_POS_Login
+  usecase "Hỗ trợ tác vụ POS cơ bản" as UC_POS_Assist
+}
+
+' -- Associations --
+Manager --> UC_Login
+Manager --> UC_Logout
+
+Manager --> UC_ViewSales
+Manager --> UC_CreateSales
+Manager --> UC_UpdateSales
+Manager --> UC_ResetPIN
+Manager --> UC_LockSales
+
+Manager --> UC_ViewSup
+Manager --> UC_CreateSup
+Manager --> UC_UpdateSup
+Manager --> UC_APSup
+
+Manager --> UC_CreatePO
+Manager --> UC_ApprovePO
+Manager --> UC_Receive
+Manager --> UC_Stocktake
+Manager --> UC_Dispose
+Manager --> UC_ViewInv
+
+Manager --> UC_ViewProd
+Manager --> UC_UpdatePrice
+Manager --> UC_UpdateStatus
+
+Manager --> UC_ReportSales
+Manager --> UC_ReportStaff
+Manager --> UC_ReportInv
+Manager --> UC_ReportSup
+
+' POS (optional)
+Manager --> UC_POS_Login
+Manager --> UC_POS_Assist
+
+' -- Includes / Extends relations --
+UC_ResetPIN .> UC_ViewSales : <<include>>
+UC_UpdateSales .> UC_ViewSales : <<include>>
+
+UC_ApprovePO .> UC_CreatePO : <<include>>
+UC_Receive .> UC_ViewInv : <<include>>
+UC_Stocktake .> UC_ViewInv : <<include>>
+UC_Dispose .> UC_ViewInv : <<include>>
+
+UC_UpdatePrice .> UC_ViewProd : <<include>>
+UC_UpdateStatus .> UC_ViewProd : <<include>>
+
+UC_POS_Assist .> UC_POS_Login : <<include>>
+
+note bottom of System
+  Sơ đồ không chia nhóm chức năng, tất cả use case nằm trong một hộp theo yêu cầu.
+  Phạm vi Manager: HR (Sales), nhà cung cấp, kho hàng, sản phẩm (giới hạn), báo cáo, và POS hỗ trợ (tùy chọn).
+end note
+
+@enduml
