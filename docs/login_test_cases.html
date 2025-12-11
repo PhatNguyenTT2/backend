@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Cases - Đăng nhập</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Cases - Đăng nhập</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Test Case ID</th>
+                <th>Mô tả Test Case</th>
+                <th>Điều kiện tiên quyết</th>
+                <th>Các bước của Test Case</th>
+                <th>Dữ liệu kiểm thử</th>
+                <th>Kết quả mong đợi</th>
+                <th>Kết quả thực tế</th>
+                <th>Trạng thái</th>
+                <th>Ghi chú</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>TC_DN_01</td>
+                <td>Xác minh người dùng có thể đăng nhập thành công với email và password đúng.</td>
+                <td>Người dùng phải ở form đăng nhập.</td>
+                <td>
+                    <ol>
+                        <li>Nhập Email hợp lệ.</li>
+                        <li>Nhập password hợp lệ.</li>
+                        <li>Nhấn nút "Đăng nhập".</li>
+                    </ol>
+                </td>
+                <td>
+                    Email: user1@gmail.com<br>
+                    Password: Password123
+                </td>
+                <td>Người dùng được chuyển đến trang chủ.</td>
+                <td>Như mong đợi.</td>
+                <td>Passed</td>
+                <td>Kiểm tra API /login với dữ liệu hợp lệ.</td>
+            </tr>
+            <tr>
+                <td>TC_DN_02</td>
+                <td>Xác minh rằng người dùng không thể đăng nhập với email hoặc password sai.</td>
+                <td>Người dùng phải ở form đăng nhập.</td>
+                <td>
+                    <ol>
+                        <li>Nhập email hoặc password không hợp lệ.</li>
+                        <li>Nhấn nút "Đăng nhập".</li>
+                    </ol>
+                </td>
+                <td>
+                    Email: user1@gmail.com<br>
+                    Password: WrongPass
+                </td>
+                <td>Hệ thống hiển thị thông báo "Mật khẩu không đúng".</td>
+                <td>Như mong đợi.</td>
+                <td>Passed</td>
+                <td>Kiểm tra API /login với mật khẩu sai.</td>
+            </tr>
+            <tr>
+                <td>TC_DN_03</td>
+                <td>Xác minh rằng người dùng không thể đăng nhập với email không hợp lệ.</td>
+                <td>Người dùng phải ở form đăng nhập.</td>
+                <td>
+                    <ol>
+                        <li>Nhập email không hợp lệ.</li>
+                        <li>Nhập password hợp lệ.</li>
+                        <li>Nhấn nút "Đăng nhập".</li>
+                    </ol>
+                </td>
+                <td>
+                    Email: invalid-email<br>
+                    Password: Password123
+                </td>
+                <td>Hệ thống hiển thị thông báo "Email không hợp lệ".</td>
+                <td>Như mong đợi.</td>
+                <td>Passed</td>
+                <td>Kiểm tra API /login với email không hợp lệ.</td>
+            </tr>
+            <tr>
+                <td>TC_DN_04</td>
+                <td>Xác minh rằng người dùng không thể đăng nhập với tài khoản bị khóa.</td>
+                <td>Người dùng phải ở form đăng nhập.</td>
+                <td>
+                    <ol>
+                        <li>Nhập email hợp lệ.</li>
+                        <li>Nhập password hợp lệ.</li>
+                        <li>Nhấn nút "Đăng nhập".</li>
+                    </ol>
+                </td>
+                <td>
+                    Email: lockeduser@gmail.com<br>
+                    Password: Password123
+                </td>
+                <td>Hệ thống hiển thị thông báo "Tài khoản của bạn đã bị khóa".</td>
+                <td>Như mong đợi.</td>
+                <td>Passed</td>
+                <td>Kiểm tra API /login với tài khoản bị khóa.</td>
+            </tr>
+            <tr>
+                <td>TC_DN_05</td>
+                <td>Xác minh rằng người dùng không thể đăng nhập khi không nhập mật khẩu.</td>
+                <td>Người dùng phải ở form đăng nhập.</td>
+                <td>
+                    <ol>
+                        <li>Nhập email hợp lệ.</li>
+                        <li>Để trống trường mật khẩu.</li>
+                        <li>Nhấn nút "Đăng nhập".</li>
+                    </ol>
+                </td>
+                <td>
+                    Email: user1@gmail.com<br>
+                    Password: (trống)
+                </td>
+                <td>Hệ thống hiển thị thông báo "Vui lòng nhập mật khẩu".</td>
+                <td>Như mong đợi.</td>
+                <td>Passed</td>
+                <td>Kiểm tra API /login với mật khẩu trống.</td>
+            </tr>
+            <tr>
+                <td>TC_DN_06</td>
+                <td>Xác minh rằng người dùng không thể đăng nhập khi không nhập email.</td>
+                <td>Người dùng phải ở form đăng nhập.</td>
+                <td>
+                    <ol>
+                        <li>Để trống trường email.</li>
+                        <li>Nhập mật khẩu hợp lệ.</li>
+                        <li>Nhấn nút "Đăng nhập".</li>
+                    </ol>
+                </td>
+                <td>
+                    Email: (trống)<br>
+                    Password: Password123
+                </td>
+                <td>Hệ thống hiển thị thông báo "Vui lòng nhập email".</td>
+                <td>Như mong đợi.</td>
+                <td>Passed</td>
+                <td>Kiểm tra API /login với email trống.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h1>Test Cases - Đăng nhập POS</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Test Case ID</th>
+                <th>Mô tả Test Case</th>
+                <th>Điều kiện tiên quyết</th>
+                <th>Các bước của Test Case</th>
+                <th>Dữ liệu kiểm thử</th>
+                <th>Kết quả mong đợi</th>
+                <th>Kết quả thực tế</th>
+                <th>Trạng thái</th>
+                <th>Ghi chú</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>TC_POS_01</td>
+                <td>Xác minh nhân viên POS có thể đăng nhập thành công với mã nhân viên và mật khẩu đúng.</td>
+                <td>Nhân viên phải ở màn hình đăng nhập POS.</td>
+                <td>
+                    <ol>
+                        <li>Nhập mã nhân viên hợp lệ.</li>
+                        <li>Nhập mật khẩu hợp lệ.</li>
+                        <li>Nhấn nút "Đăng nhập".</li>
+                    </ol>
+                </td>
+                <td>
+                    Mã nhân viên: POS001<br>
+                    Mật khẩu: Password123
+                </td>
+                <td>Nhân viên được chuyển đến màn hình chính POS.</td>
+                <td>Như mong đợi.</td>
+                <td>Passed</td>
+                <td>Kiểm tra API /posLogin với dữ liệu hợp lệ.</td>
+            </tr>
+            <tr>
+                <td>TC_POS_02</td>
+                <td>Xác minh rằng nhân viên không thể đăng nhập với mã nhân viên hoặc mật khẩu sai.</td>
+                <td>Nhân viên phải ở màn hình đăng nhập POS.</td>
+                <td>
+                    <ol>
+                        <li>Nhập mã nhân viên hoặc mật khẩu không hợp lệ.</li>
+                        <li>Nhấn nút "Đăng nhập".</li>
+                    </ol>
+                </td>
+                <td>
+                    Mã nhân viên: POS001<br>
+                    Mật khẩu: WrongPass
+                </td>
+                <td>Hệ thống hiển thị thông báo "Mã nhân viên hoặc mật khẩu không đúng".</td>
+                <td>Như mong đợi.</td>
+                <td>Passed</td>
+                <td>Kiểm tra API /posLogin với mật khẩu sai.</td>
+            </tr>
+            <tr>
+                <td>TC_POS_03</td>
+                <td>Xác minh rằng nhân viên không thể đăng nhập khi không nhập mật khẩu.</td>
+                <td>Nhân viên phải ở màn hình đăng nhập POS.</td>
+                <td>
+                    <ol>
+                        <li>Nhập mã nhân viên hợp lệ.</li>
+                        <li>Để trống trường mật khẩu.</li>
+                        <li>Nhấn nút "Đăng nhập".</li>
+                    </ol>
+                </td>
+                <td>
+                    Mã nhân viên: POS001<br>
+                    Mật khẩu: (trống)
+                </td>
+                <td>Hệ thống hiển thị thông báo "Vui lòng nhập mật khẩu".</td>
+                <td>Như mong đợi.</td>
+                <td>Passed</td>
+                <td>Kiểm tra API /posLogin với mật khẩu trống.</td>
+            </tr>
+            <tr>
+                <td>TC_POS_04</td>
+                <td>Xác minh rằng nhân viên không thể đăng nhập khi không nhập mã nhân viên.</td>
+                <td>Nhân viên phải ở màn hình đăng nhập POS.</td>
+                <td>
+                    <ol>
+                        <li>Để trống trường mã nhân viên.</li>
+                        <li>Nhập mật khẩu hợp lệ.</li>
+                        <li>Nhấn nút "Đăng nhập".</li>
+                    </ol>
+                </td>
+                <td>
+                    Mã nhân viên: (trống)<br>
+                    Mật khẩu: Password123
+                </td>
+                <td>Hệ thống hiển thị thông báo "Vui lòng nhập mã nhân viên".</td>
+                <td>Như mong đợi.</td>
+                <td>Passed</td>
+                <td>Kiểm tra API /posLogin với mã nhân viên trống.</td>
+            </tr>
+            <tr>
+                <td>TC_POS_05</td>
+                <td>Xác minh rằng nhân viên không thể đăng nhập với tài khoản bị khóa.</td>
+                <td>Nhân viên phải ở màn hình đăng nhập POS.</td>
+                <td>
+                    <ol>
+                        <li>Nhập mã nhân viên hợp lệ.</li>
+                        <li>Nhập mật khẩu hợp lệ.</li>
+                        <li>Nhấn nút "Đăng nhập".</li>
+                    </ol>
+                </td>
+                <td>
+                    Mã nhân viên: POS002<br>
+                    Mật khẩu: Password123
+                </td>
+                <td>Hệ thống hiển thị thông báo "Tài khoản của bạn đã bị khóa".</td>
+                <td>Như mong đợi.</td>
+                <td>Passed</td>
+                <td>Kiểm tra API /posLogin với tài khoản bị khóa.</td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+</html>
