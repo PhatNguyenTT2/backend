@@ -485,7 +485,7 @@ export const POSMain = () => {
   // Handle QR scan success
   const handleQRScanSuccess = (productCode) => {
     console.log('✅ QR Code scanned:', productCode);
-    setShowQRScanner(false);
+    // setShowQRScanner(false); // ❌ REMOVED: Keep scanner open for continuous scanning
 
     // Use existing handler (same flow as keyboard scanning)
     handleProductScanned(productCode);
@@ -1275,4 +1275,3 @@ export const POSMain = () => {
     </div>
   );
 };
-

@@ -94,6 +94,7 @@ export const NavigationMenuSection = () => {
           submenu: [
             { name: 'List', href: '/products/' },
             { name: 'View', href: '/products/view' },
+            { name: 'QR Codes', href: '/product-qr-codes' }
           ]
         },
         {
