@@ -6,6 +6,8 @@ const DetailPurchaseOrder = require('../models/detailPurchaseOrder')
 const Product = require('../models/product')
 const ProductBatch = require('../models/productBatch')
 const Customer = require('../models/customer')
+const Inventory = require('../models/inventory')
+const DetailInventory = require('../models/detailInventory')
 const logger = require('../utils/logger')
 
 /**
@@ -118,33 +120,11 @@ statisticsRouter.get('/dashboard', async (request, response) => {
       createdAt: { $gte: prevStartDate, $lte: prevEndDate }
     })
 
-    // 4. Build summary with trends
-    const summary = {
-      totalOrders: {
-        current: currentTotalOrders,
-        previous: previousTotalOrders,
-        change: calculateChange(currentTotalOrders, previousTotalOrders),
-        trend: currentTotalOrders >= previousTotalOrders ? 'up' : 'down'
-      },
-      totalSales: {
-        current: currentTotalSales,
-        previous: previousTotalSales,
-        change: calculateChange(currentTotalSales, previousTotalSales),
-        trend: currentTotalSales >= previousTotalSales ? 'up' : 'down'
-      },
-      newCustomers: {
-        current: currentNewCustomers,
-        previous: previousNewCustomers,
-        change: calculateChange(currentNewCustomers, previousNewCustomers),
-        trend: currentNewCustomers >= previousNewCustomers ? 'up' : 'down'
-      },
-      totalRevenue: {
-        current: currentTotalRevenue,
-        previous: previousTotalRevenue,
-        change: calculateChange(currentTotalRevenue, previousTotalRevenue),
-        trend: currentTotalRevenue >= previousTotalRevenue ? 'up' : 'down'
-      }
-    }
+    // 4. Build summary with change percentages
+    const totalOrdersChange = calculateChange(currentTotalOrders, previousTotalOrders)
+    const totalSalesChange = calculateChange(currentTotalSales, previousTotalSales)
+    const newCustomersChange = calculateChange(currentNewCustomers, previousNewCustomers)
+    const totalRevenueChange = calculateChange(currentTotalRevenue, previousTotalRevenue)
 
     // 5. Order trend data - group by date
     const currentOrdersByDate = {}
@@ -159,32 +139,95 @@ statisticsRouter.get('/dashboard', async (request, response) => {
       previousOrdersByDate[dateKey] = (previousOrdersByDate[dateKey] || 0) + order.total
     })
 
-    // Build chart data arrays
+    // Build chart data arrays with appropriate labels based on period
     const orderTrend = {
       labels: [],
-      currentPeriod: [],
-      comparisonPeriod: []
+      current: [],
+      previous: []
     }
 
-    let currentDate = new Date(startDate)
-    while (currentDate <= endDate) {
-      const dateKey = currentDate.toISOString().split('T')[0]
-      const label = `${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`
+    if (period === 'week') {
+      // Week: show day names (Mon-Sun)
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      let currentDate = new Date(startDate)
+      while (currentDate <= endDate) {
+        const dateKey = currentDate.toISOString().split('T')[0]
+        const dayOfWeek = currentDate.getDay()
 
-      orderTrend.labels.push(label)
-      orderTrend.currentPeriod.push(currentOrdersByDate[dateKey] || 0)
+        orderTrend.labels.push(dayNames[dayOfWeek])
+        orderTrend.current.push(currentOrdersByDate[dateKey] || 0)
 
-      currentDate.setDate(currentDate.getDate() + 1)
+        currentDate.setDate(currentDate.getDate() + 1)
+      }
+
+      let prevDate = new Date(prevStartDate)
+      while (prevDate <= prevEndDate) {
+        const dateKey = prevDate.toISOString().split('T')[0]
+        orderTrend.previous.push(previousOrdersByDate[dateKey] || 0)
+        prevDate.setDate(prevDate.getDate() + 1)
+      }
+    } else if (period === 'month') {
+      // Month: show date labels at intervals (MM/DD format)
+      // Create intervals: show ~8-10 labels across the month
+      const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1
+      const interval = Math.max(Math.floor(totalDays / 8), 1)
+
+      let currentDate = new Date(startDate)
+      let dayCount = 0
+
+      while (currentDate <= endDate) {
+        const dateKey = currentDate.toISOString().split('T')[0]
+
+        // Show label at intervals or first/last day
+        if (dayCount % interval === 0 || currentDate >= endDate) {
+          const label = `${String(currentDate.getMonth() + 1).padStart(2, '0')}/${String(currentDate.getDate()).padStart(2, '0')}`
+          orderTrend.labels.push(label)
+          orderTrend.current.push(currentOrdersByDate[dateKey] || 0)
+        }
+
+        currentDate.setDate(currentDate.getDate() + 1)
+        dayCount++
+      }
+
+      // For previous period, use same interval
+      let prevDate = new Date(prevStartDate)
+      let prevDayCount = 0
+
+      while (prevDate <= prevEndDate) {
+        const dateKey = prevDate.toISOString().split('T')[0]
+
+        if (prevDayCount % interval === 0 || prevDate >= prevEndDate) {
+          orderTrend.previous.push(previousOrdersByDate[dateKey] || 0)
+        }
+
+        prevDate.setDate(prevDate.getDate() + 1)
+        prevDayCount++
+      }
+    } else if (period === 'year') {
+      // Year: show month names
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+      // Aggregate by month
+      const currentByMonth = Array(12).fill(0)
+      const previousByMonth = Array(12).fill(0)
+
+      currentOrders.forEach(order => {
+        const month = order.orderDate.getMonth()
+        currentByMonth[month] += order.total
+      })
+
+      previousOrders.forEach(order => {
+        const month = order.orderDate.getMonth()
+        previousByMonth[month] += order.total
+      })
+
+      orderTrend.labels = monthNames
+      orderTrend.current = currentByMonth
+      orderTrend.previous = previousByMonth
     }
 
-    let prevDate = new Date(prevStartDate)
-    while (prevDate <= prevEndDate) {
-      const dateKey = prevDate.toISOString().split('T')[0]
-      orderTrend.comparisonPeriod.push(previousOrdersByDate[dateKey] || 0)
-      prevDate.setDate(prevDate.getDate() + 1)
-    }
-
-    // 6. Top categories
+    // 6. Top categories with colors
     const categoryStats = await OrderDetail.aggregate([
       { $match: { order: { $in: currentOrderIds } } },
       {
@@ -224,46 +267,46 @@ statisticsRouter.get('/dashboard', async (request, response) => {
       { $limit: 5 }
     ])
 
+    // Color palette for categories
+    const categoryColors = ['#e6816f', '#3b82f6', '#fbbf24', '#a855f7', '#10b981']
+
     const totalCategoryQty = categoryStats.reduce((sum, c) => sum + c.total, 0)
-    const topCategories = categoryStats.map(cat => ({
+    const topCategories = categoryStats.map((cat, index) => ({
       name: cat._id,
       value: totalCategoryQty > 0 ? Math.round((cat.total / totalCategoryQty) * 100) : 0,
-      quantity: cat.total
+      color: categoryColors[index] || '#6b7280'
     }))
 
-    // 7. Recent transactions
-    const recentTransactions = currentOrders
+    // 7. Recent transactions - formatted for template
+    const transactions = currentOrders
       .sort((a, b) => b.orderDate - a.orderDate)
       .slice(0, 10)
       .map(order => ({
-        id: order._id,
-        orderNumber: order.orderNumber,
-        customerName: order.customer?.fullName || 'N/A',
-        customerPhone: order.customer?.phone || 'N/A',
-        totalPayment: order.total,
-        date: order.orderDate,
+        id: order.orderNumber,
+        customer: order.customer?.fullName || 'N/A',
+        phone: order.customer?.phone || 'N/A',
+        amount: order.total,
+        date: order.orderDate.toLocaleDateString('vi-VN'),
         status: order.status
       }))
 
-    // 8. Format response
+    // 8. Format response - simplified structure for template
     response.json({
       success: true,
       data: {
-        currentPeriod: {
-          type: period,
-          label: `${startDate.toLocaleDateString('vi-VN')} - ${endDate.toLocaleDateString('vi-VN')}`,
-          startDate,
-          endDate
+        totalOrders: currentTotalOrders,
+        totalSales: currentTotalSales,
+        newCustomers: currentNewCustomers,
+        totalRevenue: currentTotalRevenue,
+        changes: {
+          totalOrders: totalOrdersChange,
+          totalSales: totalSalesChange,
+          newCustomers: newCustomersChange,
+          totalRevenue: totalRevenueChange
         },
-        comparisonPeriod: {
-          label: `${prevStartDate.toLocaleDateString('vi-VN')} - ${prevEndDate.toLocaleDateString('vi-VN')}`,
-          startDate: prevStartDate,
-          endDate: prevEndDate
-        },
-        summary,
         orderTrend,
         topCategories,
-        recentTransactions
+        transactions
       }
     })
 
@@ -988,6 +1031,327 @@ statisticsRouter.get('/profit', async (request, response) => {
     response.status(500).json({
       success: false,
       error: 'Failed to get profit statistics',
+      message: error.message
+    })
+  }
+})
+
+/**
+ * GET /api/statistics/inventory
+ * Get inventory report with stock analysis and distribution
+ * Query params: categoryId (optional), productId (optional), view (optional), includeDetails (optional)
+ */
+statisticsRouter.get('/inventory', async (request, response) => {
+  try {
+    const { categoryId, productId, view, includeDetails } = request.query
+
+    logger.info('Fetching inventory report', { categoryId, productId, view, includeDetails })
+
+    // Build product filter
+    const productFilter = { isActive: true }
+    if (categoryId) {
+      productFilter.category = categoryId
+    }
+    if (productId) {
+      productFilter._id = productId
+    }
+
+    // Get all active products
+    const products = await Product.find(productFilter)
+      .populate('category', 'name categoryCode')
+      .sort({ productCode: 1 })
+
+    const productIds = products.map(p => p._id)
+
+    // Get all inventories for these products
+    const inventories = await Inventory.find({ product: { $in: productIds } })
+      .populate('product', 'productCode name image category')
+
+    // Get all product batches for these products
+    const batches = await ProductBatch.find({
+      product: { $in: productIds }
+    }).select('_id product')
+
+    const batchIds = batches.map(b => b._id)
+
+    // Get all detail inventories
+    const detailInventories = await DetailInventory.find({
+      batchId: { $in: batchIds }
+    }).populate({
+      path: 'batchId',
+      select: 'batchCode expirationDate createdAt product',
+      populate: {
+        path: 'product',
+        select: 'productCode name'
+      }
+    })
+
+    // Create a map of product inventory data
+    const productInventoryMap = new Map()
+
+    // Initialize map with all products
+    products.forEach(product => {
+      productInventoryMap.set(product._id.toString(), {
+        productId: product._id,
+        productCode: product.productCode,
+        productName: product.name,
+        categoryId: product.category?._id,
+        categoryName: product.category?.name || 'Uncategorized',
+        image: product.image,
+        quantityOnHand: 0,
+        quantityOnShelf: 0,
+        quantityReserved: 0,
+        quantityAvailable: 0,
+        totalQuantity: 0,
+        reorderPoint: 10,
+        warehouseLocation: null,
+        isOutOfStock: true,
+        isLowStock: false,
+        needsReorder: true,
+        batchCount: 0,
+        oldestBatchDays: null,
+        batches: []
+      })
+    })
+
+    // Aggregate inventory data from DetailInventory
+    detailInventories.forEach(detail => {
+      if (!detail.batchId || !detail.batchId.product) return
+
+      const productId = detail.batchId.product._id.toString()
+      const productData = productInventoryMap.get(productId)
+      if (!productData) return
+
+      // Accumulate quantities
+      productData.quantityOnHand += detail.quantityOnHand || 0
+      productData.quantityOnShelf += detail.quantityOnShelf || 0
+      productData.quantityReserved += detail.quantityReserved || 0
+      productData.batchCount++
+
+      // Calculate oldest batch
+      if (detail.batchId.createdAt) {
+        const batchAge = Math.floor((Date.now() - new Date(detail.batchId.createdAt)) / (1000 * 60 * 60 * 24))
+        if (productData.oldestBatchDays === null || batchAge > productData.oldestBatchDays) {
+          productData.oldestBatchDays = batchAge
+        }
+      }
+
+      // Add batch details if requested
+      if (includeDetails === 'true') {
+        productData.batches.push({
+          batchId: detail.batchId._id,
+          batchCode: detail.batchId.batchCode,
+          quantityOnHand: detail.quantityOnHand,
+          quantityOnShelf: detail.quantityOnShelf,
+          quantityReserved: detail.quantityReserved,
+          quantityAvailable: detail.quantityAvailable,
+          totalQuantity: detail.totalQuantity,
+          location: detail.location,
+          expirationDate: detail.batchId.expirationDate
+        })
+      }
+    })
+
+    // Update inventory data from Inventory collection
+    inventories.forEach(inv => {
+      const productId = inv.product._id.toString()
+      const productData = productInventoryMap.get(productId)
+      if (!productData) return
+
+      productData.reorderPoint = inv.reorderPoint || 10
+      productData.warehouseLocation = inv.warehouseLocation
+    })
+
+    // Calculate derived fields for all products
+    productInventoryMap.forEach((data) => {
+      data.totalQuantity = data.quantityOnHand + data.quantityOnShelf
+      data.quantityAvailable = Math.max(0, data.totalQuantity - data.quantityReserved)
+      data.isOutOfStock = data.quantityAvailable === 0
+      data.isLowStock = data.quantityAvailable > 0 && data.quantityAvailable <= (data.reorderPoint * 2)
+      data.needsReorder = data.quantityAvailable <= data.reorderPoint
+    })
+
+    // Convert to array
+    let productsList = Array.from(productInventoryMap.values())
+
+    // Apply view filter
+    if (view === 'low-stock') {
+      productsList = productsList.filter(p => p.isLowStock)
+    } else if (view === 'out-of-stock') {
+      productsList = productsList.filter(p => p.isOutOfStock)
+    } else if (view === 'needs-reorder') {
+      productsList = productsList.filter(p => p.needsReorder)
+    }
+
+    // ==================== SUMMARY METRICS ====================
+    const summary = {
+      totalProducts: productsList.length,
+      totalQuantity: 0,
+      totalWarehouseStock: 0,
+      totalShelfStock: 0,
+      totalReservedStock: 0,
+      totalAvailableStock: 0,
+      lowStockItems: 0,
+      outOfStockItems: 0,
+      needsReorderItems: 0,
+      warehouseUtilization: 0,
+      shelfUtilization: 0
+    }
+
+    productsList.forEach(product => {
+      summary.totalQuantity += product.totalQuantity
+      summary.totalWarehouseStock += product.quantityOnHand
+      summary.totalShelfStock += product.quantityOnShelf
+      summary.totalReservedStock += product.quantityReserved
+      summary.totalAvailableStock += product.quantityAvailable
+      if (product.isLowStock) summary.lowStockItems++
+      if (product.isOutOfStock) summary.outOfStockItems++
+      if (product.needsReorder) summary.needsReorderItems++
+    })
+
+    // Calculate utilization percentages
+    if (summary.totalQuantity > 0) {
+      summary.warehouseUtilization = parseFloat(((summary.totalWarehouseStock / summary.totalQuantity) * 100).toFixed(1))
+      summary.shelfUtilization = parseFloat(((summary.totalShelfStock / summary.totalQuantity) * 100).toFixed(1))
+    }
+
+    // ==================== CATEGORY DISTRIBUTION ====================
+    const categoryMap = new Map()
+
+    productsList.forEach(product => {
+      const categoryKey = product.categoryId?.toString() || 'uncategorized'
+      if (!categoryMap.has(categoryKey)) {
+        categoryMap.set(categoryKey, {
+          categoryId: product.categoryId,
+          categoryName: product.categoryName,
+          productCount: 0,
+          totalQuantity: 0,
+          warehouseStock: 0,
+          shelfStock: 0,
+          percentage: 0
+        })
+      }
+
+      const categoryData = categoryMap.get(categoryKey)
+      categoryData.productCount++
+      categoryData.totalQuantity += product.totalQuantity
+      categoryData.warehouseStock += product.quantityOnHand
+      categoryData.shelfStock += product.quantityOnShelf
+    })
+
+    // Calculate percentages and add colors
+    const categoryColors = ['#e6816f', '#3b82f6', '#fbbf24', '#a855f7', '#10b981', '#ec4899', '#f97316']
+    const categoryDistribution = Array.from(categoryMap.values())
+      .sort((a, b) => b.totalQuantity - a.totalQuantity)
+      .slice(0, 7)
+      .map((cat, index) => ({
+        ...cat,
+        percentage: summary.totalQuantity > 0
+          ? parseFloat(((cat.totalQuantity / summary.totalQuantity) * 100).toFixed(1))
+          : 0,
+        color: categoryColors[index] || '#6b7280'
+      }))
+
+    // ==================== STOCK STATUS BREAKDOWN ====================
+    const stockStatus = {
+      inStock: productsList.filter(p => !p.isLowStock && !p.isOutOfStock && p.quantityAvailable > p.reorderPoint * 2).length,
+      lowStock: summary.lowStockItems,
+      outOfStock: summary.outOfStockItems,
+      needsReorder: summary.needsReorderItems
+    }
+
+    // ==================== MONTHLY STOCK MOVEMENT ====================
+    const now = new Date()
+    const yearStart = new Date(now.getFullYear(), 0, 1)
+
+    const monthlyData = Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      monthName: new Date(now.getFullYear(), i, 1).toLocaleString('en-US', { month: 'short' }),
+      incoming: 0,
+      outgoing: 0,
+      netChange: 0
+    }))
+
+    // Get purchase orders for the year (incoming stock)
+    const purchaseOrders = await PurchaseOrder.find({
+      orderDate: { $gte: yearStart, $lte: now },
+      status: { $in: ['approved', 'received'] }
+    })
+
+    const purchaseOrderIds = purchaseOrders.map(po => po._id)
+    const purchaseDetails = await DetailPurchaseOrder.find({
+      purchaseOrder: { $in: purchaseOrderIds },
+      product: { $in: productIds }
+    })
+
+    purchaseDetails.forEach(detail => {
+      const po = purchaseOrders.find(p => p._id.equals(detail.purchaseOrder))
+      if (po && po.orderDate) {
+        const month = new Date(po.orderDate).getMonth()
+        monthlyData[month].incoming += detail.quantity || 0
+      }
+    })
+
+    // Get sales orders for the year (outgoing stock)
+    const salesOrders = await Order.find({
+      orderDate: { $gte: yearStart, $lte: now },
+      status: 'delivered',
+      paymentStatus: 'paid'
+    })
+
+    const salesOrderIds = salesOrders.map(o => o._id)
+    const salesDetails = await OrderDetail.find({
+      order: { $in: salesOrderIds }
+    }).populate({
+      path: 'batch',
+      select: 'product',
+      match: { product: { $in: productIds } }
+    })
+
+    salesDetails.forEach(detail => {
+      if (!detail.batch) return
+      const order = salesOrders.find(o => o._id.equals(detail.order))
+      if (order && order.orderDate) {
+        const month = new Date(order.orderDate).getMonth()
+        monthlyData[month].outgoing += detail.quantity || 0
+      }
+    })
+
+    // Calculate net change
+    monthlyData.forEach(month => {
+      month.netChange = month.incoming - month.outgoing
+    })
+
+    const stockMovement = {
+      labels: monthlyData.map(m => m.monthName),
+      incoming: monthlyData.map(m => m.incoming),
+      outgoing: monthlyData.map(m => m.outgoing),
+      netChange: monthlyData.map(m => m.netChange)
+    }
+
+    // ==================== FORMAT RESPONSE ====================
+    logger.info('Inventory report calculated', {
+      totalProducts: summary.totalProducts,
+      totalQuantity: summary.totalQuantity,
+      lowStockItems: summary.lowStockItems
+    })
+
+    response.json({
+      success: true,
+      data: {
+        summary,
+        categoryDistribution,
+        stockStatus,
+        stockMovement,
+        products: productsList
+      }
+    })
+
+  } catch (error) {
+    logger.error('Error fetching inventory report:', error)
+    response.status(500).json({
+      success: false,
+      error: 'Failed to fetch inventory report',
       message: error.message
     })
   }

@@ -17,6 +17,7 @@ import {
 } from '../../components/POSMain';
 import { POSBatchSelectModal } from '../../components/POSMain/POSBatchSelectModal';
 import { POSHeldOrdersModal } from '../../components/POSMain/POSHeldOrdersModal';
+import { QRCodeScannerModal } from '../../components/POSMain/QRCodeScannerModal';
 import orderService from '../../services/orderService';
 import orderDetailService from '../../services/orderDetailService';
 import paymentService from '../../services/paymentService';
@@ -51,6 +52,9 @@ export const POSMain = () => {
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [selectedProductData, setSelectedProductData] = useState(null);
   const [scanning, setScanning] = useState(false);
+
+  // QR Scanner modal state
+  const [showQRScanner, setShowQRScanner] = useState(false);
 
   // Held orders modal state
   const [showHeldOrdersModal, setShowHeldOrdersModal] = useState(false);
@@ -476,6 +480,21 @@ export const POSMain = () => {
     setTimeout(() => {
       setToast(null);
     }, 3000);
+  };
+
+  // Handle QR scan success
+  const handleQRScanSuccess = (productCode) => {
+    console.log('✅ QR Code scanned:', productCode);
+    setShowQRScanner(false);
+
+    // Use existing handler (same flow as keyboard scanning)
+    handleProductScanned(productCode);
+  };
+
+  // Handle QR scan error
+  const handleQRScanError = (error) => {
+    console.error('❌ QR Scan error:', error);
+    showToast('error', error);
   };
 
   // Handle batch selected from modal
@@ -1145,6 +1164,7 @@ export const POSMain = () => {
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
               onProductScanned={handleProductScanned}
+              onOpenQRScanner={() => setShowQRScanner(true)}
               scanning={scanning}
             />
 
@@ -1204,6 +1224,14 @@ export const POSMain = () => {
         isOpen={showHeldOrdersModal}
         onClose={() => setShowHeldOrdersModal(false)}
         onLoadOrder={handleLoadHeldOrder}
+      />
+
+      {/* QR Code Scanner Modal */}
+      <QRCodeScannerModal
+        isOpen={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        onScanSuccess={handleQRScanSuccess}
+        onScanError={handleQRScanError}
       />
 
       {/* Invoice Modal */}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { QrCode } from 'lucide-react';
 
-export const POSSearchBar = ({ onProductScanned, onSearchChange, searchTerm, scanning }) => {
+export const POSSearchBar = ({ onProductScanned, onSearchChange, searchTerm, scanning, onOpenQRScanner }) => {
   const [scanBuffer, setScanBuffer] = useState('');
   const [lastKeyTime, setLastKeyTime] = useState(0);
   const [scanStatus, setScanStatus] = useState(null); // 'success' | 'error' | null
@@ -120,36 +121,51 @@ export const POSSearchBar = ({ onProductScanned, onSearchChange, searchTerm, sca
 
   return (
     <div className="relative">
-      <input
-        ref={inputRef}
-        id="product-search"
-        type="text"
-        defaultValue={searchTerm}
-        onChange={handleInputChange}
-        placeholder="Scan productCode or search products... (Ctrl+K or F2)"
-        className="w-full px-4 py-3 pl-10 border-2 border-gray-300 rounded-lg text-[15px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent mb-3"
-      />
-      <svg
-        className="absolute left-3 top-3.5 text-gray-400"
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-      >
-        <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
-        <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-
-      {/* Scanning/Processing indicator */}
-      {(scanBuffer.length > 0 || scanning) && (
-        <div className="absolute right-3 top-3 flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold animate-pulse">
-          <svg className="animate-spin" width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" fill="none" opacity="0.25" />
-            <path d="M8 2 A6 6 0 0 1 14 8" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <div className="flex gap-2 mb-3">
+        {/* Search Input */}
+        <div className="flex-1 relative">
+          <input
+            ref={inputRef}
+            id="product-search"
+            type="text"
+            defaultValue={searchTerm}
+            onChange={handleInputChange}
+            placeholder="Scan productCode or search products... (Ctrl+K or F2)"
+            className="w-full px-4 py-3 pl-10 border-2 border-gray-300 rounded-lg text-[15px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+          />
+          <svg
+            className="absolute left-3 top-3.5 text-gray-400"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <circle cx="11" cy="11" r="8" stroke="currentColor" strokeWidth="2" />
+            <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          {scanBuffer.length > 0 ? 'Scanning...' : 'Processing...'}
+
+          {/* Scanning/Processing indicator */}
+          {(scanBuffer.length > 0 || scanning) && (
+            <div className="absolute right-3 top-3 flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold animate-pulse">
+              <svg className="animate-spin" width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" fill="none" opacity="0.25" />
+                <path d="M8 2 A6 6 0 0 1 14 8" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+              </svg>
+              {scanBuffer.length > 0 ? 'Scanning...' : 'Processing...'}
+            </div>
+          )}
         </div>
-      )}
+
+        {/* QR Scanner Button */}
+        <button
+          onClick={onOpenQRScanner}
+          className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center gap-2 font-medium shadow-sm"
+          title="Scan QR Code"
+        >
+          <QrCode size={20} />
+          <span className="hidden sm:inline">Scan QR</span>
+        </button>
+      </div>
     </div>
   );
 };

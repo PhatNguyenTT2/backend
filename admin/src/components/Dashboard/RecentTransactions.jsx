@@ -2,36 +2,42 @@ import React from 'react';
 import { Clock } from 'lucide-react';
 
 export const RecentTransactions = ({ data, loading }) => {
-  const formatCurrency = (amount) => {
-    if (!amount && amount !== 0) return '₫0';
-
-    // Handle Mongoose Decimal128
-    if (typeof amount === 'object' && amount.$numberDecimal) {
-      return `₫${Number(amount.$numberDecimal).toLocaleString('vi-VN')}`;
-    }
-
-    return `₫${Number(amount).toLocaleString('vi-VN')}`;
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('vi-VN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(value);
   };
 
   const getStatusBadge = (status) => {
-    const statusMap = {
-      pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Pending' },
-      processing: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Processing' },
-      shipping: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Shipping' },
-      delivered: { bg: 'bg-green-100', text: 'text-green-800', label: 'Delivered' },
-      cancelled: { bg: 'bg-red-100', text: 'text-red-800', label: 'Cancelled' },
+    const statusConfig = {
+      delivered: {
+        label: 'Delivered',
+        className: 'bg-emerald-100 text-emerald-700'
+      },
+      pending: {
+        label: 'Pending',
+        className: 'bg-orange-100 text-orange-700'
+      },
+      cancelled: {
+        label: 'Cancelled',
+        className: 'bg-red-100 text-red-700'
+      },
+      processing: {
+        label: 'Processing',
+        className: 'bg-blue-100 text-blue-700'
+      }
     };
-    const config = statusMap[status?.toLowerCase()] || { bg: 'bg-gray-100', text: 'text-gray-800', label: status };
+
+    const config = statusConfig[status] || {
+      label: status,
+      className: 'bg-gray-100 text-gray-700'
+    };
+
     return (
-      <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase ${config.bg} ${config.text}`}>
+      <span className={`inline-block px-3 py-1 rounded-md text-xs font-semibold ${config.className}`}>
         {config.label}
       </span>
     );
@@ -39,109 +45,103 @@ export const RecentTransactions = ({ data, loading }) => {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="h-6 bg-gray-200 rounded w-1/4 animate-pulse"></div>
-        </div>
-        <div className="p-6">
+      <div className="bg-white rounded-xl p-6 shadow-sm">
+        <div className="h-6 bg-gray-200 rounded w-48 mb-4 animate-pulse"></div>
+        <div className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex items-center gap-4 py-3 animate-pulse">
-              <div className="h-4 bg-gray-200 rounded flex-1"></div>
-              <div className="h-4 bg-gray-200 rounded w-24"></div>
-              <div className="h-4 bg-gray-200 rounded w-20"></div>
-              <div className="h-4 bg-gray-200 rounded w-16"></div>
-            </div>
+            <div key={i} className="h-16 bg-gray-100 rounded animate-pulse"></div>
           ))}
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-        <div className="flex items-center gap-2">
-          <Clock className="w-5 h-5 text-gray-600" />
-          <h3 className="text-[16px] font-semibold text-gray-900">
-            Recent Transactions
-          </h3>
-          {data && data.length > 0 && (
-            <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 text-[11px] font-semibold rounded-full">
-              {data.length}
-            </span>
-          )}
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-white rounded-xl p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-6">
+          <Clock size={20} className="text-gray-600" />
+          <h3 className="text-base font-semibold text-gray-900">Recent Transactions</h3>
+          <span className="bg-emerald-500 text-white text-xs font-semibold px-2 py-1 rounded-full">
+            0
+          </span>
+        </div>
+        <div className="py-12 flex items-center justify-center text-gray-500 text-sm">
+          No transactions found
         </div>
       </div>
+    );
+  }
 
-      {/* Table */}
+  return (
+    <div className="bg-white rounded-xl p-6 shadow-sm">
+      <div className="flex items-center gap-2 mb-6">
+        <Clock size={20} className="text-gray-600" />
+        <h3 className="text-base font-semibold text-gray-900">Recent Transactions</h3>
+        <span className="bg-emerald-500 text-white text-xs font-semibold px-2 py-1 rounded-full">
+          {data.length}
+        </span>
+      </div>
+
       <div className="overflow-x-auto">
-        {data && data.length > 0 ? (
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                  Order Number
-                </th>
-                <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                  Customer Name
-                </th>
-                <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                  Total Payment
-                </th>
-                <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                  Date
-                </th>
-                <th className="px-6 py-3 text-center text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                  Status
-                </th>
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Order ID
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Customer Name
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Phone Number
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Total Amount
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Date
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Status
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {data.map((transaction, index) => (
+              <tr key={index} className="hover:bg-gray-50 transition-colors">
+                <td className="px-4 py-4 whitespace-nowrap">
+                  <span className="text-sm font-semibold text-blue-600">
+                    {transaction.id}
+                  </span>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap">
+                  <span className="text-sm text-gray-900">
+                    {transaction.customer}
+                  </span>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap">
+                  <span className="text-sm text-gray-600">
+                    {transaction.phone}
+                  </span>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap">
+                  <span className="text-sm font-medium text-gray-900">
+                    {formatCurrency(transaction.amount)}
+                  </span>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap">
+                  <span className="text-sm text-gray-600">
+                    {transaction.date}
+                  </span>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap">
+                  {getStatusBadge(transaction.status)}
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {data.map((transaction, idx) => (
-                <tr key={transaction.id || idx} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <span className="text-[13px] font-semibold text-blue-600">
-                      {transaction.orderNumber}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div>
-                      <p className="text-[13px] font-medium text-gray-900">
-                        {transaction.customerName}
-                      </p>
-                      {transaction.customerPhone && (
-                        <p className="text-[11px] text-gray-500">
-                          {transaction.customerPhone}
-                        </p>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <span className="text-[14px] font-semibold text-emerald-600">
-                      {formatCurrency(transaction.totalPayment)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-[12px] text-gray-600">
-                      {formatDate(transaction.date)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    {getStatusBadge(transaction.status)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <div className="px-6 py-16 text-center">
-            <Clock className="mx-auto h-12 w-12 text-gray-400" />
-            <p className="mt-4 text-[13px] text-gray-500">
-              No recent transactions found
-            </p>
-          </div>
-        )}
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

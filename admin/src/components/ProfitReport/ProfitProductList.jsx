@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, TrendingDown, Package } from 'lucide-react';
+import { TrendingUp, TrendingDown, PackageOpen, ArrowUpDown } from 'lucide-react';
 
 export const ProfitProductList = ({ products = [], loading = false }) => {
   const [sortBy, setSortBy] = useState('profit'); // profit, revenue, cost, margin
@@ -7,7 +7,12 @@ export const ProfitProductList = ({ products = [], loading = false }) => {
 
   const formatCurrency = (amount) => {
     if (!amount && amount !== 0) return '₫0';
-    return `₫${Number(amount).toLocaleString('vi-VN')}`;
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
   };
 
   const handleSort = (field) => {
@@ -44,19 +49,19 @@ export const ProfitProductList = ({ products = [], loading = false }) => {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm py-12 text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-[13px] text-gray-500">Loading profit data...</p>
+      <div className="bg-white rounded-xl shadow-sm py-12 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
+        <p className="mt-4 text-sm text-gray-500">Loading profit data...</p>
       </div>
     );
   }
 
   if (!products || products.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm py-16 text-center">
-        <Package className="mx-auto h-16 w-16 text-gray-400" />
-        <h3 className="mt-4 text-[16px] font-semibold text-gray-900">No product data found</h3>
-        <p className="mt-2 text-[13px] text-gray-500">
+      <div className="bg-white rounded-xl shadow-sm py-16 text-center">
+        <PackageOpen className="mx-auto h-16 w-16 text-gray-400" />
+        <h3 className="mt-4 text-base font-semibold text-gray-900">No product data found</h3>
+        <p className="mt-2 text-sm text-gray-500">
           There are no products with sales or purchases in the selected period
         </p>
       </div>
@@ -69,7 +74,7 @@ export const ProfitProductList = ({ products = [], loading = false }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
       <div className="overflow-x-auto">
         <table className="w-full">
           {/* Table Header */}

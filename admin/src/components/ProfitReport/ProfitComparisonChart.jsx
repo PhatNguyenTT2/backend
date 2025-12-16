@@ -1,11 +1,11 @@
 import React from 'react';
-import { DollarSign, ShoppingCart, Package } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Package2 } from 'lucide-react';
 
 export const ProfitComparisonChart = ({ products = [], summary }) => {
   if (!products || products.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-        <p className="text-gray-500 text-[13px]">No data available</p>
+      <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+        <p className="text-gray-500 text-sm">No data available</p>
       </div>
     );
   }
@@ -28,38 +28,38 @@ export const ProfitComparisonChart = ({ products = [], summary }) => {
     .slice(0, 5);
 
   const revenueColors = [
-    'bg-green-500',
-    'bg-emerald-500',
-    'bg-teal-500',
     'bg-cyan-500',
-    'bg-sky-500'
+    'bg-cyan-400',
+    'bg-sky-500',
+    'bg-teal-500',
+    'bg-emerald-500'
   ];
 
   const costColors = [
-    'bg-red-500',
-    'bg-rose-500',
-    'bg-pink-500',
     'bg-orange-500',
-    'bg-amber-500'
+    'bg-orange-400',
+    'bg-amber-500',
+    'bg-red-500',
+    'bg-rose-500'
   ];
 
   return (
     <div className="grid grid-cols-2 gap-6">
       {/* Revenue Side */}
-      <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-green-500">
+      <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-cyan-500 hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-[16px] font-semibold text-gray-900 flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-green-600" />
+            <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+              <ShoppingBag className="w-5 h-5 text-cyan-600" />
               Revenue
             </h3>
-            <p className="text-[11px] text-gray-600 mt-1">Top 5 products by revenue</p>
+            <p className="text-xs text-gray-600 mt-1">Top 5 products by revenue</p>
           </div>
           <div className="text-right">
-            <p className="text-[20px] font-bold text-green-600">
+            <p className="text-xl font-bold text-cyan-600">
               {formatCurrency(summary?.totalRevenue || 0)}
             </p>
-            <p className="text-[11px] text-gray-500">{summary?.totalSalesOrders || 0} orders</p>
+            <p className="text-xs text-gray-500">{summary?.totalSalesOrders || 0} orders</p>
           </div>
         </div>
 
@@ -117,20 +117,20 @@ export const ProfitComparisonChart = ({ products = [], summary }) => {
       </div>
 
       {/* Cost Side */}
-      <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-red-500">
+      <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-orange-500 hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-[16px] font-semibold text-gray-900 flex items-center gap-2">
-              <Package className="w-5 h-5 text-red-600" />
+            <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+              <Package2 className="w-5 h-5 text-orange-600" />
               Cost
             </h3>
-            <p className="text-[11px] text-gray-600 mt-1">Top 5 products by cost</p>
+            <p className="text-xs text-gray-600 mt-1">Top 5 products by cost</p>
           </div>
           <div className="text-right">
-            <p className="text-[20px] font-bold text-red-600">
+            <p className="text-xl font-bold text-orange-600">
               {formatCurrency(summary?.totalCost || 0)}
             </p>
-            <p className="text-[11px] text-gray-500">{summary?.totalPurchaseOrders || 0} POs</p>
+            <p className="text-xs text-gray-500">{summary?.totalPurchaseOrders || 0} POs</p>
           </div>
         </div>
 
