@@ -11,6 +11,9 @@ export const QRCodeScannerModal = ({ isOpen, onClose, onScanSuccess, onScanError
   const html5QrCodeRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  // ⏱️ Simple timestamp tracking for cooldown (camera stays running)
+  const lastScanTimeRef = useRef(0);
+
   // Initialize scanner when modal opens
   useEffect(() => {
     if (!isOpen) return;
@@ -102,6 +105,13 @@ export const QRCodeScannerModal = ({ isOpen, onClose, onScanSuccess, onScanError
 
   // Handle successful scan
   const handleScanSuccess = (decodedText) => {
+    // ⏱️ CHECK COOLDOWN: Camera KHÔNG BAO GIỜ tắt, chỉ ignore callbacks
+    const now = Date.now();
+    if (now - lastScanTimeRef.current < 5000) {
+      console.log('⚠️ Scan cooldown active, ignoring scan');
+      return; // Bỏ qua scan này
+    }
+
     // Validate ProductCode format: PROD + 10 digits
     const productCodePattern = /^PROD\d{10}$/i;
 
@@ -116,21 +126,22 @@ export const QRCodeScannerModal = ({ isOpen, onClose, onScanSuccess, onScanError
       return;
     }
 
-    // Valid ProductCode
+    // Valid ProductCode - Scan hợp lệ → gọi API
     const productCode = decodedText.toUpperCase();
+    lastScanTimeRef.current = now; // Update timestamp
+
+    console.log('✅ Valid scan at', new Date(now).toLocaleTimeString());
 
     setScanResult({
       type: 'success',
       message: `Product ${productCode} scanned!`
     });
 
-    // Add to cart immediately (don't stop scanning, don't close modal)
+    // Call parent handler (add to cart with quantity = 1)
     onScanSuccess?.(productCode);
 
-    // Clear success message after 1.5 seconds and continue scanning
-    setTimeout(() => {
-      setScanResult(null);
-    }, 1500);
+    // Clear success message after 2 seconds
+    setTimeout(() => setScanResult(null), 2000);
   };
 
   // Handle camera change
@@ -187,6 +198,8 @@ export const QRCodeScannerModal = ({ isOpen, onClose, onScanSuccess, onScanError
     stopScanning();
     setScanResult(null);
     setIsFileMode(false);
+    lastScanTimeRef.current = 0; // Reset timestamp
+
     onClose?.();
   };
 

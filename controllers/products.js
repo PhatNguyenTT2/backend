@@ -684,6 +684,36 @@ productsRouter.get('/code/:productCode', async (request, response) => {
           );
 
           result.batches = batchesWithInventory;
+
+          // ⭐ CALCULATE DISCOUNT FROM FEFO BATCH (SAME LOGIC AS getAllProducts)
+          // Filter batches with shelf stock and active status
+          const availableBatches = batchesWithInventory.filter(batch => {
+            const hasStock = batch.detailInventory
+              ? (batch.detailInventory.quantityOnShelf || 0) > 0
+              : (batch.quantity || 0) > 0;
+            const isActive = batch.status === 'active' || !batch.status;
+            return hasStock && isActive;
+          });
+
+          if (availableBatches.length > 0) {
+            // Sort by expiry date (nearest first) - FEFO logic
+            const sortedBatches = [...availableBatches].sort((a, b) => {
+              if (!a.expiryDate) return 1;
+              if (!b.expiryDate) return -1;
+              return new Date(a.expiryDate) - new Date(b.expiryDate);
+            });
+
+            const fefoBatch = sortedBatches[0];
+
+            // Set discount percentage if batch has discount promotion
+            if (fefoBatch.promotionApplied === 'discount' && (fefoBatch.discountPercentage || 0) > 0) {
+              result.product.discountPercentage = fefoBatch.discountPercentage;
+            } else {
+              result.product.discountPercentage = 0;
+            }
+          } else {
+            result.product.discountPercentage = 0;
+          }
         } else {
           result.batches = [];
           result.outOfStock = true;

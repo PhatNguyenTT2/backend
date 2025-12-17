@@ -314,8 +314,6 @@ export const POSMain = () => {
     } else {
       // REGULAR PRODUCT: Add directly to cart (simple increment logic)
       // Backend will handle FEFO batch selection when creating order
-      const existingItem = cart.find(item => item.id === product.id);
-      const currentQuantityInCart = existingItem ? existingItem.quantity : 0;
       const availableStock = product.stock || product.inventory?.quantityAvailable || 0;
 
       // Check if product has stock on shelf (same check as ProductGrid filter)
@@ -325,41 +323,49 @@ export const POSMain = () => {
         return;
       }
 
-      if (currentQuantityInCart >= availableStock) {
-        showToast('error', `Not enough stock. Available: ${availableStock}`);
-        return;
-      }
+      // Calculate final price with discount (outside cart update)
+      const basePrice = product.unitPrice || product.price || 0;
+      const discountPercentage = product.discountPercentage || 0;
+      const finalPrice = discountPercentage > 0
+        ? basePrice * (1 - discountPercentage / 100)
+        : basePrice;
 
-      if (existingItem) {
-        setCart(cart.map(item =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        ));
-        showToast('success', `Updated ${product.name} quantity`);
-      } else {
-        // Calculate final price with discount
-        const basePrice = product.unitPrice || product.price || 0;
-        const discountPercentage = product.discountPercentage || 0;
-        const finalPrice = discountPercentage > 0
-          ? basePrice * (1 - discountPercentage / 100)
-          : basePrice;
+      // Use functional update to avoid stale closure issue
+      setCart(prevCart => {
+        const existingItem = prevCart.find(item => item.id === product.id);
+        const currentQuantityInCart = existingItem ? existingItem.quantity : 0;
 
-        setCart([...cart, {
-          ...product,
-          quantity: 1,
-          basePrice: basePrice, // Store original price
-          discountPercentage: discountPercentage, // Store discount percentage
-          price: finalPrice // Store final price after discount
-        }]);
-        showToast('success', `Added ${product.name} to cart`);
-      }
+        // Check stock availability
+        if (currentQuantityInCart >= availableStock) {
+          showToast('error', `Not enough stock. Available: ${availableStock}`);
+          return prevCart; // Return unchanged cart
+        }
+
+        if (existingItem) {
+          // Update existing item quantity
+          showToast('success', `Updated ${product.name} quantity`);
+          return prevCart.map(item =>
+            item.id === product.id
+              ? { ...item, quantity: item.quantity + 1 }
+              : item
+          );
+        } else {
+          // Add new item to cart
+          showToast('success', `Added ${product.name} to cart`);
+          return [...prevCart, {
+            ...product,
+            quantity: 1,
+            basePrice: basePrice, // Store original price
+            discountPercentage: discountPercentage, // Store discount percentage
+            price: finalPrice // Store final price after discount
+          }];
+        }
+      });
     }
   };
 
   // Handle productCode scanned
   const handleProductScanned = async (productCode) => {
-    console.log('ProductCode scanned:', productCode);
     setScanning(true);
 
     try {
@@ -414,10 +420,9 @@ export const POSMain = () => {
         // REGULAR PRODUCT: Add directly to cart (NO batch selection)
         // Backend will handle FEFO (First Expired First Out) batch selection when creating order
         // This is same logic as clicking product card for regular products
-        console.log('📦 Scanned REGULAR product - Adding to cart directly');
 
-        const existingItem = cart.find(item => item.id === product.id);
-        const currentQuantityInCart = existingItem ? existingItem.quantity : 0;
+        // Normalize product data (ensure id field exists)
+        const productId = product._id || product.id;
         const availableStock = product.stock || inventory?.quantityAvailable || 0;
 
         // Check if product has stock on shelf
@@ -427,36 +432,52 @@ export const POSMain = () => {
           return;
         }
 
-        // Check if enough stock for current quantity
-        if (currentQuantityInCart >= availableStock) {
-          showToast('error', `Not enough stock. Available: ${availableStock}`);
-          return;
-        }
-
-        // Calculate final price with discount
+        // Calculate final price with discount (SAME logic as ProductGrid click)
+        // Backend API now calculates discountPercentage from FEFO batch
         const basePrice = product.unitPrice || product.price || 0;
         const discountPercentage = product.discountPercentage || 0;
         const finalPrice = discountPercentage > 0
           ? basePrice * (1 - discountPercentage / 100)
           : basePrice;
 
-        if (existingItem) {
-          setCart(cart.map(item =>
-            item.id === product.id
-              ? { ...item, quantity: item.quantity + 1 }
-              : item
-          ));
-          showToast('success', `Updated ${product.name} quantity`);
-        } else {
-          setCart([...cart, {
-            ...product,
-            quantity: 1,
-            basePrice: basePrice, // Store original price
-            discountPercentage: discountPercentage, // Store discount percentage
-            price: finalPrice // Store final price after discount
-          }]);
-          showToast('success', `Added ${product.name} to cart`);
-        }
+        // Use functional update to avoid stale closure issue
+        setCart(prevCart => {
+          const existingItem = prevCart.find(item => item.id === productId);
+          const currentQuantityInCart = existingItem ? existingItem.quantity : 0;
+
+          // Check if enough stock for current quantity
+          if (currentQuantityInCart >= availableStock) {
+            showToast('error', `Not enough stock. Available: ${availableStock}`);
+            return prevCart; // Return unchanged cart
+          }
+
+          if (existingItem) {
+            // Update existing item quantity
+            showToast('success', `Updated ${product.name} quantity`);
+            return prevCart.map(item =>
+              item.id === productId
+                ? { ...item, quantity: item.quantity + 1 }
+                : item
+            );
+          } else {
+            // Add new item to cart (normalize structure)
+            showToast('success', `Added ${product.name} to cart`);
+            return [...prevCart, {
+              id: productId,
+              productId: productId,
+              productCode: product.productCode,
+              name: product.name,
+              image: product.image,
+              stock: availableStock,
+              categoryName: product.category?.name || 'Uncategorized',
+              quantity: 1,
+              basePrice: basePrice, // Store original price
+              discountPercentage: discountPercentage, // Store discount percentage
+              price: finalPrice, // Store final price after discount
+              inventory: inventory // Store full inventory data
+            }];
+          }
+        });
       }
 
       // Reset search term after successful scan
@@ -484,8 +505,10 @@ export const POSMain = () => {
 
   // Handle QR scan success
   const handleQRScanSuccess = (productCode) => {
-    console.log('✅ QR Code scanned:', productCode);
     // setShowQRScanner(false); // ❌ REMOVED: Keep scanner open for continuous scanning
+
+    // Note: Cooldown logic is now handled in QRCodeScannerModal component
+    // This prevents continuous scanning at the camera level before reaching POSMain
 
     // Use existing handler (same flow as keyboard scanning)
     handleProductScanned(productCode);
@@ -548,15 +571,7 @@ export const POSMain = () => {
     // Get current price from batch (with discount applied)
     const batchPrice = getCurrentBatchPrice(batch);
 
-    console.log('🛒 Adding product with batch to cart:', {
-      product: product.name,
-      batch: batch.batchCode,
-      batchId,
-      quantity,
-      basePrice: getBatchPrice(batch),
-      discount: getBatchDiscountPercentage(batch),
-      finalPrice: batchPrice
-    });
+
 
     const cartItem = {
       id: cartItemId,
@@ -581,38 +596,31 @@ export const POSMain = () => {
       }
     };
 
-    // Check if this exact product+batch combo already exists in cart
-    const existingItem = cart.find(item => item.id === cartItemId);
+    // Use functional update to avoid stale closure issue
+    setCart(prevCart => {
+      const existingItem = prevCart.find(item => item.id === cartItemId);
 
-    if (existingItem) {
-      // Update quantity for existing batch
-      const newQuantity = existingItem.quantity + quantity;
-      const maxQty = batch.quantity;
+      if (existingItem) {
+        // Update quantity for existing batch
+        const newQuantity = existingItem.quantity + quantity;
+        const maxQty = batch.quantity;
 
-      if (newQuantity > maxQty) {
-        showToast('error', `Not enough stock for batch ${batch.batchCode}. Available: ${maxQty}`);
-        return;
+        if (newQuantity > maxQty) {
+          showToast('error', `Not enough stock for batch ${batch.batchCode}. Available: ${maxQty}`);
+          return prevCart; // Return unchanged cart
+        }
+
+        showToast('success', `Updated ${product.name} (${batch.batchCode}) quantity to ${newQuantity}`);
+        return prevCart.map(item =>
+          item.id === cartItemId
+            ? { ...item, quantity: newQuantity }
+            : item
+        );
+      } else {
+        // Add new cart item for this batch
+        showToast('success', `Added ${quantity}x ${product.name} (${batch.batchCode}) to cart`);
+        return [...prevCart, cartItem];
       }
-
-      setCart(cart.map(item =>
-        item.id === cartItemId
-          ? { ...item, quantity: newQuantity }
-          : item
-      ));
-
-      showToast('success', `Updated ${product.name} (${batch.batchCode}) quantity to ${newQuantity}`);
-    } else {
-      // Add new cart item for this batch
-      setCart([...cart, cartItem]);
-      showToast('success', `Added ${quantity}x ${product.name} (${batch.batchCode}) to cart`);
-    }
-
-    console.log(`✅ Added to cart:`, {
-      product: product.name,
-      batch: batch.batchCode,
-      quantity,
-      price: batchPrice,
-      total: batchPrice * quantity
     });
   };
 
@@ -633,7 +641,7 @@ export const POSMain = () => {
       return;
     }
 
-    setCart(cart.map(item =>
+    setCart(prevCart => prevCart.map(item =>
       item.id === productId
         ? { ...item, quantity: newQuantity }
         : item
@@ -642,7 +650,7 @@ export const POSMain = () => {
 
   // Remove from cart
   const removeFromCart = (productId) => {
-    setCart(cart.filter(item => item.id !== productId));
+    setCart(prevCart => prevCart.filter(item => item.id !== productId));
   };
 
   // Clear cart
@@ -707,8 +715,6 @@ export const POSMain = () => {
     try {
       setLoading(true);
 
-      console.log('🔄 Hold Order - Processing cart:', cart);
-
       // Prepare order items from cart
       // Include batch for fresh products, omit for regular (backend will use FEFO)
       const orderItems = cart.map(item => {
@@ -743,8 +749,6 @@ export const POSMain = () => {
         ? 'virtual-guest'
         : selectedCustomer?.id || 'virtual-guest';
 
-      console.log('👤 Customer:', customerId);
-
       // Prepare order data
       const orderData = {
         customer: customerId,
@@ -755,17 +759,12 @@ export const POSMain = () => {
         paymentStatus: 'pending'
       };
 
-      console.log('📝 Creating hold order:', JSON.stringify(orderData, null, 2));
-
       // Get POS token from localStorage
       const posToken = localStorage.getItem('posToken');
-      console.log('🔑 POS Token:', posToken ? 'Found' : 'Not Found');
 
       if (!posToken) {
         throw new Error('POS authentication required');
       }
-
-      console.log('🌐 Calling API: POST /api/pos-login/order');
 
       // Call POS-specific API endpoint (no admin auth required)
       const response = await fetch('/api/pos-login/order', {
@@ -776,8 +775,6 @@ export const POSMain = () => {
         },
         body: JSON.stringify(orderData)
       });
-
-      console.log('📡 Response status:', response.status, response.statusText);
 
       // Check if response is ok before parsing JSON
       if (!response.ok) {
@@ -799,8 +796,6 @@ export const POSMain = () => {
         throw new Error(result.error?.message || 'Failed to hold order');
       }
 
-      console.log('✅ Hold order created:', result.data.order);
-
       // Clear cart and show success
       setCart([]);
       setSelectedCustomer(null);
@@ -817,10 +812,6 @@ export const POSMain = () => {
   // Handle payment - NEW ATOMIC WORKFLOW
   // ⭐ UNIFIED: Handle payment for both new orders and held orders
   const handlePaymentMethodSelect = async (paymentMethod) => {
-    console.log('💳 Payment method selected:', paymentMethod);
-    console.log('📦 Existing order:', existingOrder ? existingOrder.orderNumber : 'None');
-    console.log('🛒 Cart:', cart.length, 'items');
-
     try {
       // Validate cart
       if (!cart || cart.length === 0) {
@@ -970,9 +961,6 @@ export const POSMain = () => {
   // Handle load order from held orders
   const handleLoadHeldOrder = async (order) => {
     try {
-      console.log('📥 Loading held order:', order.orderNumber);
-      console.log('📦 Order details:', order.details);
-
       // Check if current cart has items
       if (cart.length > 0) {
         const confirm = window.confirm(
@@ -1132,10 +1120,6 @@ export const POSMain = () => {
       });
 
       showToast('success', `Loaded order ${order.orderNumber} to cart`);
-      console.log('💾 Existing order stored with ID:', order._id || order.id);
-
-      console.log('✅ Order loaded to cart:', cartItems);
-      console.log('✅ Existing order stored:', order.orderNumber);
     } catch (error) {
       console.error('❌ Error loading held order:', error);
       showToast('error', 'Failed to load order');
