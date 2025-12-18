@@ -32,6 +32,7 @@ const settingsRouter = require('./controllers/settings')
 const customerDiscountSettingsRouter = require('./controllers/customerDiscountSettings')
 const permissionsRouter = require('./controllers/permissions')
 const statisticsRouter = require('./controllers/statistics')
+const vnpayRouter = require('./controllers/vnpay')
 const promotionScheduler = require('./services/promotionScheduler')
 
 const app = express()
@@ -82,6 +83,7 @@ app.use('/api/settings', settingsRouter)
 app.use('/api/customer-discount-settings', customerDiscountSettingsRouter)
 app.use('/api/permissions', permissionsRouter)
 app.use('/api/statistics', statisticsRouter)
+app.use('/api/vnpay', vnpayRouter)
 
 if (process.env.NODE_ENV === 'test') {
   const testingRouter = require('./controllers/testing')

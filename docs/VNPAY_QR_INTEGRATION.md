@@ -111,29 +111,92 @@ HASH_SECRET:   Secret key for signing requests
 ### 2. Node.js Dependencies
 
 ```bash
-npm install crypto moment qs qrcode.react
+# Backend dependencies
+npm install vnpay
+
+# Frontend dependencies (in admin folder)
+cd admin
+npm install qrcode.react
 ```
 
 ### 3. Database Schema Updates
 
-```javascript
-// models/payment.js - Add VNPay fields
-const paymentSchema = new mongoose.Schema({
-  // ... existing fields
-  
-  // VNPay specific fields
-  vnpayTransactionNo: String,        // Transaction ID from VNPay
-  vnpayResponseCode: String,         // Response code (00 = success)
-  vnpayBankCode: String,             // Bank code used
-  vnpayCardType: String,             // Card type (ATM/QRCODE)
-  vnpayPayDate: Date,                // Payment timestamp
-  vnpaySecureHash: String            // Hash for verification
-});
-```
+**Create new VNPay model** (do not modify existing Payment model)
 
-Run migration:
-```bash
-npm run migrate:vnpay
+**File:** `models/vnpay.js`
+
+```javascript
+const mongoose = require('mongoose');
+
+const vnpaySchema = new mongoose.Schema({
+  // Order reference
+  orderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Order',
+    required: true
+  },
+  
+  // VNPay transaction reference
+  vnp_TxnRef: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  
+  // VNPay transaction details
+  vnp_Amount: {
+    type: Number,
+    required: true
+  },
+  
+  vnp_OrderInfo: String,
+  
+  vnp_TransactionNo: String,        // VNPay's transaction ID
+  vnp_ResponseCode: String,         // 00 = success
+  vnp_BankCode: String,             // Bank used for payment
+  vnp_BankTranNo: String,           // Bank's transaction number
+  vnp_CardType: String,             // ATM/QRCODE
+  vnp_PayDate: String,              // Format: YYYYMMDDHHmmss
+  vnp_TransactionStatus: String,    // 00 = success
+  
+  // Request details
+  vnp_IpAddr: String,
+  vnp_Locale: String,
+  
+  // Security
+  vnp_SecureHash: String,
+  
+  // Status tracking
+  status: {
+    type: String,
+    enum: ['pending', 'success', 'failed', 'expired'],
+    default: 'pending'
+  },
+  
+  // Payment URL
+  paymentUrl: String,
+  
+  // IPN verified
+  ipnVerified: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Return URL accessed
+  returnUrlAccessed: {
+    type: Boolean,
+    default: false
+  }
+}, {
+  timestamps: true
+});
+
+// Index for quick lookups
+vnpaySchema.index({ vnp_TxnRef: 1 });
+vnpaySchema.index({ orderId: 1 });
+vnpaySchema.index({ status: 1 });
+
+module.exports = mongoose.model('VNPay', vnpaySchema);
 ```
 
 ---
@@ -146,166 +209,268 @@ npm run migrate:vnpay
 
 ```bash
 # VNPay Configuration
-VNPAY_TMN_CODE=YOUR_MERCHANT_CODE
-VNPAY_HASH_SECRET=YOUR_HASH_SECRET
+VNP_TMNCODE=YOUR_MERCHANT_CODE
+VNP_HASHSECRET=YOUR_HASH_SECRET
+
+# Application URL
+APP_URL=http://localhost:3000
 
 # Development (Sandbox)
-VNPAY_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-VNPAY_RETURN_URL=http://localhost:3001/api/vnpay/return
-VNPAY_IPN_URL=http://localhost:3001/api/vnpay/ipn
+VNP_URL=https://sandbox.vnpayment.vn
+VNP_TEST_MODE=true
 
 # Production
-# VNPAY_URL=https://vnpayment.vn/paymentv2/vpcpay.html
-# VNPAY_RETURN_URL=https://yourdomain.com/api/vnpay/return
-# VNPAY_IPN_URL=https://yourdomain.com/api/vnpay/ipn
-
-# Mock Mode (Development)
-VNPAY_MOCK_MODE=true
+# VNP_URL=https://pay.vnpay.vn
+# VNP_TEST_MODE=false
 ```
 
-### Step 2: VNPay Service
+### Step 2: VNPay Configuration
+
+**File:** `config/vnpay.js`
+
+```javascript
+const { VNPay } = require('vnpay');
+
+/**
+ * Initialize VNPay instance with configuration
+ */
+const vnpay = new VNPay({
+  tmnCode: process.env.VNP_TMNCODE,
+  secureSecret: process.env.VNP_HASHSECRET,
+  vnpayHost: process.env.VNP_URL || 'https://sandbox.vnpayment.vn',
+  testMode: process.env.VNP_TEST_MODE === 'true',
+  /**
+   * Hash algorithm: SHA256 or SHA512
+   * Defaults to SHA512 if not specified
+   */
+  hashAlgorithm: 'SHA512',
+});
+
+module.exports = vnpay;
+```
+
+### Step 3: VNPay Service
 
 **File:** `services/vnpayService.js`
 
 ```javascript
-const crypto = require('crypto');
-const querystring = require('qs');
-const moment = require('moment');
+const vnpay = require('../config/vnpay');
+const VNPayModel = require('../models/vnpay');
+const Order = require('../models/order');
+const logger = require('../utils/logger');
 
 class VNPayService {
-  constructor() {
-    this.tmnCode = process.env.VNPAY_TMN_CODE;
-    this.hashSecret = process.env.VNPAY_HASH_SECRET;
-    this.vnpUrl = process.env.VNPAY_URL;
-    this.returnUrl = process.env.VNPAY_RETURN_URL;
-    this.mockMode = process.env.VNPAY_MOCK_MODE === 'true';
-  }
-
   /**
    * Create VNPay payment URL
-   * @param {string} orderId - Order ID or order number
+   * @param {string} orderId - MongoDB Order ID
    * @param {number} amount - Amount in VND
    * @param {string} orderInfo - Order description
    * @param {string} ipAddr - Customer IP address
-   * @returns {string} Payment URL
+   * @returns {Object} Payment URL and transaction reference
    */
-  createPaymentUrl(orderId, amount, orderInfo, ipAddr) {
-    // Mock mode for development
-    if (this.mockMode) {
-      return `MOCK_PAYMENT_URL?order=${orderId}&amount=${amount}&ts=${Date.now()}`;
+  async createPaymentUrl(orderId, amount, orderInfo, ipAddr) {
+    try {
+      // Generate unique transaction reference
+      const vnp_TxnRef = `ORDER_${Date.now()}`;
+      
+      // Build payment URL using vnpay library
+      const paymentUrl = vnpay.buildPaymentUrl({
+        vnp_Amount: amount * 100, // Convert to VNPay format (multiply by 100)
+        vnp_TxnRef: vnp_TxnRef,
+        vnp_OrderInfo: orderInfo || `Thanh toán đơn hàng ${orderId}`,
+        vnp_OrderType: 'billpayment',
+        vnp_IpAddr: ipAddr || '127.0.0.1',
+        vnp_ReturnUrl: `${process.env.APP_URL}/api/vnpay/return`,
+        vnp_Locale: 'vn',
+        vnp_CurrCode: 'VND',
+      });
+
+      // Save to database
+      const vnpayRecord = new VNPayModel({
+        orderId: orderId,
+        vnp_TxnRef: vnp_TxnRef,
+        vnp_Amount: amount,
+        vnp_OrderInfo: orderInfo,
+        vnp_IpAddr: ipAddr,
+        vnp_Locale: 'vn',
+        paymentUrl: paymentUrl,
+        status: 'pending'
+      });
+
+      await vnpayRecord.save();
+
+      logger.info('VNPay payment URL created', {
+        orderId,
+        vnp_TxnRef,
+        amount
+      });
+
+      return {
+        paymentUrl,
+        vnp_TxnRef
+      };
+    } catch (error) {
+      logger.error('Create VNPay payment URL error:', error);
+      throw error;
     }
-
-    const date = new Date();
-    const createDate = moment(date).format('YYYYMMDDHHmmss');
-    const expireDate = moment(date).add(15, 'minutes').format('YYYYMMDDHHmmss');
-
-    let vnpParams = {
-      vnp_Version: '2.1.0',
-      vnp_Command: 'pay',
-      vnp_TmnCode: this.tmnCode,
-      vnp_Locale: 'vn',
-      vnp_CurrCode: 'VND',
-      vnp_TxnRef: orderId,
-      vnp_OrderInfo: orderInfo,
-      vnp_OrderType: 'other',
-      vnp_Amount: amount * 100, // VNPay requires amount in cents (VND * 100)
-      vnp_ReturnUrl: this.returnUrl,
-      vnp_IpAddr: ipAddr,
-      vnp_CreateDate: createDate,
-      vnp_ExpireDate: expireDate
-    };
-
-    // Sort parameters alphabetically
-    vnpParams = this.sortObject(vnpParams);
-
-    // Create secure hash
-    const signData = querystring.stringify(vnpParams, { encode: false });
-    const hmac = crypto.createHmac('sha512', this.hashSecret);
-    const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-    vnpParams['vnp_SecureHash'] = signed;
-
-    // Create payment URL
-    const paymentUrl = this.vnpUrl + '?' + querystring.stringify(vnpParams, { encode: false });
-
-    return paymentUrl;
   }
 
   /**
    * Verify return URL from VNPay
-   * @param {Object} vnpParams - Query parameters from VNPay
-   * @returns {boolean} True if signature is valid
+   * @param {Object} query - Query parameters from VNPay
+   * @returns {Object} Verification result
    */
-  verifyReturnUrl(vnpParams) {
-    const secureHash = vnpParams['vnp_SecureHash'];
-    
-    // Remove hash params before verification
-    delete vnpParams['vnp_SecureHash'];
-    delete vnpParams['vnp_SecureHashType'];
-
-    // Sort parameters
-    vnpParams = this.sortObject(vnpParams);
-
-    // Create signature
-    const signData = querystring.stringify(vnpParams, { encode: false });
-    const hmac = crypto.createHmac('sha512', this.hashSecret);
-    const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-
-    return secureHash === signed;
+  verifyReturnUrl(query) {
+    try {
+      const verification = vnpay.verifyReturnUrl(query);
+      
+      return {
+        isValid: verification.isSuccess,
+        isVerified: verification.isVerified,
+        vnp_ResponseCode: verification.vnp_ResponseCode,
+        vnp_TxnRef: verification.vnp_TxnRef,
+        message: verification.message
+      };
+    } catch (error) {
+      logger.error('Verify return URL error:', error);
+      return {
+        isValid: false,
+        message: error.message
+      };
+    }
   }
 
   /**
-   * Sort object keys alphabetically
-   * @param {Object} obj - Object to sort
-   * @returns {Object} Sorted object
+   * Verify IPN call from VNPay
+   * @param {Object} query - Query parameters from VNPay IPN
+   * @returns {Object} Verification result
    */
-  sortObject(obj) {
-    const sorted = {};
-    const keys = Object.keys(obj).sort();
-    keys.forEach(key => {
-      sorted[key] = obj[key];
-    });
-    return sorted;
+  verifyIpnCall(query) {
+    try {
+      const verification = vnpay.verifyIpnCall(query);
+      
+      return {
+        isValid: verification.isSuccess,
+        isVerified: verification.isVerified,
+        vnp_ResponseCode: verification.vnp_ResponseCode,
+        vnp_TxnRef: verification.vnp_TxnRef,
+        vnp_Amount: verification.vnp_Amount,
+        vnp_TransactionNo: verification.vnp_TransactionNo,
+        vnp_BankCode: verification.vnp_BankCode,
+        vnp_PayDate: verification.vnp_PayDate,
+        message: verification.message
+      };
+    } catch (error) {
+      logger.error('Verify IPN call error:', error);
+      return {
+        isValid: false,
+        message: error.message
+      };
+    }
+  }
+
+  /**
+   * Update payment status after verification
+   * @param {string} vnp_TxnRef - Transaction reference
+   * @param {Object} vnpParams - VNPay parameters
+   * @returns {Object} Updated record
+   */
+  async updatePaymentStatus(vnp_TxnRef, vnpParams) {
+    try {
+      const vnpayRecord = await VNPayModel.findOne({ vnp_TxnRef });
+      
+      if (!vnpayRecord) {
+        throw new Error('VNPay transaction not found');
+      }
+
+      // Update VNPay record
+      vnpayRecord.vnp_ResponseCode = vnpParams.vnp_ResponseCode;
+      vnpayRecord.vnp_TransactionNo = vnpParams.vnp_TransactionNo;
+      vnpayRecord.vnp_BankCode = vnpParams.vnp_BankCode;
+      vnpayRecord.vnp_BankTranNo = vnpParams.vnp_BankTranNo;
+      vnpayRecord.vnp_CardType = vnpParams.vnp_CardType;
+      vnpayRecord.vnp_PayDate = vnpParams.vnp_PayDate;
+      vnpayRecord.vnp_TransactionStatus = vnpParams.vnp_TransactionStatus;
+      vnpayRecord.vnp_SecureHash = vnpParams.vnp_SecureHash;
+      
+      // Update status based on response code
+      if (vnpParams.vnp_ResponseCode === '00') {
+        vnpayRecord.status = 'success';
+      } else {
+        vnpayRecord.status = 'failed';
+      }
+
+      await vnpayRecord.save();
+
+      // Update order status
+      await Order.findByIdAndUpdate(vnpayRecord.orderId, {
+        paymentStatus: vnpParams.vnp_ResponseCode === '00' ? 'completed' : 'failed'
+      });
+
+      logger.info('VNPay payment status updated', {
+        vnp_TxnRef,
+        status: vnpayRecord.status,
+        orderId: vnpayRecord.orderId
+      });
+
+      return vnpayRecord;
+    } catch (error) {
+      logger.error('Update payment status error:', error);
+      throw error;
+    }
   }
 
   /**
    * Get response message from response code
    * @param {string} code - VNPay response code
-   * @returns {string} Message
+   * @returns {string} Message in Vietnamese
    */
   getResponseMessage(code) {
     const messages = {
       '00': 'Giao dịch thành công',
-      '07': 'Trừ tiền thành công. Giao dịch bị nghi ngờ (liên quan tới lừa đảo, giao dịch bất thường).',
-      '09': 'Giao dịch không thành công do: Thẻ/Tài khoản của khách hàng chưa đăng ký dịch vụ InternetBanking tại ngân hàng.',
+      '07': 'Trừ tiền thành công. Giao dịch bị nghi ngờ (liên quan tới lừa đảo, giao dịch bất thường)',
+      '09': 'Giao dịch không thành công do: Thẻ/Tài khoản của khách hàng chưa đăng ký dịch vụ InternetBanking tại ngân hàng',
       '10': 'Giao dịch không thành công do: Khách hàng xác thực thông tin thẻ/tài khoản không đúng quá 3 lần',
-      '11': 'Giao dịch không thành công do: Đã hết hạn chờ thanh toán. Xin quý khách vui lòng thực hiện lại giao dịch.',
-      '12': 'Giao dịch không thành công do: Thẻ/Tài khoản của khách hàng bị khóa.',
-      '13': 'Giao dịch không thành công do Quý khách nhập sai mật khẩu xác thực giao dịch (OTP). Xin quý khách vui lòng thực hiện lại giao dịch.',
+      '11': 'Giao dịch không thành công do: Đã hết hạn chờ thanh toán. Xin quý khách vui lòng thực hiện lại giao dịch',
+      '12': 'Giao dịch không thành công do: Thẻ/Tài khoản của khách hàng bị khóa',
+      '13': 'Giao dịch không thành công do Quý khách nhập sai mật khẩu xác thực giao dịch (OTP)',
       '24': 'Giao dịch không thành công do: Khách hàng hủy giao dịch',
-      '51': 'Giao dịch không thành công do: Tài khoản của quý khách không đủ số dư để thực hiện giao dịch.',
-      '65': 'Giao dịch không thành công do: Tài khoản của Quý khách đã vượt quá hạn mức giao dịch trong ngày.',
-      '75': 'Ngân hàng thanh toán đang bảo trì.',
-      '79': 'Giao dịch không thành công do: KH nhập sai mật khẩu thanh toán quá số lần quy định. Xin quý khách vui lòng thực hiện lại giao dịch',
+      '51': 'Giao dịch không thành công do: Tài khoản của quý khách không đủ số dư để thực hiện giao dịch',
+      '65': 'Giao dịch không thành công do: Tài khoản của Quý khách đã vượt quá hạn mức giao dịch trong ngày',
+      '75': 'Ngân hàng thanh toán đang bảo trì',
+      '79': 'Giao dịch không thành công do: KH nhập sai mật khẩu thanh toán quá số lần quy định',
       '99': 'Các lỗi khác (lỗi còn lại, không có trong danh sách mã lỗi đã liệt kê)'
     };
 
-    return messages[code] || 'Unknown error';
+    return messages[code] || 'Lỗi không xác định';
   }
 }
 
 module.exports = new VNPayService();
 ```
 
-### Step 3: VNPay Controller
+### Step 4: VNPay Controller
 
 **File:** `controllers/vnpay.js`
 
 ```javascript
 const vnpayRouter = require('express').Router();
 const vnpayService = require('../services/vnpayService');
-const Payment = require('../models/payment');
+const VNPayModel = require('../models/vnpay');
 const Order = require('../models/order');
 const logger = require('../utils/logger');
+
+/**
+ * Utility function to sort object keys
+ */
+function sortObject(obj) {
+  const sorted = {};
+  const keys = Object.keys(obj).sort();
+  keys.forEach(key => {
+    sorted[key] = obj[key];
+  });
+  return sorted;
+}
 
 /**
  * Create VNPay payment URL
@@ -327,23 +492,28 @@ vnpayRouter.post('/create-payment-url', async (req, res) => {
     const ipAddr = req.headers['x-forwarded-for'] ||
                    req.connection.remoteAddress ||
                    req.socket.remoteAddress ||
-                   req.connection.socket.remoteAddress;
+                   '127.0.0.1';
 
     // Create payment URL
-    const paymentUrl = vnpayService.createPaymentUrl(
+    const result = await vnpayService.createPaymentUrl(
       orderId,
       amount,
-      orderInfo || `Payment for order ${orderId}`,
+      orderInfo || `Thanh toán đơn hàng ${orderId}`,
       ipAddr
     );
 
-    logger.info('VNPay payment URL created', { orderId, amount });
+    logger.info('VNPay payment URL created', { 
+      orderId, 
+      amount,
+      vnp_TxnRef: result.vnp_TxnRef
+    });
 
     res.json({
       success: true,
       data: {
-        paymentUrl,
-        qrData: paymentUrl // Use this to generate QR code
+        paymentUrl: result.paymentUrl,
+        qrData: result.paymentUrl, // Use this to generate QR code
+        vnp_TxnRef: result.vnp_TxnRef
       }
     });
   } catch (error) {
@@ -361,73 +531,46 @@ vnpayRouter.post('/create-payment-url', async (req, res) => {
  */
 vnpayRouter.get('/return', async (req, res) => {
   try {
-    const vnpParams = req.query;
+    let vnpParams = req.query;
 
     logger.info('VNPay return callback', vnpParams);
 
-    // Verify signature
-    const isValid = vnpayService.verifyReturnUrl({ ...vnpParams });
-    if (!isValid) {
+    // Verify signature using vnpay library
+    const verification = vnpayService.verifyReturnUrl(vnpParams);
+    
+    if (!verification.isValid || !verification.isVerified) {
       logger.error('VNPay signature verification failed');
       return res.redirect('/pos?payment=failed&reason=invalid_signature');
     }
 
-    const orderId = vnpParams['vnp_TxnRef'];
-    const responseCode = vnpParams['vnp_ResponseCode'];
-    const transactionNo = vnpParams['vnp_TransactionNo'];
-    const bankCode = vnpParams['vnp_BankCode'];
-    const cardType = vnpParams['vnp_CardType'];
-    const payDate = vnpParams['vnp_PayDate'];
+    const vnp_TxnRef = verification.vnp_TxnRef;
+    const vnp_ResponseCode = verification.vnp_ResponseCode;
 
-    if (responseCode === '00') {
-      // Payment successful
-      logger.info('VNPay payment successful', { orderId, transactionNo });
+    // Mark return URL as accessed
+    await VNPayModel.findOneAndUpdate(
+      { vnp_TxnRef },
+      { returnUrlAccessed: true }
+    );
 
-      // Update payment record
-      const payment = await Payment.findOneAndUpdate(
-        { order: orderId },
-        {
-          status: 'completed',
-          transactionId: transactionNo,
-          vnpayTransactionNo: transactionNo,
-          vnpayResponseCode: responseCode,
-          vnpayBankCode: bankCode,
-          vnpayCardType: cardType,
-          vnpayPayDate: payDate ? moment(payDate, 'YYYYMMDDHHmmss').toDate() : new Date()
-        },
-        { new: true }
-      );
+    if (vnp_ResponseCode === '00') {
+      // Payment successful - display success message only
+      // Do NOT update database here, wait for IPN callback
+      logger.info('VNPay payment successful (return URL)', { 
+        vnp_TxnRef, 
+        vnp_ResponseCode 
+      });
 
-      // Update order status
-      const order = await Order.findByIdAndUpdate(
-        orderId,
-        {
-          paymentStatus: 'paid',
-          status: 'delivered'
-        },
-        { new: true }
-      );
-
-      logger.info('Order and payment updated', { orderId, paymentId: payment._id });
-
-      // Redirect to POS with success
-      res.redirect(`/pos?payment=success&order=${orderId}`);
+      res.redirect(`/pos?payment=success&ref=${vnp_TxnRef}`);
     } else {
       // Payment failed
-      const errorMessage = vnpayService.getResponseMessage(responseCode);
-      logger.error('VNPay payment failed', { orderId, responseCode, errorMessage });
+      const errorMessage = vnpayService.getResponseMessage(vnp_ResponseCode);
+      logger.error('VNPay payment failed', { 
+        vnp_TxnRef, 
+        vnp_ResponseCode, 
+        errorMessage 
+      });
 
-      // Update payment status to failed
-      await Payment.findOneAndUpdate(
-        { order: orderId },
-        {
-          status: 'failed',
-          vnpayResponseCode: responseCode,
-          failureReason: errorMessage
-        }
-      );
-
-      res.redirect(`/pos?payment=failed&code=${responseCode}&message=${encodeURIComponent(errorMessage)}`);
+      res.redirect(`/pos?payment=failed&code=${vnp_ResponseCode}&message=${encodeURIComponent(errorMessage)}`);
     }
   } catch (error) {
     logger.error('VNPay return error:', error);
@@ -437,78 +580,107 @@ vnpayRouter.get('/return', async (req, res) => {
 
 /**
  * VNPay IPN (Instant Payment Notification)
- * POST /api/vnpay/ipn
+ * This is the official callback where we UPDATE the database
+ * GET /api/vnpay/ipn (VNPay uses GET for IPN, not POST)
  */
-vnpayRouter.post('/ipn', async (req, res) => {
+vnpayRouter.get('/ipn', async (req, res) => {
   try {
-    const vnpParams = req.query;
+    let vnpParams = req.query;
+    const secureHash = vnpParams['vnp_SecureHash'];
 
-    logger.info('VNPay IPN received', vnpParams);
+    // Remove hash params before verification (as per VNPay demo)
+    delete vnpParams['vnp_SecureHash'];
+    delete vnpParams['vnp_SecureHashType'];
 
-    // Verify signature
-    const isValid = vnpayService.verifyReturnUrl({ ...vnpParams });
-    if (!isValid) {
+    // Sort parameters
+    vnpParams = sortObject(vnpParams);
+
+    logger.info('VNPay IPN callback', vnpParams);
+
+    // Verify signature using vnpay library
+    const verification = vnpayService.verifyIpnCall({
+      ...vnpParams,
+      vnp_SecureHash: secureHash
+    });
+
+    if (!verification.isValid || !verification.isVerified) {
       logger.error('VNPay IPN signature verification failed');
-      return res.json({ RspCode: '97', Message: 'Invalid signature' });
-    }
-
-    const orderId = vnpParams['vnp_TxnRef'];
-    const responseCode = vnpParams['vnp_ResponseCode'];
-    const transactionNo = vnpParams['vnp_TransactionNo'];
-
-    // Check if order exists
-    const order = await Order.findById(orderId);
-    if (!order) {
-      logger.error('Order not found', { orderId });
-      return res.json({ RspCode: '01', Message: 'Order not found' });
-    }
-
-    // Check if payment already processed
-    const payment = await Payment.findOne({ order: orderId });
-    if (payment && payment.status === 'completed') {
-      logger.warn('Payment already processed', { orderId });
-      return res.json({ RspCode: '02', Message: 'Order already confirmed' });
-    }
-
-    if (responseCode === '00') {
-      // Update payment & order
-      await Payment.findOneAndUpdate(
-        { order: orderId },
-        {
-          status: 'completed',
-          transactionId: transactionNo,
-          vnpayTransactionNo: transactionNo,
-          vnpayResponseCode: responseCode
-        }
-      );
-
-      await Order.findByIdAndUpdate(orderId, {
-        paymentStatus: 'paid',
-        status: 'delivered'
+      return res.status(200).json({ 
+        RspCode: '97', 
+        Message: 'Fail checksum' 
       });
-
-      logger.info('IPN: Payment confirmed', { orderId, transactionNo });
-      res.json({ RspCode: '00', Message: 'Success' });
-    } else {
-      logger.error('IPN: Payment failed', { orderId, responseCode });
-      res.json({ RspCode: responseCode, Message: 'Payment failed' });
     }
+
+    const vnp_TxnRef = verification.vnp_TxnRef;
+    const vnp_ResponseCode = verification.vnp_ResponseCode;
+
+    // Find VNPay record
+    const vnpayRecord = await VNPayModel.findOne({ vnp_TxnRef });
+    if (!vnpayRecord) {
+      logger.error('VNPay transaction not found', { vnp_TxnRef });
+      return res.status(200).json({ 
+        RspCode: '01', 
+        Message: 'Order not found' 
+      });
+    }
+
+    // Check if already processed
+    if (vnpayRecord.ipnVerified) {
+      logger.warn('IPN already processed', { vnp_TxnRef });
+      return res.status(200).json({ 
+        RspCode: '02', 
+        Message: 'Order already confirmed' 
+      });
+    }
+
+    // Update VNPay record with IPN data
+    await vnpayService.updatePaymentStatus(vnp_TxnRef, {
+      ...vnpParams,
+      vnp_SecureHash: secureHash,
+      vnp_ResponseCode,
+      vnp_TransactionNo: verification.vnp_TransactionNo,
+      vnp_BankCode: verification.vnp_BankCode,
+      vnp_PayDate: verification.vnp_PayDate
+    });
+
+    // Mark IPN as verified
+    await VNPayModel.findOneAndUpdate(
+      { vnp_TxnRef },
+      { ipnVerified: true }
+    );
+
+    logger.info('IPN: Payment processed', { 
+      vnp_TxnRef, 
+      vnp_ResponseCode,
+      orderId: vnpayRecord.orderId
+    });
+
+    res.status(200).json({ 
+      RspCode: '00', 
+      Message: 'success' 
+    });
   } catch (error) {
     logger.error('VNPay IPN error:', error);
-    res.json({ RspCode: '99', Message: 'Unknown error' });
+    res.status(200).json({ 
+      RspCode: '99', 
+      Message: 'Unknown error' 
+    });
   }
 });
 
 /**
  * Check payment status (for polling)
- * GET /api/payments/check-status/:orderId
+ * GET /api/vnpay/check-status/:vnpTxnRef
  */
-vnpayRouter.get('/check-status/:orderId', async (req, res) => {
+vnpayRouter.get('/check-status/:vnpTxnRef', async (req, res) => {
   try {
-    const { orderId } = req.params;
+    const { vnpTxnRef } = req.params;
 
-    const payment = await Payment.findOne({ order: orderId });
-    if (!payment) {
+    const vnpayRecord = await VNPayModel.findOne({ 
+      vnp_TxnRef: vnpTxnRef 
+    }).populate('orderId');
+
+    if (!vnpayRecord) {
       return res.status(404).json({
         success: false,
         error: { message: 'Payment not found' }
@@ -518,9 +690,11 @@ vnpayRouter.get('/check-status/:orderId', async (req, res) => {
     res.json({
       success: true,
       data: {
-        status: payment.status,
-        transactionId: payment.vnpayTransactionNo,
-        responseCode: payment.vnpayResponseCode
+        status: vnpayRecord.status,
+        vnp_ResponseCode: vnpayRecord.vnp_ResponseCode,
+        vnp_TransactionNo: vnpayRecord.vnp_TransactionNo,
+        orderId: vnpayRecord.orderId,
+        message: vnpayService.getResponseMessage(vnpayRecord.vnp_ResponseCode || '')
       }
     });
   } catch (error) {
@@ -535,7 +709,7 @@ vnpayRouter.get('/check-status/:orderId', async (req, res) => {
 module.exports = vnpayRouter;
 ```
 
-### Step 4: Register Routes
+### Step 5: Register Routes
 
 **File:** `app.js`
 
@@ -546,6 +720,10 @@ const vnpayRouter = require('./controllers/vnpay');
 
 app.use('/api/vnpay', vnpayRouter);
 ```
+
+**IMPORTANT:** Configure VNPay IPN URL in VNPay merchant portal:
+- IPN URL: `https://yourdomain.com/api/vnpay/ipn`
+- Return URL: `https://yourdomain.com/api/vnpay/return`
 
 ---
 
@@ -576,6 +754,7 @@ export const VNPayPaymentModal = ({
   onClose 
 }) => {
   const [qrData, setQrData] = useState(null);
+  const [vnpTxnRef, setVnpTxnRef] = useState(null);
   const [loading, setLoading] = useState(false);
   const [polling, setPolling] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(900); // 15 minutes
@@ -586,6 +765,7 @@ export const VNPayPaymentModal = ({
     } else {
       // Cleanup
       setQrData(null);
+      setVnpTxnRef(null);
       setPolling(false);
       setTimeRemaining(900);
     }
@@ -601,14 +781,15 @@ export const VNPayPaymentModal = ({
         body: JSON.stringify({
           orderId,
           amount,
-          orderInfo: orderInfo || `Payment for order ${orderId}`
+          orderInfo: orderInfo || `Thanh toán đơn hàng ${orderId}`
         })
       });
 
       const result = await response.json();
       if (result.success) {
         setQrData(result.data.paymentUrl);
-        startPaymentPolling();
+        setVnpTxnRef(result.data.vnp_TxnRef);
+        startPaymentPolling(result.data.vnp_TxnRef);
         startCountdown();
       } else {
         throw new Error(result.error?.message || 'Failed to create payment QR');
@@ -623,19 +804,27 @@ export const VNPayPaymentModal = ({
   };
 
   // Poll payment status every 3 seconds
-  const startPaymentPolling = () => {
+  const startPaymentPolling = (txnRef) => {
     setPolling(true);
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`/api/vnpay/check-status/${orderId}`);
+        const response = await fetch(`/api/vnpay/check-status/${txnRef}`);
         const result = await response.json();
 
-        if (result.success && result.data.status === 'completed') {
+        if (result.success && result.data.status === 'success') {
           clearInterval(interval);
           setPolling(false);
           onPaymentSuccess({
-            orderId,
-            transactionNo: result.data.transactionId
+            orderId: result.data.orderId,
+            transactionNo: result.data.vnp_TransactionNo,
+            vnpTxnRef: txnRef
+          });
+        } else if (result.success && result.data.status === 'failed') {
+          clearInterval(interval);
+          setPolling(false);
+          onPaymentFailed({ 
+            reason: 'payment_failed',
+            message: result.data.message
           });
         }
       } catch (error) {
@@ -876,22 +1065,25 @@ export const VNPaySimulator = ({ qrData, onSimulateSuccess, onSimulateFailure })
 
 ## 🧪 Testing Guide
 
-### Development Testing (Mock Mode)
+### Development Testing
 
-**Step 1: Enable Mock Mode**
+**Note:** The `vnpay` npm package works in both sandbox and production modes. No separate mock mode needed.
+
+**Step 1: Use Sandbox Mode**
 
 ```bash
 # .env
-VNPAY_MOCK_MODE=true
+VNP_TEST_MODE=true
+VNP_URL=https://sandbox.vnpayment.vn
 ```
 
 **Step 2: Test Flow**
 
 1. Add products to cart
 2. Select "VNPay QR" payment
-3. QR code displays with `MOCK_PAYMENT_URL`
-4. Use VNPaySimulator to simulate success/failure
-5. Verify order status updates
+3. QR code displays with sandbox payment URL
+4. Scan with banking app or use test cards (see below)
+5. Verify order status updates via polling
 
 ### Sandbox Testing
 
@@ -905,11 +1097,14 @@ Contact VNPay support for sandbox credentials:
 
 ```bash
 # .env
-VNPAY_MOCK_MODE=false
-VNPAY_TMN_CODE=DEMO12345
-VNPAY_HASH_SECRET=SANDBOXSECRET
-VNPAY_URL=https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
+VNP_TEST_MODE=true
+VNP_TMNCODE=YOUR_SANDBOX_TMNCODE
+VNP_HASHSECRET=YOUR_SANDBOX_SECRET
+VNP_URL=https://sandbox.vnpayment.vn
+APP_URL=http://localhost:3000
 ```
+
+Register for sandbox at: https://sandbox.vnpayment.vn/devreg
 
 **Step 3: Test with Test Cards**
 
@@ -962,12 +1157,11 @@ curl -X POST http://yourdomain.com/api/vnpay/ipn
 **Production `.env`:**
 
 ```bash
-VNPAY_MOCK_MODE=false
-VNPAY_TMN_CODE=YOUR_PROD_TMN_CODE
-VNPAY_HASH_SECRET=YOUR_PROD_SECRET
-VNPAY_URL=https://vnpayment.vn/paymentv2/vpcpay.html
-VNPAY_RETURN_URL=https://yourdomain.com/api/vnpay/return
-VNPAY_IPN_URL=https://yourdomain.com/api/vnpay/ipn
+VNP_TEST_MODE=false
+VNP_TMNCODE=YOUR_PROD_TMN_CODE
+VNP_HASHSECRET=YOUR_PROD_SECRET
+VNP_URL=https://pay.vnpay.vn
+APP_URL=https://yourdomain.com
 ```
 
 ### Step 2: VNPay Portal Configuration
@@ -1202,27 +1396,30 @@ logger.error('VNPay payment error', {
 ## ✅ Implementation Checklist
 
 ### Backend
-- [ ] Install dependencies (crypto, moment, qs)
-- [ ] Create `.env` configuration
-- [ ] Implement VNPayService
-- [ ] Create VNPay controller
+- [ ] Install `vnpay` npm package
+- [ ] Create `.env` configuration with VNP_TMNCODE and VNP_HASHSECRET
+- [ ] Create VNPay model (`models/vnpay.js`)
+- [ ] Create VNPay config (`config/vnpay.js`)
+- [ ] Implement VNPayService (`services/vnpayService.js`)
+- [ ] Create VNPay controller (`controllers/vnpay.js`)
 - [ ] Add routes to app.js
-- [ ] Update Payment model schema
-- [ ] Test with mock mode
+- [ ] Test with sandbox credentials
 
 ### Frontend
 - [ ] Install qrcode.react
 - [ ] Create VNPayPaymentModal component
 - [ ] Update POSPaymentModal
-- [ ] Implement payment polling
-- [ ] Add timeout handling
-- [ ] Create mock simulator (dev)
+- [ ] Implement payment polling with vnp_TxnRef
+- [ ] Add timeout handling (15 minutes)
+- [ ] Display QR code with proper formatting
 
 ### Testing
-- [ ] Test mock mode flow
 - [ ] Test with sandbox credentials
-- [ ] Test all error scenarios
-- [ ] Verify callback handling
+- [ ] Test successful payment flow
+- [ ] Test all error scenarios (cancel, timeout, insufficient funds)
+- [ ] Verify IPN callback handling
+- [ ] Verify return URL handling
+- [ ] Test payment status polling
 - [ ] Load test (100+ concurrent users)
 
 ### Deployment
