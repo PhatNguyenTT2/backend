@@ -3,6 +3,8 @@ const vnpayService = require('../services/vnpayService');
 const VNPayModel = require('../models/vnpay');
 const Order = require('../models/order');
 const logger = require('../utils/logger');
+const crypto = require('crypto');
+const querystring = require('qs');
 
 /**
  * Utility function to sort object keys
@@ -72,49 +74,59 @@ vnpayRouter.post('/create-payment-url', async (req, res) => {
 /**
  * VNPay return URL (after payment)
  * GET /api/vnpay/return
+ * Chỉ verify và hiển thị kết quả cho user, KHÔNG update database
  */
 vnpayRouter.get('/return', async (req, res) => {
   try {
     let vnpParams = req.query;
+    const secureHash = vnpParams['vnp_SecureHash'];
+
+    // Remove hash params before verification
+    delete vnpParams['vnp_SecureHash'];
+    delete vnpParams['vnp_SecureHashType'];
+
+    // Sort parameters
+    vnpParams = sortObject(vnpParams);
 
     logger.info('VNPay return callback', vnpParams);
 
-    // Verify signature using vnpay library
-    const verification = vnpayService.verifyReturnUrl(vnpParams);
+    // Manual signature verification like VNPay template
+    const secretKey = process.env.VNP_HASHSECRET;
+    const signData = querystring.stringify(vnpParams, { encode: false });
+    const hmac = crypto.createHmac('sha512', secretKey);
+    const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
-    if (!verification.isValid || !verification.isVerified) {
-      logger.error('VNPay signature verification failed');
-      return res.redirect('/pos?payment=failed&reason=invalid_signature');
-    }
+    if (secureHash === signed) {
+      const vnp_ResponseCode = vnpParams['vnp_ResponseCode'];
+      const vnp_TxnRef = vnpParams['vnp_TxnRef'];
 
-    const vnp_TxnRef = verification.vnp_TxnRef;
-    const vnp_ResponseCode = verification.vnp_ResponseCode;
+      // Mark return URL as accessed (không update payment status)
+      await VNPayModel.findOneAndUpdate(
+        { vnp_TxnRef },
+        { returnUrlAccessed: true }
+      ).catch(err => logger.error('Mark return URL error:', err));
 
-    // Mark return URL as accessed
-    await VNPayModel.findOneAndUpdate(
-      { vnp_TxnRef },
-      { returnUrlAccessed: true }
-    );
-
-    if (vnp_ResponseCode === '00') {
-      // Payment successful - display success message only
-      // Do NOT update database here, wait for IPN callback
-      logger.info('VNPay payment successful (return URL)', {
-        vnp_TxnRef,
-        vnp_ResponseCode
-      });
-
-      res.redirect(`/pos?payment=success&ref=${vnp_TxnRef}`);
+      if (vnp_ResponseCode === '00') {
+        // Payment successful - chỉ hiển thị thông báo
+        logger.info('VNPay payment successful (return URL)', {
+          vnp_TxnRef,
+          vnp_ResponseCode
+        });
+        res.redirect(`/pos?payment=success&ref=${vnp_TxnRef}`);
+      } else {
+        // Payment failed
+        const errorMessage = vnpayService.getResponseMessage(vnp_ResponseCode);
+        logger.warn('VNPay payment failed', {
+          vnp_TxnRef,
+          vnp_ResponseCode,
+          errorMessage
+        });
+        res.redirect(`/pos?payment=failed&code=${vnp_ResponseCode}&message=${encodeURIComponent(errorMessage)}`);
+      }
     } else {
-      // Payment failed
-      const errorMessage = vnpayService.getResponseMessage(vnp_ResponseCode);
-      logger.error('VNPay payment failed', {
-        vnp_TxnRef,
-        vnp_ResponseCode,
-        errorMessage
-      });
-
-      res.redirect(`/pos?payment=failed&code=${vnp_ResponseCode}&message=${encodeURIComponent(errorMessage)}`);
+      // Invalid signature
+      logger.error('VNPay return URL: Invalid signature');
+      res.redirect('/pos?payment=failed&reason=invalid_signature');
     }
   } catch (error) {
     logger.error('VNPay return error:', error);
@@ -125,14 +137,14 @@ vnpayRouter.get('/return', async (req, res) => {
 /**
  * VNPay IPN (Instant Payment Notification)
  * This is the official callback where we UPDATE the database
- * GET /api/vnpay/ipn (VNPay uses GET for IPN, not POST)
+ * GET /api/vnpay/ipn (VNPay uses GET for IPN)
  */
 vnpayRouter.get('/ipn', async (req, res) => {
   try {
     let vnpParams = req.query;
     const secureHash = vnpParams['vnp_SecureHash'];
 
-    // Remove hash params before verification (as per VNPay demo)
+    // Remove hash params before verification
     delete vnpParams['vnp_SecureHash'];
     delete vnpParams['vnp_SecureHashType'];
 
@@ -141,68 +153,67 @@ vnpayRouter.get('/ipn', async (req, res) => {
 
     logger.info('VNPay IPN callback', vnpParams);
 
-    // Verify signature using vnpay library
-    const verification = vnpayService.verifyIpnCall({
-      ...vnpParams,
-      vnp_SecureHash: secureHash
-    });
+    // Manual signature verification like VNPay template
+    const secretKey = process.env.VNP_HASHSECRET;
+    const signData = querystring.stringify(vnpParams, { encode: false });
+    const hmac = crypto.createHmac('sha512', secretKey);
+    const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
-    if (!verification.isValid || !verification.isVerified) {
-      logger.error('VNPay IPN signature verification failed');
-      return res.status(200).json({
+    if (secureHash === signed) {
+      const vnp_TxnRef = vnpParams['vnp_TxnRef'];
+      const vnp_ResponseCode = vnpParams['vnp_ResponseCode'];
+
+      // Kiểm tra dữ liệu có hợp lệ không
+      const vnpayRecord = await VNPayModel.findOne({ vnp_TxnRef });
+      if (!vnpayRecord) {
+        logger.error('VNPay transaction not found', { vnp_TxnRef });
+        return res.status(200).json({
+          RspCode: '01',
+          Message: 'Order not found'
+        });
+      }
+
+      // Check if already processed
+      if (vnpayRecord.ipnVerified) {
+        logger.warn('IPN already processed', { vnp_TxnRef });
+        return res.status(200).json({
+          RspCode: '02',
+          Message: 'Order already confirmed'
+        });
+      }
+
+      // Cập nhật trạng thái đơn hàng và gửi kết quả cho VNPAY
+      await vnpayService.updatePaymentStatus(vnp_TxnRef, {
+        ...vnpParams,
+        vnp_SecureHash: secureHash,
+        vnp_ResponseCode
+      });
+
+      // Mark IPN as verified
+      await VNPayModel.findOneAndUpdate(
+        { vnp_TxnRef },
+        { ipnVerified: true }
+      );
+
+      logger.info('IPN: Payment processed successfully', {
+        vnp_TxnRef,
+        vnp_ResponseCode,
+        orderId: vnpayRecord.orderId
+      });
+
+      // Response theo đúng định dạng VNPay yêu cầu
+      res.status(200).json({
+        RspCode: '00',
+        Message: 'success'
+      });
+    } else {
+      // Checksum failed
+      logger.error('VNPay IPN: Fail checksum');
+      res.status(200).json({
         RspCode: '97',
         Message: 'Fail checksum'
       });
     }
-
-    const vnp_TxnRef = verification.vnp_TxnRef;
-    const vnp_ResponseCode = verification.vnp_ResponseCode;
-
-    // Find VNPay record
-    const vnpayRecord = await VNPayModel.findOne({ vnp_TxnRef });
-    if (!vnpayRecord) {
-      logger.error('VNPay transaction not found', { vnp_TxnRef });
-      return res.status(200).json({
-        RspCode: '01',
-        Message: 'Order not found'
-      });
-    }
-
-    // Check if already processed
-    if (vnpayRecord.ipnVerified) {
-      logger.warn('IPN already processed', { vnp_TxnRef });
-      return res.status(200).json({
-        RspCode: '02',
-        Message: 'Order already confirmed'
-      });
-    }
-
-    // Update VNPay record with IPN data
-    await vnpayService.updatePaymentStatus(vnp_TxnRef, {
-      ...vnpParams,
-      vnp_SecureHash: secureHash,
-      vnp_ResponseCode,
-      vnp_TransactionNo: verification.vnp_TransactionNo,
-      vnp_BankCode: verification.vnp_BankCode,
-      vnp_PayDate: verification.vnp_PayDate
-    });
-
-    // Mark IPN as verified
-    await VNPayModel.findOneAndUpdate(
-      { vnp_TxnRef },
-      { ipnVerified: true }
-    );
-
-    logger.info('IPN: Payment processed', {
-      vnp_TxnRef,
-      vnp_ResponseCode,
-      orderId: vnpayRecord.orderId
-    });
-
-    res.status(200).json({
-      RspCode: '00',
-      Message: 'success'
-    });
   } catch (error) {
     logger.error('VNPay IPN error:', error);
     res.status(200).json({
