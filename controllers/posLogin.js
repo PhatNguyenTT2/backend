@@ -892,6 +892,10 @@ posLoginRouter.post('/order', async (request, response) => {
  * @route   POST /api/pos-login/order-with-payment
  * @desc    Create order and payment in single atomic transaction (POS only)
  * @access  Private (POS)
+ * @deprecated Use POST /order + POST /payment instead (Unified Flow)
+ * @reason  Atomic flow is complex and inconsistent with VNPay integration
+ *          New frontend uses: POST /order → POST /payment (2-step)
+ *          Kept for backward compatibility only
  * @body    {
  *            customer: ObjectId | 'virtual-guest',
  *            items: [{ product, batch?, quantity, unitPrice }],
@@ -1009,8 +1013,6 @@ posLoginRouter.post('/order-with-payment', async (request, response) => {
       throw new Error('Order not found after creation')
     }
 
-    // ⭐ SOLUTION 1C: Set _originalStatus BEFORE changing status
-    // This is CRITICAL for middleware to detect status change
     orderToUpdate._originalStatus = 'draft' // Must be 'draft' since we just created it
     orderToUpdate.status = 'delivered' // POS: draft → delivered (direct sale)
     orderToUpdate.paymentStatus = 'paid'
@@ -1018,16 +1020,6 @@ posLoginRouter.post('/order-with-payment', async (request, response) => {
     // ⭐ SOLUTION 1D: Force Mongoose to track status change
     orderToUpdate.markModified('status')
 
-    // ⭐ SOLUTION 1E: Add debug logging
-    console.log('\n========== ORDER STATUS UPDATE ==========')
-    console.log(`Order ID: ${orderToUpdate._id}`)
-    console.log(`Order Number: ${orderToUpdate.orderNumber}`)
-    console.log(`_originalStatus: ${orderToUpdate._originalStatus}`)
-    console.log(`New status: ${orderToUpdate.status}`)
-    console.log(`Payment status: ${orderToUpdate.paymentStatus}`)
-    console.log(`isModified('status'): ${orderToUpdate.isModified('status')}`)
-    console.log(`isNew: ${orderToUpdate.isNew}`)
-    console.log('=========================================\n')
 
     console.log('💾 Saving order (this will trigger pre-save middleware)...')
     await orderToUpdate.save({ session })
@@ -1057,18 +1049,6 @@ posLoginRouter.post('/order-with-payment', async (request, response) => {
 
     // Populate payment
     await payment.populate('createdBy', 'fullName')
-
-    console.log('\n========== POS ORDER + PAYMENT COMPLETED ==========')
-    console.log(`✅ Order: ${orderToUpdate.orderNumber}`)
-    console.log(`   Status: ${orderToUpdate.status}`)
-    console.log(`   Payment Status: ${orderToUpdate.paymentStatus}`)
-    console.log(`   Total: ${orderToUpdate.total}`)
-    console.log(`✅ Payment: ${payment.paymentNumber}`)
-    console.log(`   Method: ${payment.paymentMethod}`)
-    console.log(`   Amount: ${payment.amount}`)
-    console.log(`   Status: ${payment.status}`)
-    console.log('===================================================\n')
-
     return response.status(201).json({
       success: true,
       data: {
