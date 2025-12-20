@@ -4,7 +4,8 @@ const VNPayModel = require('../models/vnpay');
 const Order = require('../models/order');
 const logger = require('../utils/logger');
 const crypto = require('crypto');
-const querystring = require('qs');
+const querystring = require('querystring'); // Native Node.js module for VNPay compatibility
+const vnpay = require('../config/vnpay'); // Import VNPay instance
 
 /**
  * Utility function to sort object keys
@@ -16,6 +17,30 @@ function sortObject(obj) {
     sorted[key] = obj[key];
   });
   return sorted;
+}
+
+/**
+ * Ensure all values are strings (fix for Express query parser creating nested objects)
+ * Handles arrays (take first value) and objects (stringify)
+ */
+function ensureStringValues(obj) {
+  const result = {};
+  Object.keys(obj).forEach(key => {
+    const value = obj[key];
+    if (value == null) {
+      result[key] = '';
+    } else if (Array.isArray(value)) {
+      // If array, take first value
+      result[key] = String(value[0] || '');
+    } else if (typeof value === 'object') {
+      // If object, this is an error - log it and use empty string
+      logger.warn(`VNPay param ${key} is object, expected string:`, value);
+      result[key] = '';
+    } else {
+      result[key] = String(value);
+    }
+  });
+  return result;
 }
 
 /**
@@ -78,27 +103,22 @@ vnpayRouter.post('/create-payment-url', async (req, res) => {
  */
 vnpayRouter.get('/return', async (req, res) => {
   try {
-    let vnpParams = req.query;
-    const secureHash = vnpParams['vnp_SecureHash'];
+    // DEBUG: Log raw query string
+    logger.info('VNPay return - Raw query:', req.url);
 
-    // Remove hash params before verification
-    delete vnpParams['vnp_SecureHash'];
-    delete vnpParams['vnp_SecureHashType'];
+    // Use vnpay library's built-in verification
+    const verify = vnpay.verifyReturnUrl(req.query);
 
-    // Sort parameters
-    vnpParams = sortObject(vnpParams);
+    logger.info('VNPay signature verification result:', {
+      isSuccess: verify.isSuccess,
+      message: verify.message,
+      vnp_ResponseCode: req.query.vnp_ResponseCode,
+      vnp_TxnRef: req.query.vnp_TxnRef
+    });
 
-    logger.info('VNPay return callback', vnpParams);
-
-    // Manual signature verification like VNPay template
-    const secretKey = process.env.VNP_HASHSECRET;
-    const signData = querystring.stringify(vnpParams, { encode: false });
-    const hmac = crypto.createHmac('sha512', secretKey);
-    const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-
-    if (secureHash === signed) {
-      const vnp_ResponseCode = vnpParams['vnp_ResponseCode'];
-      const vnp_TxnRef = vnpParams['vnp_TxnRef'];
+    if (verify.isSuccess) {
+      const vnp_ResponseCode = req.query.vnp_ResponseCode;
+      const vnp_TxnRef = req.query.vnp_TxnRef;
 
       // Mark return URL as accessed (không update payment status)
       await VNPayModel.findOneAndUpdate(
@@ -106,13 +126,15 @@ vnpayRouter.get('/return', async (req, res) => {
         { returnUrlAccessed: true }
       ).catch(err => logger.error('Mark return URL error:', err));
 
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
       if (vnp_ResponseCode === '00') {
-        // Payment successful - chỉ hiển thị thông báo
+        // Payment successful - redirect to frontend
         logger.info('VNPay payment successful (return URL)', {
           vnp_TxnRef,
           vnp_ResponseCode
         });
-        res.redirect(`/pos?payment=success&ref=${vnp_TxnRef}`);
+        res.redirect(`${frontendUrl}/pos?payment=success&ref=${vnp_TxnRef}`);
       } else {
         // Payment failed
         const errorMessage = vnpayService.getResponseMessage(vnp_ResponseCode);
@@ -121,16 +143,18 @@ vnpayRouter.get('/return', async (req, res) => {
           vnp_ResponseCode,
           errorMessage
         });
-        res.redirect(`/pos?payment=failed&code=${vnp_ResponseCode}&message=${encodeURIComponent(errorMessage)}`);
+        res.redirect(`${frontendUrl}/pos?payment=failed&code=${vnp_ResponseCode}&message=${encodeURIComponent(errorMessage)}`);
       }
     } else {
       // Invalid signature
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
       logger.error('VNPay return URL: Invalid signature');
-      res.redirect('/pos?payment=failed&reason=invalid_signature');
+      res.redirect(`${frontendUrl}/pos?payment=failed&reason=invalid_signature`);
     }
   } catch (error) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     logger.error('VNPay return error:', error);
-    res.redirect('/pos?payment=error');
+    res.redirect(`${frontendUrl}/pos?payment=error`);
   }
 });
 
@@ -141,27 +165,18 @@ vnpayRouter.get('/return', async (req, res) => {
  */
 vnpayRouter.get('/ipn', async (req, res) => {
   try {
-    let vnpParams = req.query;
-    const secureHash = vnpParams['vnp_SecureHash'];
+    // Use vnpay library's built-in verification
+    const verify = vnpay.verifyReturnUrl(req.query);
 
-    // Remove hash params before verification
-    delete vnpParams['vnp_SecureHash'];
-    delete vnpParams['vnp_SecureHashType'];
+    logger.info('VNPay IPN signature verification:', {
+      isSuccess: verify.isSuccess,
+      vnp_TxnRef: req.query.vnp_TxnRef,
+      vnp_ResponseCode: req.query.vnp_ResponseCode
+    });
 
-    // Sort parameters
-    vnpParams = sortObject(vnpParams);
-
-    logger.info('VNPay IPN callback', vnpParams);
-
-    // Manual signature verification like VNPay template
-    const secretKey = process.env.VNP_HASHSECRET;
-    const signData = querystring.stringify(vnpParams, { encode: false });
-    const hmac = crypto.createHmac('sha512', secretKey);
-    const signed = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
-
-    if (secureHash === signed) {
-      const vnp_TxnRef = vnpParams['vnp_TxnRef'];
-      const vnp_ResponseCode = vnpParams['vnp_ResponseCode'];
+    if (verify.isSuccess) {
+      const vnp_TxnRef = req.query.vnp_TxnRef;
+      const vnp_ResponseCode = req.query.vnp_ResponseCode;
 
       // Kiểm tra dữ liệu có hợp lệ không
       const vnpayRecord = await VNPayModel.findOne({ vnp_TxnRef });
@@ -184,8 +199,7 @@ vnpayRouter.get('/ipn', async (req, res) => {
 
       // Cập nhật trạng thái đơn hàng và gửi kết quả cho VNPAY
       await vnpayService.updatePaymentStatus(vnp_TxnRef, {
-        ...vnpParams,
-        vnp_SecureHash: secureHash,
+        ...req.query,
         vnp_ResponseCode
       });
 
@@ -208,10 +222,10 @@ vnpayRouter.get('/ipn', async (req, res) => {
       });
     } else {
       // Checksum failed
-      logger.error('VNPay IPN: Fail checksum');
+      logger.error('VNPay IPN: Invalid signature');
       res.status(200).json({
         RspCode: '97',
-        Message: 'Fail checksum'
+        Message: 'Invalid signature'
       });
     }
   } catch (error) {

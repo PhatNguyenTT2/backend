@@ -37,6 +37,11 @@ jest.mock('../utils/middleware', () => ({
 // Mock vnpayService
 jest.mock('../services/vnpayService');
 
+// Helper: stringify without URL encoding (same as controller)
+const stringifyForSignature = (obj) => {
+  return require('querystring').stringify(obj, '&', '=', { encodeURIComponent: (str) => str });
+};
+
 // Close connections after all tests
 afterAll(async () => {
   await mongoose.connection.close();
@@ -154,7 +159,7 @@ describe('GET /api/vnpay/return', () => {
 
     // Sort params before generating hash (same as controller)
     const sortedParams = sortObject(vnpParams);
-    const signData = querystring.stringify(sortedParams, { encode: false });
+    const signData = stringifyForSignature(sortedParams);
     const hmac = crypto.createHmac('sha512', process.env.VNP_HASHSECRET);
     const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
@@ -195,7 +200,7 @@ describe('GET /api/vnpay/return', () => {
 
     // Sort params before generating hash (same as controller)
     const sortedParams = sortObject(vnpParams);
-    const signData = querystring.stringify(sortedParams, { encode: false });
+    const signData = stringifyForSignature(sortedParams);
     const hmac = crypto.createHmac('sha512', process.env.VNP_HASHSECRET);
     const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
@@ -255,7 +260,7 @@ describe('GET /api/vnpay/ipn', () => {
     };
 
     // Generate valid hash
-    const signData = querystring.stringify(vnpParams, { encode: false });
+    const signData = stringifyForSignature(vnpParams);
     const hmac = crypto.createHmac('sha512', process.env.VNP_HASHSECRET);
     const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
@@ -296,7 +301,7 @@ describe('GET /api/vnpay/ipn', () => {
 
     // Sort params before generating hash (same as controller)
     const sortedParams = sortObject(vnpParams);
-    const signData = querystring.stringify(sortedParams, { encode: false });
+    const signData = stringifyForSignature(sortedParams);
     const hmac = crypto.createHmac('sha512', process.env.VNP_HASHSECRET);
     const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 
@@ -352,7 +357,7 @@ describe('GET /api/vnpay/ipn', () => {
 
     // Sort params before generating hash (same as controller)
     const sortedParams = sortObject(vnpParams);
-    const signData = querystring.stringify(sortedParams, { encode: false });
+    const signData = stringifyForSignature(sortedParams);
     const hmac = crypto.createHmac('sha512', process.env.VNP_HASHSECRET);
     const secureHash = hmac.update(Buffer.from(signData, 'utf-8')).digest('hex');
 

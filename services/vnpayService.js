@@ -18,8 +18,10 @@ class VNPayService {
       const vnp_TxnRef = `ORDER_${Date.now()}`;
 
       // Build payment URL using vnpay library
+      // NOTE: vnpay library AUTOMATICALLY multiplies amount by 100 internally
+      // So we pass the original VND amount here
       const paymentUrl = vnpay.buildPaymentUrl({
-        vnp_Amount: amount * 100, // Convert to VNPay format (multiply by 100)
+        vnp_Amount: amount, // Library will multiply by 100 internally
         vnp_TxnRef: vnp_TxnRef,
         vnp_OrderInfo: orderInfo || `Thanh toán đơn hàng ${orderId}`,
         vnp_OrderType: 'billpayment',

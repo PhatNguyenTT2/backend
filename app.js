@@ -54,6 +54,11 @@ mongoose
 app.use(cors())
 app.use(express.static('dist'))
 app.use(express.json())
+// CRITICAL: Use native querystring parser for VNPay signature verification
+// This prevents Express from creating nested objects from query params
+app.set('query parser', (str) => {
+  return require('querystring').parse(str);
+})
 app.use(middleware.requestLogger)
 
 // API Routes

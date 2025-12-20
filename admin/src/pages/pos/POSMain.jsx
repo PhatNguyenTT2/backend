@@ -18,9 +18,11 @@ import {
 import { POSBatchSelectModal } from '../../components/POSMain/POSBatchSelectModal';
 import { POSHeldOrdersModal } from '../../components/POSMain/POSHeldOrdersModal';
 import { QRCodeScannerModal } from '../../components/POSMain/QRCodeScannerModal';
+import { VNPayReturnHandler } from '../../components/VNPayReturnHandler';
 import orderService from '../../services/orderService';
 import orderDetailService from '../../services/orderDetailService';
 import paymentService from '../../services/paymentService';
+import vnpayService from '../../services/vnpayService';
 
 export const POSMain = () => {
   const navigate = useNavigate();
@@ -65,6 +67,9 @@ export const POSMain = () => {
 
   // Existing order state (from held order)
   const [existingOrder, setExistingOrder] = useState(null);
+
+  // VNPay state
+  const [vnpayProcessing, setVnpayProcessing] = useState(false);
 
   // Toast notification state
   const [toast, setToast] = useState(null); // { type: 'success'|'error', message: string }
@@ -913,14 +918,63 @@ export const POSMain = () => {
       setShowPaymentModal(false);
 
       if (paymentMethod === 'bank_transfer') {
-        // VNPay: Will be implemented in next phase
-        // TODO: Redirect to VNPay, handle return URL
-        showToast('info', 'VNPay integration coming soon!');
+        // VNPay flow
+        await handleVNPayPayment(orderId);
         return;
       }
 
-      // Cash/Card: Create payment immediately
-      console.log(`💳 Processing ${paymentMethod} payment for order: ${existingOrder.orderNumber}`);
+      // Cash/Card flow
+      await handleCashCardPayment(orderId, paymentMethod);
+
+    } catch (error) {
+      console.error('❌ Payment error:', error);
+
+      const errorMessage = error.response?.data?.error?.message
+        || error.error?.message
+        || error.message
+        || 'Failed to process payment';
+
+      showToast('error', errorMessage);
+      alert(`Payment failed: ${errorMessage}`);
+
+      // Re-open payment modal to allow retry
+      setShowPaymentModal(true);
+    }
+  };
+
+  // ========== VNPAY HANDLER (UNIFIED) ==========
+  const handleVNPayPayment = async (orderId) => {
+    try {
+      setVnpayProcessing(true);
+
+      console.log('🏦 Creating VNPay payment URL for order:', existingOrder.orderNumber);
+
+      // Create VNPay payment URL
+      const { paymentUrl, vnp_TxnRef } = await vnpayService.createPaymentUrl(
+        orderId,
+        existingOrder.total,
+        `Thanh toán ${existingOrder.orderNumber}`
+      );
+
+      console.log('✅ VNPay URL created:', vnp_TxnRef);
+      showToast('success', 'Chuyển đến VNPay...');
+
+      // Redirect to VNPay
+      setTimeout(() => {
+        window.location.href = paymentUrl;
+      }, 1500);
+
+    } catch (error) {
+      console.error('❌ VNPay error:', error);
+      setVnpayProcessing(false);
+      throw error;
+    }
+  };
+
+  // ========== CASH/CARD HANDLER (UNIFIED) ==========
+  const handleCashCardPayment = async (orderId, paymentMethod) => {
+    try {
+      console.log(`💳 Processing ${paymentMethod} payment for order:`, existingOrder.orderNumber);
 
       // Step 1: Create payment
       const paymentResponse = await posLoginService.createPaymentForOrder(
@@ -942,14 +996,13 @@ export const POSMain = () => {
       });
 
       if (!updateResponse.success) {
-        console.warn('⚠️ Order status update failed, but payment was created');
+        console.warn('⚠️ Order update failed, but payment was created');
       }
 
-      // Step 3: Fetch full order for invoice
+      // Step 3: Fetch full order
       const fullOrderResponse = await orderService.getOrderById(orderId);
-
       if (!fullOrderResponse.success) {
-        throw new Error('Failed to fetch order details');
+        throw new Error('Failed to fetch order');
       }
 
       const fullOrder = fullOrderResponse.data.order;
@@ -962,24 +1015,90 @@ export const POSMain = () => {
       // Step 5: Clear cart
       setCart([]);
       setSelectedCustomer(null);
-      setExistingOrder(null); // Clear draft order
+      setExistingOrder(null);
 
       showToast('success', `Payment completed! Order: ${existingOrder.orderNumber}`);
 
     } catch (error) {
-      console.error('❌ Payment error:', error);
-
-      const errorMessage = error.response?.data?.error?.message
-        || error.error?.message
-        || error.message
-        || 'Failed to process payment';
-
-      showToast('error', errorMessage);
-      alert(`Payment failed: ${errorMessage}`);
-
-      // Re-open payment modal to allow retry
-      setShowPaymentModal(true);
+      console.error('❌ Cash/Card error:', error);
+      throw error;
     }
+  };
+
+  // ⭐ Handle VNPay payment complete
+  const handleVNPayComplete = async (order) => {
+    setVnpayProcessing(false);
+
+    try {
+      const orderId = order._id || order.id;
+
+      // Step 1: Create payment
+      console.log('💳 Creating payment...');
+      const paymentResponse = await posLoginService.createPaymentForOrder(
+        orderId,
+        'bank_transfer',
+        `VNPay Payment - ${order.orderNumber}`
+      );
+
+      if (!paymentResponse.success) {
+        throw new Error(paymentResponse.error?.message);
+      }
+
+      console.log('✅ Payment created');
+
+      // Step 2: Update order
+      console.log('🔄 Updating order...');
+      await orderService.updateOrder(orderId, {
+        status: 'delivered',
+        paymentStatus: 'paid'
+      });
+
+      console.log('✅ Order updated');
+
+      // Step 3: Fetch full order
+      const fullOrderResponse = await orderService.getOrderById(orderId);
+      const completeOrder = fullOrderResponse.data.order;
+      completeOrder.paymentMethod = 'bank_transfer';
+
+      // Step 4: Close payment modal (if still open)
+      setShowPaymentModal(false);
+
+      // Step 5: Show invoice modal
+      setInvoiceOrder(completeOrder);
+      setShowInvoiceModal(true);
+
+      // Step 6: Clear cart and customer
+      setCart([]);
+      setSelectedCustomer(null);
+      setExistingOrder(null);
+
+      showToast('success', `Thanh toán VNPay thành công! Đơn hàng: ${order.orderNumber}`);
+
+    } catch (error) {
+      console.error('❌ VNPay complete error:', error);
+      showToast('error', 'Không thể hoàn tất thanh toán');
+    }
+  };
+
+  // ⭐ Handle VNPay payment failed
+  const handleVNPayFailed = async (error) => {
+    setVnpayProcessing(false);
+
+    // Delete draft order if NEW order (not held)
+    if (existingOrder && !existingOrder.wasHeldOrder) {
+      console.log('❌ Deleting new draft order...');
+      try {
+        await orderService.deleteOrder(existingOrder._id);
+        console.log('✅ Draft order deleted');
+        setExistingOrder(null);
+      } catch (deleteError) {
+        console.error('Failed to delete draft:', deleteError);
+      }
+    } else {
+      console.log('ℹ️ Keeping held order (can retry payment)');
+    }
+
+    showToast('error', error.message || 'Thanh toán VNPay thất bại');
   };
   // Handle payment modal close (cancel payment)
   const handlePaymentModalClose = () => {
@@ -1273,6 +1392,12 @@ export const POSMain = () => {
           setInvoiceOrder(null);
           showToast('success', 'Order completed successfully!');
         }}
+      />
+
+      {/* ⭐ VNPay Return Handler */}
+      <VNPayReturnHandler
+        onPaymentComplete={handleVNPayComplete}
+        onPaymentFailed={handleVNPayFailed}
       />
 
       {/* Toast Notification */}
