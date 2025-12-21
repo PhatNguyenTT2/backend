@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { POSAccessList, POSListHeader } from '../components/POSList';
 import { EditPOSAccessModal, GrantPOSAccessModal, ViewPOSAccessModal } from '../components/POSList/POSModal';
@@ -330,113 +329,111 @@ export const POSManagement = () => {
   };
 
   return (
-    <Layout>
-      <div className="space-y-6">
-        {/* Breadcrumb */}
-        <Breadcrumb items={breadcrumbItems} />
+    <div className="space-y-6">
+      {/* Breadcrumb */}
+      <Breadcrumb items={breadcrumbItems} />
 
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-[13px] font-['Poppins',sans-serif]">
-            {error}
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-[13px] font-['Poppins',sans-serif]">
+          {error}
+        </div>
+      )}
+
+      {/* POS List Header */}
+      <POSListHeader
+        itemsPerPage={itemsPerPage}
+        onItemsPerPageChange={handleItemsPerPageChange}
+        searchQuery={searchQuery}
+        onSearchChange={handleSearchChange}
+        onSearch={handleSearch}
+        onGrantAccess={handleGrantAccess}
+        totalPOS={stats.total}
+        activePOS={stats.active}
+        lockedPOS={stats.locked}
+        deniedPOS={stats.denied}
+        statusFilter={statusFilter}
+        onFilterStatus={handleFilterStatus}
+      />
+
+      {/* Loading State */}
+      {loading ? (
+        <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+          <div className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-6 w-6 text-emerald-600" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-gray-600 text-[14px] font-['Poppins',sans-serif]">
+              Loading POS access data...
+            </p>
           </div>
-        )}
+        </div>
+      ) : (
+        <>
+          {/* POS Access List */}
+          <POSAccessList
+            posAccess={filteredAccess}
+            onViewDetails={handleViewDetails}
+            onEditSettings={handleEditSettings}
+            onResetPIN={handleResetPIN}
+            onUnlock={handleUnlock}
+            onRevoke={handleRevoke}
+            onSort={handleSort}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            maxFailedAttempts={posSecuritySettings.maxFailedAttempts}
+          />
 
-        {/* POS List Header */}
-        <POSListHeader
-          itemsPerPage={itemsPerPage}
-          onItemsPerPageChange={handleItemsPerPageChange}
-          searchQuery={searchQuery}
-          onSearchChange={handleSearchChange}
-          onSearch={handleSearch}
-          onGrantAccess={handleGrantAccess}
-          totalPOS={stats.total}
-          activePOS={stats.active}
-          lockedPOS={stats.locked}
-          deniedPOS={stats.denied}
-          statusFilter={statusFilter}
-          onFilterStatus={handleFilterStatus}
-        />
+          {/* Results Summary */}
+          {filteredAccess.length > 0 && (
+            <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif]">
+              Showing {filteredAccess.length} of {stats.total} POS access record{filteredAccess.length !== 1 ? 's' : ''}
+            </div>
+          )}
 
-        {/* Loading State */}
-        {loading ? (
-          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-            <div className="flex items-center justify-center gap-2">
-              <svg className="animate-spin h-6 w-6 text-emerald-600" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          {/* Empty State */}
+          {filteredAccess.length === 0 && !loading && (
+            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+              <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
               </svg>
-              <p className="text-gray-600 text-[14px] font-['Poppins',sans-serif]">
-                Loading POS access data...
+              <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
+                No POS access records found
               </p>
             </div>
-          </div>
-        ) : (
-          <>
-            {/* POS Access List */}
-            <POSAccessList
-              posAccess={filteredAccess}
-              onViewDetails={handleViewDetails}
-              onEditSettings={handleEditSettings}
-              onResetPIN={handleResetPIN}
-              onUnlock={handleUnlock}
-              onRevoke={handleRevoke}
-              onSort={handleSort}
-              sortField={sortField}
-              sortOrder={sortOrder}
-              maxFailedAttempts={posSecuritySettings.maxFailedAttempts}
-            />
+          )}
+        </>
+      )}
 
-            {/* Results Summary */}
-            {filteredAccess.length > 0 && (
-              <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif]">
-                Showing {filteredAccess.length} of {stats.total} POS access record{filteredAccess.length !== 1 ? 's' : ''}
-              </div>
-            )}
+      {/* Modals */}
+      <GrantPOSAccessModal
+        isOpen={isGrantModalOpen}
+        onClose={() => setIsGrantModalOpen(false)}
+        onSuccess={handleGrantSuccess}
+      />
 
-            {/* Empty State */}
-            {filteredAccess.length === 0 && !loading && (
-              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-                <svg className="w-16 h-16 mx-auto text-gray-300 mb-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                </svg>
-                <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
-                  No POS access records found
-                </p>
-              </div>
-            )}
-          </>
-        )}
+      <EditPOSAccessModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        employee={selectedEmployee}
+        onSuccess={handleEditSuccess}
+      />
 
-        {/* Modals */}
-        <GrantPOSAccessModal
-          isOpen={isGrantModalOpen}
-          onClose={() => setIsGrantModalOpen(false)}
-          onSuccess={handleGrantSuccess}
-        />
+      <ViewPOSAccessModal
+        isOpen={isViewModalOpen}
+        onClose={() => {
+          setIsViewModalOpen(false);
+          setSelectedEmployee(null);
+        }}
+        employee={selectedEmployee}
+        maxFailedAttempts={posSecuritySettings.maxFailedAttempts}
+      />
 
-        <EditPOSAccessModal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          employee={selectedEmployee}
-          onSuccess={handleEditSuccess}
-        />
-
-        <ViewPOSAccessModal
-          isOpen={isViewModalOpen}
-          onClose={() => {
-            setIsViewModalOpen(false);
-            setSelectedEmployee(null);
-          }}
-          employee={selectedEmployee}
-          maxFailedAttempts={posSecuritySettings.maxFailedAttempts}
-        />
-
-        {/* TODO: Add more modals
+      {/* TODO: Add more modals
           - ResetPINModal
         */}
-      </div>
-    </Layout>
+    </div>
   );
 };
 

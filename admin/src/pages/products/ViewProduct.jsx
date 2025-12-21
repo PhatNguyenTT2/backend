@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Layout } from '../../components/Layout';
 import { Breadcrumb } from '../../components/Breadcrumb';
 import { FilterProduct } from '../../components/FilterProduct';
 import { ProductGrid, ProductListHeader, SortBy } from '../../components/ViewProduct';
@@ -50,40 +49,38 @@ const ViewProduct = () => {
   };
 
   return (
-    <Layout>
-      <div className="flex gap-6 h-full -m-6 p-6">
-        {/* Main Content */}
-        <div className="flex-1 space-y-6 min-w-0">
-          {/* Breadcrumb */}
-          <Breadcrumb items={breadcrumbItems} />
+    <div className="flex gap-6 h-full -m-6 p-6">
+      {/* Main Content */}
+      <div className="flex-1 space-y-6 min-w-0">
+        {/* Breadcrumb */}
+        <Breadcrumb items={breadcrumbItems} />
 
-          {/* Header with Sort */}
-          <div className="flex items-center justify-between">
-            <ProductListHeader
-              totalItems={paginationInfo.totalItems}
-              currentCount={paginationInfo.currentCount}
-              isLoading={paginationInfo.isLoading}
-            />
-            <SortBy value={sortBy} onChange={handleSortChange} />
-          </div>
-
-          {/* Product Grid */}
-          <ProductGrid
-            filters={filters}
-            sortBy={sortBy}
-            onPaginationChange={handlePaginationChange}
+        {/* Header with Sort */}
+        <div className="flex items-center justify-between">
+          <ProductListHeader
+            totalItems={paginationInfo.totalItems}
+            currentCount={paginationInfo.currentCount}
+            isLoading={paginationInfo.isLoading}
           />
+          <SortBy value={sortBy} onChange={handleSortChange} />
         </div>
 
-        {/* Right Sidebar - Filter */}
-        <div className="flex-shrink-0">
-          <FilterProduct
-            onFilterChange={handleFilterChange}
-            currentFilters={filters}
-          />
-        </div>
+        {/* Product Grid */}
+        <ProductGrid
+          filters={filters}
+          sortBy={sortBy}
+          onPaginationChange={handlePaginationChange}
+        />
       </div>
-    </Layout>
+
+      {/* Right Sidebar - Filter */}
+      <div className="flex-shrink-0">
+        <FilterProduct
+          onFilterChange={handleFilterChange}
+          currentFilters={filters}
+        />
+      </div>
+    </div>
   );
 };
 

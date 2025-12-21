@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { PaymentListHeader } from '../components/PaymentList/PaymentListHeader';
 import { PaymentList } from '../components/PaymentList/PaymentList';
@@ -199,185 +198,183 @@ export const Payments = () => {
   };
 
   return (
-    <Layout>
-      <div className="space-y-6">
-        {/* Breadcrumb */}
-        <Breadcrumb items={breadcrumbItems} />
+    <div className="space-y-6">
+      {/* Breadcrumb */}
+      <Breadcrumb items={breadcrumbItems} />
 
-        {/* Payment List Header */}
-        <PaymentListHeader
-          itemsPerPage={itemsPerPage}
-          onItemsPerPageChange={handleItemsPerPageChange}
-          searchQuery={searchQuery}
-          onSearchChange={handleSearchChange}
-          onSearch={handleSearch}
-          onAddPayment={handleAddPayment}
-        />
+      {/* Payment List Header */}
+      <PaymentListHeader
+        itemsPerPage={itemsPerPage}
+        onItemsPerPageChange={handleItemsPerPageChange}
+        searchQuery={searchQuery}
+        onSearchChange={handleSearchChange}
+        onSearch={handleSearch}
+        onAddPayment={handleAddPayment}
+      />
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
-          </div>
-        )}
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        </div>
+      )}
 
-        {/* Error State */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            <p className="font-medium">Error loading payments</p>
-            <p className="text-sm mt-1">{error}</p>
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          <p className="font-medium">Error loading payments</p>
+          <p className="text-sm mt-1">{error}</p>
+          <button
+            onClick={fetchPayments}
+            className="mt-2 text-sm underline hover:no-underline"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {/* Payment List Table */}
+      {!isLoading && !error && (
+        <>
+          <PaymentList
+            payments={paginatedPayments}
+            onSort={handleColumnSort}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onUpdateStatus={handleUpdateStatus}
+          />
+
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center justify-center mt-6">
+              <div className="flex items-center gap-2">
+                {/* Previous button */}
+                <button
+                  onClick={() => handlePageChange(pagination.currentPage - 1)}
+                  disabled={pagination.currentPage === 1}
+                  className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                    }`}
+                >
+                  ‹ Previous
+                </button>
+
+                {/* Page numbers */}
+                {(() => {
+                  const maxPagesToShow = 5;
+                  const { totalPages, currentPage } = pagination;
+
+                  let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+                  let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+                  if (endPage - startPage < maxPagesToShow - 1) {
+                    startPage = Math.max(1, endPage - maxPagesToShow + 1);
+                  }
+
+                  const pages = [];
+
+                  // First page + ellipsis
+                  if (startPage > 1) {
+                    pages.push(
+                      <button
+                        key={1}
+                        onClick={() => handlePageChange(1)}
+                        className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                      >
+                        1
+                      </button>
+                    );
+                    if (startPage > 2) {
+                      pages.push(
+                        <span key="ellipsis-start" className="px-2 text-gray-400">
+                          ...
+                        </span>
+                      );
+                    }
+                  }
+
+                  // Page numbers
+                  for (let page = startPage; page <= endPage; page++) {
+                    pages.push(
+                      <button
+                        key={page}
+                        onClick={() => handlePageChange(page)}
+                        className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${currentPage === page
+                          ? 'bg-[#3bb77e] text-white'
+                          : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                          }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  }
+
+                  // Ellipsis + last page
+                  if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                      pages.push(
+                        <span key="ellipsis-end" className="px-2 text-gray-400">
+                          ...
+                        </span>
+                      );
+                    }
+                    pages.push(
+                      <button
+                        key={totalPages}
+                        onClick={() => handlePageChange(totalPages)}
+                        className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                      >
+                        {totalPages}
+                      </button>
+                    );
+                  }
+
+                  return pages;
+                })()}
+
+                {/* Next button */}
+                <button
+                  onClick={() => handlePageChange(pagination.currentPage + 1)}
+                  disabled={pagination.currentPage === pagination.totalPages}
+                  className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                    }`}
+                >
+                  Next ›
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Results Summary */}
+          {paginatedPayments.length > 0 && (
+            <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
+              Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
+              {Math.min(pagination.currentPage * pagination.itemsPerPage, filteredPayments.length)} of{' '}
+              {filteredPayments.length} payments
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && !error && filteredPayments.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
+          <p className="text-gray-500 text-sm">No payments found</p>
+          {searchQuery && (
             <button
-              onClick={fetchPayments}
-              className="mt-2 text-sm underline hover:no-underline"
+              onClick={() => setSearchQuery('')}
+              className="mt-2 text-sm text-emerald-600 hover:underline"
             >
-              Try again
+              Clear search
             </button>
-          </div>
-        )}
-
-        {/* Payment List Table */}
-        {!isLoading && !error && (
-          <>
-            <PaymentList
-              payments={paginatedPayments}
-              onSort={handleColumnSort}
-              sortField={sortField}
-              sortOrder={sortOrder}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              onUpdateStatus={handleUpdateStatus}
-            />
-
-            {/* Pagination */}
-            {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-center mt-6">
-                <div className="flex items-center gap-2">
-                  {/* Previous button */}
-                  <button
-                    onClick={() => handlePageChange(pagination.currentPage - 1)}
-                    disabled={pagination.currentPage === 1}
-                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
-                      }`}
-                  >
-                    ‹ Previous
-                  </button>
-
-                  {/* Page numbers */}
-                  {(() => {
-                    const maxPagesToShow = 5;
-                    const { totalPages, currentPage } = pagination;
-
-                    let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-                    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
-
-                    if (endPage - startPage < maxPagesToShow - 1) {
-                      startPage = Math.max(1, endPage - maxPagesToShow + 1);
-                    }
-
-                    const pages = [];
-
-                    // First page + ellipsis
-                    if (startPage > 1) {
-                      pages.push(
-                        <button
-                          key={1}
-                          onClick={() => handlePageChange(1)}
-                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
-                        >
-                          1
-                        </button>
-                      );
-                      if (startPage > 2) {
-                        pages.push(
-                          <span key="ellipsis-start" className="px-2 text-gray-400">
-                            ...
-                          </span>
-                        );
-                      }
-                    }
-
-                    // Page numbers
-                    for (let page = startPage; page <= endPage; page++) {
-                      pages.push(
-                        <button
-                          key={page}
-                          onClick={() => handlePageChange(page)}
-                          className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${currentPage === page
-                            ? 'bg-[#3bb77e] text-white'
-                            : 'text-[#3bb77e] hover:bg-[#def9ec]'
-                            }`}
-                        >
-                          {page}
-                        </button>
-                      );
-                    }
-
-                    // Ellipsis + last page
-                    if (endPage < totalPages) {
-                      if (endPage < totalPages - 1) {
-                        pages.push(
-                          <span key="ellipsis-end" className="px-2 text-gray-400">
-                            ...
-                          </span>
-                        );
-                      }
-                      pages.push(
-                        <button
-                          key={totalPages}
-                          onClick={() => handlePageChange(totalPages)}
-                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
-                        >
-                          {totalPages}
-                        </button>
-                      );
-                    }
-
-                    return pages;
-                  })()}
-
-                  {/* Next button */}
-                  <button
-                    onClick={() => handlePageChange(pagination.currentPage + 1)}
-                    disabled={pagination.currentPage === pagination.totalPages}
-                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
-                      }`}
-                  >
-                    Next ›
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Results Summary */}
-            {paginatedPayments.length > 0 && (
-              <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
-                Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to{' '}
-                {Math.min(pagination.currentPage * pagination.itemsPerPage, filteredPayments.length)} of{' '}
-                {filteredPayments.length} payments
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Empty State */}
-        {!isLoading && !error && filteredPayments.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
-            <p className="text-gray-500 text-sm">No payments found</p>
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="mt-2 text-sm text-emerald-600 hover:underline"
-              >
-                Clear search
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Add Payment Modal */}
       <AddPaymentModal
@@ -387,7 +384,7 @@ export const Payments = () => {
       />
 
       {/* TODO: Edit Payment Modal - to be implemented */}
-    </Layout>
+    </div>
   );
 };
 

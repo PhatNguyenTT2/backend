@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { EmployeeList, EmployeeListHeader, AddEmployeeModal, EditEmployeeModal, UserAccountModal, ViewAccountModal, AdminResetPasswordModal } from '../components/EmployeeList';
 import employeeService from '../services/employeeService';
@@ -199,113 +198,111 @@ export const Employees = () => {
   };
 
   return (
-    <Layout>
-      <div className="space-y-6">
-        {/* Breadcrumb */}
-        <Breadcrumb items={breadcrumbItems} />
+    <div className="space-y-6">
+      {/* Breadcrumb */}
+      <Breadcrumb items={breadcrumbItems} />
 
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-[13px] font-['Poppins',sans-serif]">
-            {error}
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-[13px] font-['Poppins',sans-serif]">
+          {error}
+        </div>
+      )}
+
+      {/* Employee List Header */}
+      <EmployeeListHeader
+        itemsPerPage={itemsPerPage}
+        onItemsPerPageChange={setItemsPerPage}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSearch={handleSearch}
+        onAddEmployee={handleAddEmployee}
+      />
+
+      {/* Loading State */}
+      {loading ? (
+        <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+          <div className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-6 w-6 text-emerald-600" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-gray-600 text-[14px] font-['Poppins',sans-serif]">
+              Loading employees...
+            </p>
           </div>
-        )}
+        </div>
+      ) : (
+        <>
+          {/* Employee List */}
+          <EmployeeList
+            employees={employees}
+            onEdit={handleEditEmployee}
+            onDelete={handleDeleteEmployee}
+            onManageAccount={handleManageAccount}
+            onViewDetails={handleViewDetails}
+            onResetPassword={handleResetPassword}
+            onSort={handleSort}
+            sortField={sortField}
+            sortOrder={sortOrder}
+          />
 
-        {/* Employee List Header */}
-        <EmployeeListHeader
-          itemsPerPage={itemsPerPage}
-          onItemsPerPageChange={setItemsPerPage}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onSearch={handleSearch}
-          onAddEmployee={handleAddEmployee}
-        />
+          {/* Results Summary */}
+          {employees.length > 0 && (
+            <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif]">
+              Showing {employees.length} employee{employees.length !== 1 ? 's' : ''}
+            </div>
+          )}
 
-        {/* Loading State */}
-        {loading ? (
-          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-            <div className="flex items-center justify-center gap-2">
-              <svg className="animate-spin h-6 w-6 text-emerald-600" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              <p className="text-gray-600 text-[14px] font-['Poppins',sans-serif]">
-                Loading employees...
+          {/* Empty State */}
+          {employees.length === 0 && !loading && (
+            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+              <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
+                No employees found
               </p>
             </div>
-          </div>
-        ) : (
-          <>
-            {/* Employee List */}
-            <EmployeeList
-              employees={employees}
-              onEdit={handleEditEmployee}
-              onDelete={handleDeleteEmployee}
-              onManageAccount={handleManageAccount}
-              onViewDetails={handleViewDetails}
-              onResetPassword={handleResetPassword}
-              onSort={handleSort}
-              sortField={sortField}
-              sortOrder={sortOrder}
-            />
+          )}
+        </>
+      )}
 
-            {/* Results Summary */}
-            {employees.length > 0 && (
-              <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif]">
-                Showing {employees.length} employee{employees.length !== 1 ? 's' : ''}
-              </div>
-            )}
+      {/* Add Employee Modal */}
+      <AddEmployeeModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onSuccess={handleAddSuccess}
+      />
 
-            {/* Empty State */}
-            {employees.length === 0 && !loading && (
-              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-                <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
-                  No employees found
-                </p>
-              </div>
-            )}
-          </>
-        )}
+      {/* Edit Employee Modal */}
+      <EditEmployeeModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSuccess={handleEditSuccess}
+        employee={selectedEmployee}
+      />
 
-        {/* Add Employee Modal */}
-        <AddEmployeeModal
-          isOpen={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          onSuccess={handleAddSuccess}
-        />
+      {/* User Account Modal */}
+      <UserAccountModal
+        isOpen={showAccountModal}
+        onClose={() => setShowAccountModal(false)}
+        onSuccess={handleAccountUpdateSuccess}
+        employee={selectedEmployee}
+      />
 
-        {/* Edit Employee Modal */}
-        <EditEmployeeModal
-          isOpen={showEditModal}
-          onClose={() => setShowEditModal(false)}
-          onSuccess={handleEditSuccess}
-          employee={selectedEmployee}
-        />
+      {/* View Account Modal */}
+      <ViewAccountModal
+        isOpen={showViewModal}
+        onClose={() => setShowViewModal(false)}
+        employee={selectedEmployee}
+      />
 
-        {/* User Account Modal */}
-        <UserAccountModal
-          isOpen={showAccountModal}
-          onClose={() => setShowAccountModal(false)}
-          onSuccess={handleAccountUpdateSuccess}
-          employee={selectedEmployee}
-        />
-
-        {/* View Account Modal */}
-        <ViewAccountModal
-          isOpen={showViewModal}
-          onClose={() => setShowViewModal(false)}
-          employee={selectedEmployee}
-        />
-
-        {/* Admin Reset Password Modal */}
-        <AdminResetPasswordModal
-          isOpen={showResetPasswordModal}
-          onClose={() => setShowResetPasswordModal(false)}
-          onSuccess={handleResetPasswordSuccess}
-          employee={selectedEmployee}
-        />
-      </div>
-    </Layout>
+      {/* Admin Reset Password Modal */}
+      <AdminResetPasswordModal
+        isOpen={showResetPasswordModal}
+        onClose={() => setShowResetPasswordModal(false)}
+        onSuccess={handleResetPasswordSuccess}
+        employee={selectedEmployee}
+      />
+    </div>
   );
 };
 

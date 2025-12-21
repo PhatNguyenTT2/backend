@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { CustomerListHeader, CustomerList } from '../components/CustomerList';
 import customerService from '../services/customerService';
@@ -178,190 +177,188 @@ const Customers = () => {
   };
 
   return (
-    <Layout>
-      <div className="space-y-6">
-        {/* Breadcrumb */}
-        <Breadcrumb items={breadcrumbItems} />
+    <div className="space-y-6">
+      {/* Breadcrumb */}
+      <Breadcrumb items={breadcrumbItems} />
 
-        {/* Customer List Header */}
-        <CustomerListHeader
-          itemsPerPage={filters.per_page}
-          setItemsPerPage={handleItemsPerPageChange}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          onAddCustomer={handleAddCustomer}
-        />
+      {/* Customer List Header */}
+      <CustomerListHeader
+        itemsPerPage={filters.per_page}
+        setItemsPerPage={handleItemsPerPageChange}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        onAddCustomer={handleAddCustomer}
+      />
 
-        {/* Loading State */}
-        {loading && (
-          <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
-          </div>
-        )}
+      {/* Loading State */}
+      {loading && (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        </div>
+      )}
 
-        {/* Error State */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            <p className="font-medium">Error loading customers</p>
-            <p className="text-sm mt-1">{error}</p>
-            <button
-              onClick={fetchCustomers}
-              className="mt-2 text-sm underline hover:no-underline"
-            >
-              Try again
-            </button>
-          </div>
-        )}
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          <p className="font-medium">Error loading customers</p>
+          <p className="text-sm mt-1">{error}</p>
+          <button
+            onClick={fetchCustomers}
+            className="mt-2 text-sm underline hover:no-underline"
+          >
+            Try again
+          </button>
+        </div>
+      )}
 
-        {/* Customer List Table */}
-        {!loading && !error && (
-          <>
-            <CustomerList
-              customers={customers}
-              onSort={handleColumnSort}
-              sortField={sortField}
-              sortOrder={sortOrder}
-              onToggleActive={handleToggleActive}
-              onEdit={handleEditCustomer}
-              onDelete={handleDeleteCustomer}
-              addModalOpen={addCustomerModal}
-              onCloseAddModal={() => setAddCustomerModal(false)}
-              onAddSuccess={handleCustomerSuccess}
-              editModalOpen={editCustomerModal}
-              editCustomer={selectedCustomer}
-              onCloseEditModal={() => {
-                setEditCustomerModal(false);
-                setSelectedCustomer(null);
-              }}
-              onEditSuccess={handleCustomerUpdateSuccess}
-            />
+      {/* Customer List Table */}
+      {!loading && !error && (
+        <>
+          <CustomerList
+            customers={customers}
+            onSort={handleColumnSort}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            onToggleActive={handleToggleActive}
+            onEdit={handleEditCustomer}
+            onDelete={handleDeleteCustomer}
+            addModalOpen={addCustomerModal}
+            onCloseAddModal={() => setAddCustomerModal(false)}
+            onAddSuccess={handleCustomerSuccess}
+            editModalOpen={editCustomerModal}
+            editCustomer={selectedCustomer}
+            onCloseEditModal={() => {
+              setEditCustomerModal(false);
+              setSelectedCustomer(null);
+            }}
+            onEditSuccess={handleCustomerUpdateSuccess}
+          />
 
-            {/* Pagination */}
-            {pagination.total_pages > 1 && (
-              <div className="flex items-center justify-center mt-6">
-                <div className="flex items-center gap-2">
-                  {/* Previous button */}
-                  <button
-                    onClick={() => setFilters({ ...filters, page: pagination.current_page - 1 })}
-                    disabled={!pagination.has_prev}
-                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${!pagination.has_prev
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
-                      }`}
-                  >
-                    ‹ Previous
-                  </button>
+          {/* Pagination */}
+          {pagination.total_pages > 1 && (
+            <div className="flex items-center justify-center mt-6">
+              <div className="flex items-center gap-2">
+                {/* Previous button */}
+                <button
+                  onClick={() => setFilters({ ...filters, page: pagination.current_page - 1 })}
+                  disabled={!pagination.has_prev}
+                  className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${!pagination.has_prev
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                    }`}
+                >
+                  ‹ Previous
+                </button>
 
-                  {/* Page numbers */}
-                  {(() => {
-                    const maxPagesToShow = 5;
-                    const totalPages = pagination.total_pages;
-                    const currentPage = pagination.current_page;
+                {/* Page numbers */}
+                {(() => {
+                  const maxPagesToShow = 5;
+                  const totalPages = pagination.total_pages;
+                  const currentPage = pagination.current_page;
 
-                    let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-                    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+                  let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+                  let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
 
-                    if (endPage - startPage < maxPagesToShow - 1) {
-                      startPage = Math.max(1, endPage - maxPagesToShow + 1);
-                    }
+                  if (endPage - startPage < maxPagesToShow - 1) {
+                    startPage = Math.max(1, endPage - maxPagesToShow + 1);
+                  }
 
-                    const pages = [];
+                  const pages = [];
 
-                    // First page + ellipsis
-                    if (startPage > 1) {
+                  // First page + ellipsis
+                  if (startPage > 1) {
+                    pages.push(
+                      <button
+                        key={1}
+                        onClick={() => setFilters({ ...filters, page: 1 })}
+                        className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                      >
+                        1
+                      </button>
+                    );
+                    if (startPage > 2) {
                       pages.push(
-                        <button
-                          key={1}
-                          onClick={() => setFilters({ ...filters, page: 1 })}
-                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
-                        >
-                          1
-                        </button>
-                      );
-                      if (startPage > 2) {
-                        pages.push(
-                          <span key="ellipsis-start" className="px-2 text-gray-400">
-                            ...
-                          </span>
-                        );
-                      }
-                    }
-
-                    // Page numbers
-                    for (let page = startPage; page <= endPage; page++) {
-                      pages.push(
-                        <button
-                          key={page}
-                          onClick={() => setFilters({ ...filters, page })}
-                          className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${currentPage === page
-                            ? 'bg-[#3bb77e] text-white'
-                            : 'text-[#3bb77e] hover:bg-[#def9ec]'
-                            }`}
-                        >
-                          {page}
-                        </button>
+                        <span key="ellipsis-start" className="px-2 text-gray-400">
+                          ...
+                        </span>
                       );
                     }
+                  }
 
-                    // Ellipsis + last page
-                    if (endPage < totalPages) {
-                      if (endPage < totalPages - 1) {
-                        pages.push(
-                          <span key="ellipsis-end" className="px-2 text-gray-400">
-                            ...
-                          </span>
-                        );
-                      }
+                  // Page numbers
+                  for (let page = startPage; page <= endPage; page++) {
+                    pages.push(
+                      <button
+                        key={page}
+                        onClick={() => setFilters({ ...filters, page })}
+                        className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${currentPage === page
+                          ? 'bg-[#3bb77e] text-white'
+                          : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                          }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  }
+
+                  // Ellipsis + last page
+                  if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
                       pages.push(
-                        <button
-                          key={totalPages}
-                          onClick={() => setFilters({ ...filters, page: totalPages })}
-                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
-                        >
-                          {totalPages}
-                        </button>
+                        <span key="ellipsis-end" className="px-2 text-gray-400">
+                          ...
+                        </span>
                       );
                     }
+                    pages.push(
+                      <button
+                        key={totalPages}
+                        onClick={() => setFilters({ ...filters, page: totalPages })}
+                        className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                      >
+                        {totalPages}
+                      </button>
+                    );
+                  }
 
-                    return pages;
-                  })()}
+                  return pages;
+                })()}
 
-                  {/* Next button */}
-                  <button
-                    onClick={() => setFilters({ ...filters, page: pagination.current_page + 1 })}
-                    disabled={!pagination.has_next}
-                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${!pagination.has_next
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
-                      }`}
-                  >
-                    Next ›
-                  </button>
-                </div>
+                {/* Next button */}
+                <button
+                  onClick={() => setFilters({ ...filters, page: pagination.current_page + 1 })}
+                  disabled={!pagination.has_next}
+                  className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${!pagination.has_next
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                    }`}
+                >
+                  Next ›
+                </button>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Results Summary */}
-            {customers.length > 0 && (
-              <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
-                Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to{' '}
-                {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of{' '}
-                {pagination.total} customers
-              </div>
-            )}
+          {/* Results Summary */}
+          {customers.length > 0 && (
+            <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
+              Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to{' '}
+              {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of{' '}
+              {pagination.total} customers
+            </div>
+          )}
 
-            {/* Empty State */}
-            {customers.length === 0 && !loading && (
-              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-                <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
-                  No customers found
-                </p>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </Layout>
+          {/* Empty State */}
+          {customers.length === 0 && !loading && (
+            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+              <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
+                No customers found
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 };
 

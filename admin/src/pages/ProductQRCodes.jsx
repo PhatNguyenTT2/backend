@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { Download, QrCode, Search, Loader } from 'lucide-react';
 import productService from '../services/productService';
@@ -99,16 +98,14 @@ export const ProductQRCodes = () => {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center h-96">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      </Layout>
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
     );
   }
 
   return (
-    <Layout>
+    <div className="space-y-6">
       <Breadcrumb items={breadcrumbItems} />
 
       <div className="space-y-6">
@@ -244,6 +241,6 @@ export const ProductQRCodes = () => {
           </div>
         )}
       </div>
-    </Layout>
+    </div>
   );
 };

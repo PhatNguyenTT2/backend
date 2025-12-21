@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { PermissionAlert } from '../components/PermissionAlert';
 import {
@@ -59,17 +58,15 @@ export const InventoryReport = () => {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="flex items-center justify-center h-96">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-        </div>
-      </Layout>
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Layout>
+      <div>
         <Breadcrumb items={breadcrumbItems} />
         <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
           <p className="text-red-800 font-medium">{error}</p>
@@ -80,12 +77,12 @@ export const InventoryReport = () => {
             Retry
           </button>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   return (
-    <Layout>
+    <div>
       <Breadcrumb items={breadcrumbItems} />
       <PermissionAlert requiredPermission="view_inventory_report" />
 
@@ -100,8 +97,8 @@ export const InventoryReport = () => {
               <button
                 onClick={() => handleViewChange('all')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${filters.view === 'all'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
                   }`}
               >
                 All
@@ -109,8 +106,8 @@ export const InventoryReport = () => {
               <button
                 onClick={() => handleViewChange('low-stock')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${filters.view === 'low-stock'
-                    ? 'bg-yellow-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-yellow-600 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
                   }`}
               >
                 Low Stock
@@ -118,8 +115,8 @@ export const InventoryReport = () => {
               <button
                 onClick={() => handleViewChange('out-of-stock')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${filters.view === 'out-of-stock'
-                    ? 'bg-red-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-red-600 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
                   }`}
               >
                 Out of Stock
@@ -127,8 +124,8 @@ export const InventoryReport = () => {
               <button
                 onClick={() => handleViewChange('needs-reorder')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${filters.view === 'needs-reorder'
-                    ? 'bg-orange-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
+                  ? 'bg-orange-600 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
                   }`}
               >
                 Needs Reorder
@@ -154,6 +151,6 @@ export const InventoryReport = () => {
         {/* Products Table */}
         <InventoryProductList products={reportData?.products} />
       </div>
-    </Layout>
+    </div>
   );
 };

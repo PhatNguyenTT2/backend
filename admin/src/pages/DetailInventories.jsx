@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { DetailInventoryList, DetailInventoryListHeader } from '../components/DetailInventoryList';
 import {
@@ -234,198 +233,196 @@ export const DetailInventories = () => {
   };
 
   return (
-    <Layout>
-      <div className="space-y-6">
-        {/* Breadcrumb */}
-        <Breadcrumb items={breadcrumbItems} />
+    <div className="space-y-6">
+      {/* Breadcrumb */}
+      <Breadcrumb items={breadcrumbItems} />
 
-        {/* Product Info Card */}
-        {product && (
-          <div className="bg-white rounded-lg shadow-sm p-4">
-            <div className="flex items-center gap-4">
-              {product.image && (
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="w-16 h-16 object-cover rounded-lg"
-                />
-              )}
-              <div>
-                <h3 className="text-[16px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-                  {product.name}
-                </h3>
-                <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-gray-600">
-                  Product Code: {product.productCode}
-                </p>
-              </div>
+      {/* Product Info Card */}
+      {product && (
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="flex items-center gap-4">
+            {product.image && (
+              <img
+                src={product.image}
+                alt={product.name}
+                className="w-16 h-16 object-cover rounded-lg"
+              />
+            )}
+            <div>
+              <h3 className="text-[16px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
+                {product.name}
+              </h3>
+              <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-gray-600">
+                Product Code: {product.productCode}
+              </p>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Detail Inventory List Header */}
-        <DetailInventoryListHeader
-          itemsPerPage={itemsPerPage}
-          onItemsPerPageChange={handleItemsPerPageChange}
-          searchQuery={searchQuery}
-          onSearchChange={handleSearchChange}
-          filterView={filterView}
-          onFilterViewChange={handleFilterViewChange}
-        />
+      {/* Detail Inventory List Header */}
+      <DetailInventoryListHeader
+        itemsPerPage={itemsPerPage}
+        onItemsPerPageChange={handleItemsPerPageChange}
+        searchQuery={searchQuery}
+        onSearchChange={handleSearchChange}
+        filterView={filterView}
+        onFilterViewChange={handleFilterViewChange}
+      />
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
-          </div>
-        )}
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        </div>
+      )}
 
-        {/* Error State */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            <p className="font-medium">Error loading detail inventory</p>
-            <p className="text-sm mt-1">{error}</p>
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          <p className="font-medium">Error loading detail inventory</p>
+          <p className="text-sm mt-1">{error}</p>
+          <button
+            onClick={fetchDetailInventory}
+            className="mt-2 text-sm underline hover:no-underline"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {/* Detail Inventory List Table */}
+      {!isLoading && !error && (
+        <>
+          <DetailInventoryList
+            detailInventory={paginatedDetailInventory}
+            onSort={handleColumnSort}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            onViewHistory={handleViewHistory}
+            onStockOut={handleStockOut}
+            onAdjust={handleAdjust}
+          />
+
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center justify-center mt-6">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handlePageChange(pagination.currentPage - 1)}
+                  disabled={pagination.currentPage === 1}
+                  className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                    }`}
+                >
+                  ‹ Previous
+                </button>
+
+                {(() => {
+                  const maxPagesToShow = 5;
+                  const { totalPages, currentPage } = pagination;
+                  let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+                  let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+                  if (endPage - startPage < maxPagesToShow - 1) {
+                    startPage = Math.max(1, endPage - maxPagesToShow + 1);
+                  }
+
+                  const pages = [];
+
+                  if (startPage > 1) {
+                    pages.push(
+                      <button
+                        key={1}
+                        onClick={() => handlePageChange(1)}
+                        className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                      >
+                        1
+                      </button>
+                    );
+                    if (startPage > 2) {
+                      pages.push(
+                        <span key="ellipsis-start" className="px-2 text-gray-400">...</span>
+                      );
+                    }
+                  }
+
+                  for (let page = startPage; page <= endPage; page++) {
+                    pages.push(
+                      <button
+                        key={page}
+                        onClick={() => handlePageChange(page)}
+                        className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${currentPage === page
+                          ? 'bg-[#3bb77e] text-white'
+                          : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                          }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  }
+
+                  if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                      pages.push(
+                        <span key="ellipsis-end" className="px-2 text-gray-400">...</span>
+                      );
+                    }
+                    pages.push(
+                      <button
+                        key={totalPages}
+                        onClick={() => handlePageChange(totalPages)}
+                        className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
+                      >
+                        {totalPages}
+                      </button>
+                    );
+                  }
+
+                  return pages;
+                })()}
+
+                <button
+                  onClick={() => handlePageChange(pagination.currentPage + 1)}
+                  disabled={pagination.currentPage === pagination.totalPages}
+                  className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                    }`}
+                >
+                  Next ›
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Results Summary */}
+          {paginatedDetailInventory.length > 0 && (
+            <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
+              Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to {Math.min(pagination.currentPage * pagination.itemsPerPage, filteredDetailInventory.length)} of {filteredDetailInventory.length} batches
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Empty State */}
+      {!isLoading && !error && filteredDetailInventory.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
+          <p className="text-gray-500 text-sm">No batch inventory items found</p>
+          {(searchQuery || filterView !== 'all') && (
             <button
-              onClick={fetchDetailInventory}
-              className="mt-2 text-sm underline hover:no-underline"
+              onClick={() => {
+                setSearchQuery('');
+                setFilterView('all');
+              }}
+              className="mt-2 text-sm text-emerald-600 hover:underline"
             >
-              Try again
+              Clear filters
             </button>
-          </div>
-        )}
-
-        {/* Detail Inventory List Table */}
-        {!isLoading && !error && (
-          <>
-            <DetailInventoryList
-              detailInventory={paginatedDetailInventory}
-              onSort={handleColumnSort}
-              sortField={sortField}
-              sortOrder={sortOrder}
-              onViewHistory={handleViewHistory}
-              onStockOut={handleStockOut}
-              onAdjust={handleAdjust}
-            />
-
-            {/* Pagination */}
-            {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-center mt-6">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handlePageChange(pagination.currentPage - 1)}
-                    disabled={pagination.currentPage === 1}
-                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
-                      }`}
-                  >
-                    ‹ Previous
-                  </button>
-
-                  {(() => {
-                    const maxPagesToShow = 5;
-                    const { totalPages, currentPage } = pagination;
-                    let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
-                    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
-
-                    if (endPage - startPage < maxPagesToShow - 1) {
-                      startPage = Math.max(1, endPage - maxPagesToShow + 1);
-                    }
-
-                    const pages = [];
-
-                    if (startPage > 1) {
-                      pages.push(
-                        <button
-                          key={1}
-                          onClick={() => handlePageChange(1)}
-                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
-                        >
-                          1
-                        </button>
-                      );
-                      if (startPage > 2) {
-                        pages.push(
-                          <span key="ellipsis-start" className="px-2 text-gray-400">...</span>
-                        );
-                      }
-                    }
-
-                    for (let page = startPage; page <= endPage; page++) {
-                      pages.push(
-                        <button
-                          key={page}
-                          onClick={() => handlePageChange(page)}
-                          className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${currentPage === page
-                            ? 'bg-[#3bb77e] text-white'
-                            : 'text-[#3bb77e] hover:bg-[#def9ec]'
-                            }`}
-                        >
-                          {page}
-                        </button>
-                      );
-                    }
-
-                    if (endPage < totalPages) {
-                      if (endPage < totalPages - 1) {
-                        pages.push(
-                          <span key="ellipsis-end" className="px-2 text-gray-400">...</span>
-                        );
-                      }
-                      pages.push(
-                        <button
-                          key={totalPages}
-                          onClick={() => handlePageChange(totalPages)}
-                          className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
-                        >
-                          {totalPages}
-                        </button>
-                      );
-                    }
-
-                    return pages;
-                  })()}
-
-                  <button
-                    onClick={() => handlePageChange(pagination.currentPage + 1)}
-                    disabled={pagination.currentPage === pagination.totalPages}
-                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
-                      }`}
-                  >
-                    Next ›
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Results Summary */}
-            {paginatedDetailInventory.length > 0 && (
-              <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
-                Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to {Math.min(pagination.currentPage * pagination.itemsPerPage, filteredDetailInventory.length)} of {filteredDetailInventory.length} batches
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Empty State */}
-        {!isLoading && !error && filteredDetailInventory.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
-            <p className="text-gray-500 text-sm">No batch inventory items found</p>
-            {(searchQuery || filterView !== 'all') && (
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setFilterView('all');
-                }}
-                className="mt-2 text-sm text-emerald-600 hover:underline"
-              >
-                Clear filters
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Modals */}
       <StockOutBatchModal
@@ -441,12 +438,13 @@ export const DetailInventories = () => {
         onSuccess={handleMovementSuccess}
         detailInventory={adjustModal.item}
       />
+
       <MovementHistoryBatchModal
         isOpen={historyModal.isOpen}
         onClose={() => setHistoryModal({ isOpen: false, item: null })}
         detailInventory={historyModal.item}
       />
-    </Layout>
+    </div>
   );
 };
 

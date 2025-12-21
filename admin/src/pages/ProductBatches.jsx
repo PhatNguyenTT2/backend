@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Layout } from '../components/Layout';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { ProductBatchListHeader, ProductBatchList } from '../components/ProductBatchList';
 import { BulkDiscountModal } from '../components/ProductBatchList/BulkDiscountModal';
@@ -223,185 +222,183 @@ const ProductBatches = () => {
   };
 
   return (
-    <Layout>
-      <div className="space-y-6">
-        {/* Breadcrumb */}
-        <Breadcrumb items={breadcrumbItems} />
+    <div className="space-y-6">
+      {/* Breadcrumb */}
+      <Breadcrumb items={breadcrumbItems} />
 
-        {/* Product Info Card */}
-        {product && (
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center gap-4">
-              {product.image && (
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="w-20 h-20 object-cover rounded-lg border border-gray-200"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                  }}
-                />
-              )}
-              <div>
-                <h1 className="text-[20px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-                  {product.name}
-                </h1>
-                <p className="text-[13px] text-gray-600 font-['Poppins',sans-serif]">
-                  Product Code: {product.productCode}
-                </p>
-              </div>
-              <button
-                onClick={() => navigate('/products')}
-                className="ml-auto px-4 py-2 text-[13px] font-['Poppins',sans-serif] text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                ← Back to Products
-              </button>
+      {/* Product Info Card */}
+      {product && (
+        <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="flex items-center gap-4">
+            {product.image && (
+              <img
+                src={product.image}
+                alt={product.name}
+                className="w-20 h-20 object-cover rounded-lg border border-gray-200"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
+            )}
+            <div>
+              <h1 className="text-[20px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
+                {product.name}
+              </h1>
+              <p className="text-[13px] text-gray-600 font-['Poppins',sans-serif]">
+                Product Code: {product.productCode}
+              </p>
             </div>
-          </div>
-        )}
-
-        {/* Batch List Header */}
-        <ProductBatchListHeader
-          itemsPerPage={filters.limit}
-          onItemsPerPageChange={handleItemsPerPageChange}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          onSearch={setSearchQuery}
-          statusFilter={filters.status}
-          onStatusFilterChange={handleStatusFilterChange}
-          onAddBatch={handleAddBatch}
-          onConfigureDiscount={handleConfigureDiscount}
-        />
-
-        {/* Bulk Discount Modal */}
-        <BulkDiscountModal
-          isOpen={bulkDiscountModal}
-          onClose={() => setBulkDiscountModal(false)}
-          onSuccess={handleBulkDiscountSuccess}
-          productId={productId}
-          productName={product?.name}
-        />
-
-        {/* Loading State */}
-        {loading && (
-          <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
-          </div>
-        )}
-
-        {/* Error State */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            <p className="font-medium">Error loading batches</p>
-            <p className="text-sm mt-1">{error}</p>
             <button
-              onClick={fetchBatches}
-              className="mt-2 text-sm underline hover:no-underline"
+              onClick={() => navigate('/products')}
+              className="ml-auto px-4 py-2 text-[13px] font-['Poppins',sans-serif] text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
             >
-              Try again
+              ← Back to Products
             </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Batch List Table */}
-        {!loading && !error && (
-          <>
-            <ProductBatchList
-              batches={batches}
-              onSort={handleColumnSort}
-              sortField={sortField}
-              sortOrder={sortOrder}
-              onEdit={handleEditBatch}
-              onDelete={handleDeleteBatch}
-              onUpdateStatus={handleUpdateStatus}
-              addModalOpen={addBatchModal}
-              onCloseAddModal={() => setAddBatchModal(false)}
-              onAddSuccess={handleBatchSuccess}
-              editModalOpen={editBatchModal}
-              editBatch={selectedBatch}
-              onCloseEditModal={() => {
-                setEditBatchModal(false);
-                setSelectedBatch(null);
-              }}
-              onEditSuccess={handleBatchUpdateSuccess}
-              productId={productId}
-            />
+      {/* Batch List Header */}
+      <ProductBatchListHeader
+        itemsPerPage={filters.limit}
+        onItemsPerPageChange={handleItemsPerPageChange}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSearch={setSearchQuery}
+        statusFilter={filters.status}
+        onStatusFilterChange={handleStatusFilterChange}
+        onAddBatch={handleAddBatch}
+        onConfigureDiscount={handleConfigureDiscount}
+      />
 
-            {/* Pagination */}
-            {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-center mt-6">
-                <div className="flex items-center gap-2">
-                  {/* Previous button */}
-                  <button
-                    onClick={() => setFilters({ ...filters, page: pagination.currentPage - 1 })}
-                    disabled={pagination.currentPage === 1}
-                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
-                      }`}
-                  >
-                    ‹ Previous
-                  </button>
+      {/* Bulk Discount Modal */}
+      <BulkDiscountModal
+        isOpen={bulkDiscountModal}
+        onClose={() => setBulkDiscountModal(false)}
+        onSuccess={handleBulkDiscountSuccess}
+        productId={productId}
+        productName={product?.name}
+      />
 
-                  {/* Page numbers */}
-                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                    const page = i + 1;
-                    return (
-                      <button
-                        key={page}
-                        onClick={() => setFilters({ ...filters, page })}
-                        className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === page
-                          ? 'bg-[#3bb77e] text-white'
-                          : 'text-[#3bb77e] hover:bg-[#def9ec]'
-                          }`}
-                      >
-                        {page}
-                      </button>
-                    );
-                  })}
+      {/* Loading State */}
+      {loading && (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        </div>
+      )}
 
-                  {/* Next button */}
-                  <button
-                    onClick={() => setFilters({ ...filters, page: pagination.currentPage + 1 })}
-                    disabled={pagination.currentPage === pagination.totalPages}
-                    className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-[#3bb77e] hover:bg-[#def9ec]'
-                      }`}
-                  >
-                    Next ›
-                  </button>
-                </div>
-              </div>
-            )}
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          <p className="font-medium">Error loading batches</p>
+          <p className="text-sm mt-1">{error}</p>
+          <button
+            onClick={fetchBatches}
+            className="mt-2 text-sm underline hover:no-underline"
+          >
+            Try again
+          </button>
+        </div>
+      )}
 
-            {/* Results Summary */}
-            {batches.length > 0 && (
-              <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
-                Showing {((pagination.currentPage - 1) * pagination.limit) + 1} to{' '}
-                {Math.min(pagination.currentPage * pagination.limit, pagination.total)} of{' '}
-                {pagination.total} batches
-              </div>
-            )}
+      {/* Batch List Table */}
+      {!loading && !error && (
+        <>
+          <ProductBatchList
+            batches={batches}
+            onSort={handleColumnSort}
+            sortField={sortField}
+            sortOrder={sortOrder}
+            onEdit={handleEditBatch}
+            onDelete={handleDeleteBatch}
+            onUpdateStatus={handleUpdateStatus}
+            addModalOpen={addBatchModal}
+            onCloseAddModal={() => setAddBatchModal(false)}
+            onAddSuccess={handleBatchSuccess}
+            editModalOpen={editBatchModal}
+            editBatch={selectedBatch}
+            onCloseEditModal={() => {
+              setEditBatchModal(false);
+              setSelectedBatch(null);
+            }}
+            onEditSuccess={handleBatchUpdateSuccess}
+            productId={productId}
+          />
 
-            {/* Empty State */}
-            {batches.length === 0 && !loading && (
-              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-                <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
-                  No batches found for this product
-                </p>
+          {/* Pagination */}
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center justify-center mt-6">
+              <div className="flex items-center gap-2">
+                {/* Previous button */}
                 <button
-                  onClick={handleAddBatch}
-                  className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-[13px] font-['Poppins',sans-serif]"
+                  onClick={() => setFilters({ ...filters, page: pagination.currentPage - 1 })}
+                  disabled={pagination.currentPage === 1}
+                  className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                    }`}
                 >
-                  Add First Batch
+                  ‹ Previous
+                </button>
+
+                {/* Page numbers */}
+                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                  const page = i + 1;
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => setFilters({ ...filters, page })}
+                      className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === page
+                        ? 'bg-[#3bb77e] text-white'
+                        : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                        }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+
+                {/* Next button */}
+                <button
+                  onClick={() => setFilters({ ...filters, page: pagination.currentPage + 1 })}
+                  disabled={pagination.currentPage === pagination.totalPages}
+                  className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-[#3bb77e] hover:bg-[#def9ec]'
+                    }`}
+                >
+                  Next ›
                 </button>
               </div>
-            )}
-          </>
-        )}
-      </div>
-    </Layout>
+            </div>
+          )}
+
+          {/* Results Summary */}
+          {batches.length > 0 && (
+            <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif] mt-4">
+              Showing {((pagination.currentPage - 1) * pagination.limit) + 1} to{' '}
+              {Math.min(pagination.currentPage * pagination.limit, pagination.total)} of{' '}
+              {pagination.total} batches
+            </div>
+          )}
+
+          {/* Empty State */}
+          {batches.length === 0 && !loading && (
+            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+              <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
+                No batches found for this product
+              </p>
+              <button
+                onClick={handleAddBatch}
+                className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-[13px] font-['Poppins',sans-serif]"
+              >
+                Add First Batch
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 };
 
