@@ -200,13 +200,7 @@ export const MovementHistoryModal = ({ isOpen, onClose, inventory }) => {
 
                       {movement.performedBy && (
                         <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif] mt-2">
-                          By: {movement.performedBy.firstName} {movement.performedBy.lastName}
-                        </p>
-                      )}
-
-                      {movement.purchaseOrderId && (
-                        <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif] mt-1">
-                          PO: {movement.purchaseOrderId.purchaseOrderCode}
+                          By: {movement.performedBy.fullName || movement.performedBy.employeeCode || 'N/A'}
                         </p>
                       )}
                     </div>

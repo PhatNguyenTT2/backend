@@ -290,14 +290,26 @@ detailInventoriesRouter.post('/', userExtractor, async (request, response) => {
   } catch (error) {
     console.error('Create detail inventory error:', error);
 
-    // Handle duplicate detail inventory
-    if (error.code === 11000) {
+    // Handle duplicate batch ID
+    if (error.code === 11000 && error.keyPattern && error.keyPattern.batchId) {
       return response.status(409).json({
         success: false,
         error: {
           message: 'Detail inventory already exists for this batch',
           code: 'DUPLICATE_DETAIL_INVENTORY',
           details: error.message
+        }
+      });
+    }
+
+    // Handle duplicate location error
+    if (error.code === 11000 && error.keyPattern && error.keyPattern.location) {
+      return response.status(409).json({
+        success: false,
+        error: {
+          message: 'This location is already assigned to another batch',
+          code: 'DUPLICATE_LOCATION',
+          details: 'Each warehouse location can only hold one batch at a time'
         }
       });
     }
@@ -403,6 +415,18 @@ detailInventoriesRouter.put('/:id', userExtractor, async (request, response) => 
     });
   } catch (error) {
     console.error('Update detail inventory error:', error);
+
+    // Handle duplicate location error (MongoDB error code 11000)
+    if (error.code === 11000 && error.keyPattern && error.keyPattern.location) {
+      return response.status(409).json({
+        success: false,
+        error: {
+          message: 'This location is already assigned to another batch',
+          code: 'DUPLICATE_LOCATION',
+          details: 'Each warehouse location can only hold one batch at a time'
+        }
+      });
+    }
 
     // Handle validation errors
     if (error.name === 'ValidationError') {

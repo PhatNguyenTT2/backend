@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { DetailInventoryList, DetailInventoryListHeader } from '../components/DetailInventoryList';
+import { DetailInventoryList, DetailInventoryListHeader, UpdateLocationModal } from '../components/DetailInventoryList';
 import {
   StockOutBatchModal,
   AdjustStockBatchModal,
@@ -41,6 +41,7 @@ export const DetailInventories = () => {
   const [adjustModal, setAdjustModal] = useState({ isOpen: false, item: null });
   const [transferModal, setTransferModal] = useState({ isOpen: false, item: null });
   const [historyModal, setHistoryModal] = useState({ isOpen: false, item: null });
+  const [updateLocationModal, setUpdateLocationModal] = useState({ isOpen: false, item: null });
 
   // Breadcrumb items
   const breadcrumbItems = [
@@ -228,8 +229,17 @@ export const DetailInventories = () => {
     setHistoryModal({ isOpen: true, item });
   };
 
+  const handleUpdateLocation = (item) => {
+    setUpdateLocationModal({ isOpen: true, item });
+  };
+
   const handleMovementSuccess = () => {
     fetchDetailInventory();
+  };
+
+  const handleUpdateLocationSuccess = () => {
+    fetchDetailInventory();
+    setUpdateLocationModal({ isOpen: false, item: null });
   };
 
   return (
@@ -302,6 +312,7 @@ export const DetailInventories = () => {
             onViewHistory={handleViewHistory}
             onStockOut={handleStockOut}
             onAdjust={handleAdjust}
+            onUpdateLocation={handleUpdateLocation}
           />
 
           {/* Pagination */}
@@ -443,6 +454,13 @@ export const DetailInventories = () => {
         isOpen={historyModal.isOpen}
         onClose={() => setHistoryModal({ isOpen: false, item: null })}
         detailInventory={historyModal.item}
+      />
+
+      <UpdateLocationModal
+        isOpen={updateLocationModal.isOpen}
+        onClose={() => setUpdateLocationModal({ isOpen: false, item: null })}
+        onSuccess={handleUpdateLocationSuccess}
+        detailInventory={updateLocationModal.item}
       />
     </div>
   );

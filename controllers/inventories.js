@@ -140,8 +140,7 @@ inventoriesRouter.get('/', async (request, response) => {
       const searchRegex = new RegExp(search, 'i');
       filteredInventories = filteredInventories.filter(inv =>
         (inv.product?.name && searchRegex.test(inv.product.name)) ||
-        (inv.product?.productCode && searchRegex.test(inv.product.productCode)) ||
-        (inv.warehouseLocation && searchRegex.test(inv.warehouseLocation))
+        (inv.product?.productCode && searchRegex.test(inv.product.productCode))
       );
     }
 
@@ -285,8 +284,7 @@ inventoriesRouter.post('/', userExtractor, async (request, response) => {
       quantityOnHand,
       quantityReserved,
       quantityOnShelf,
-      reorderPoint,
-      warehouseLocation
+      reorderPoint
     } = request.body;
 
     // Validation
@@ -331,8 +329,7 @@ inventoriesRouter.post('/', userExtractor, async (request, response) => {
       quantityOnHand: quantityOnHand || 0,
       quantityReserved: quantityReserved || 0,
       quantityOnShelf: quantityOnShelf || 0,
-      reorderPoint: reorderPoint || 10,
-      warehouseLocation: warehouseLocation || null
+      reorderPoint: reorderPoint || 10
     });
 
     const savedInventory = await inventory.save();
@@ -405,8 +402,7 @@ inventoriesRouter.put('/:id', userExtractor, async (request, response) => {
       quantityOnHand,
       quantityReserved,
       quantityOnShelf,
-      reorderPoint,
-      warehouseLocation
+      reorderPoint
     } = request.body;
 
     // Find inventory
@@ -427,7 +423,6 @@ inventoriesRouter.put('/:id', userExtractor, async (request, response) => {
     if (quantityReserved !== undefined) inventory.quantityReserved = quantityReserved;
     if (quantityOnShelf !== undefined) inventory.quantityOnShelf = quantityOnShelf;
     if (reorderPoint !== undefined) inventory.reorderPoint = reorderPoint;
-    if (warehouseLocation !== undefined) inventory.warehouseLocation = warehouseLocation;
 
     const updatedInventory = await inventory.save();
 

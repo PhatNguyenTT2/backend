@@ -319,29 +319,44 @@ ordersRouter.post('/', async (request, response) => {
     let customerId = customer;
     let customerDoc = null;
 
-    // If customer is virtual-guest or null, create new guest customer
+    // If customer is virtual-guest or null, find or create ONE shared virtual guest
     if (!customer || customer === 'virtual-guest') {
-      console.log('[Order] Creating new guest customer for virtual guest order...');
+      console.log('[Order] Looking for virtual guest customer (shared for all walk-in orders)...');
 
       try {
-        const guestCustomer = await Customer.create({
-          fullName: 'Khách vãng lai',
+        // Try to find existing virtual guest customer (shared instance)
+        customerDoc = await Customer.findOne({
+          email: 'virtual.guest@pos.system',
           customerType: 'guest'
-          // Other fields will auto-generate (customerCode, etc.)
         });
 
-        customerId = guestCustomer._id;
-        customerDoc = guestCustomer;
+        // If not found, create it ONCE
+        if (!customerDoc) {
+          console.log('[Order] Virtual guest not found, creating shared instance...');
+          customerDoc = await Customer.create({
+            fullName: 'Virtual Guest',
+            email: 'virtual.guest@pos.system',
+            phone: '0000000000',
+            gender: 'other',
+            customerType: 'guest',
+            totalSpent: 0,
+            isActive: true
+          });
+          console.log(`[Order] ✅ Created shared virtual guest: ${customerDoc.customerCode}`);
+        } else {
+          console.log(`[Order] ✅ Using existing virtual guest: ${customerDoc.customerCode}`);
+        }
 
-        console.log(`[Order] ✅ Created guest customer ${guestCustomer.customerCode} for order`);
+        customerId = customerDoc._id;
+
       } catch (error) {
-        console.error('[Order] ❌ Failed to create guest customer:', error);
+        console.error('[Order] ❌ Failed to get/create virtual guest customer:', error);
         return response.status(500).json({
           success: false,
           error: {
-            message: 'Failed to create guest customer',
+            message: 'Failed to get virtual guest customer',
             details: error.message,
-            code: 'GUEST_CUSTOMER_CREATION_FAILED'
+            code: 'GUEST_CUSTOMER_ERROR'
           }
         });
       }

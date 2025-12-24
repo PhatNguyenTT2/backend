@@ -122,7 +122,7 @@ inventoryMovementBatchesRouter.get('/', async (request, response) => {
       })
       .populate({
         path: 'performedBy',
-        select: 'employeeCode firstName lastName'
+        select: 'employeeCode fullName phone'
       })
       .populate({
         path: 'purchaseOrderId',
@@ -193,7 +193,7 @@ inventoryMovementBatchesRouter.get('/:id', async (request, response) => {
       })
       .populate({
         path: 'performedBy',
-        select: 'employeeCode firstName lastName email phone'
+        select: 'employeeCode fullName email phone'
       })
       .populate({
         path: 'purchaseOrderId',
@@ -450,7 +450,7 @@ inventoryMovementBatchesRouter.post('/', userExtractor, async (request, response
       },
       {
         path: 'performedBy',
-        select: 'employeeCode firstName lastName'
+        select: 'employeeCode fullName phone'
       },
       {
         path: 'purchaseOrderId',
@@ -544,7 +544,7 @@ inventoryMovementBatchesRouter.put('/:id', userExtractor, async (request, respon
       },
       {
         path: 'performedBy',
-        select: 'employeeCode firstName lastName'
+        select: 'employeeCode fullName phone'
       },
       {
         path: 'purchaseOrderId',

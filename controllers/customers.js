@@ -500,9 +500,11 @@ customersRouter.put('/:id', userExtractor, async (request, response) => {
 
 /**
  * DELETE /api/customers/:id
- * Delete customer (soft delete by setting isActive to false)
- * Requires authentication
+ * Delete customer with 2 modes:
+ * 1. Soft delete (deactivate): If customer is active → set isActive to false
+ * 2. Hard delete (permanent): If customer is inactive → delete from database
  * 
+ * Requires authentication
  * Note: Cannot delete customer if they have active orders
  */
 customersRouter.delete('/:id', userExtractor, async (request, response) => {
@@ -533,25 +535,64 @@ customersRouter.delete('/:id', userExtractor, async (request, response) => {
           code: 'CUSTOMER_HAS_ACTIVE_ORDERS',
           details: {
             activeOrders,
-            message: 'Please complete or cancel all active orders before deleting, or deactivate the customer instead'
+            message: 'Please complete or cancel all active orders before deleting'
           }
         }
       });
     }
 
-    // Soft delete - set isActive to false instead of actual deletion
-    customer.isActive = false;
-    await customer.save();
+    // LOGIC 1: If customer is ACTIVE → Soft delete (deactivate)
+    if (customer.isActive !== false) {
+      customer.isActive = false;
+      await customer.save();
+
+      return response.json({
+        success: true,
+        message: 'Customer deactivated successfully',
+        action: 'deactivated',
+        data: {
+          id: customer._id,
+          customerCode: customer.customerCode,
+          fullName: customer.fullName,
+          isActive: customer.isActive
+        }
+      });
+    }
+
+    // LOGIC 2: If customer is INACTIVE → Hard delete (permanent removal)
+    // Check if customer has any orders (even completed ones)
+    const totalOrders = await Order.countDocuments({
+      customer: customer._id
+    });
+
+    if (totalOrders > 0) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Cannot permanently delete customer with order history',
+          code: 'CUSTOMER_HAS_ORDERS',
+          details: {
+            totalOrders,
+            message: 'Customer has order history and cannot be permanently deleted for data integrity'
+          }
+        }
+      });
+    }
+
+    // Safe to permanently delete (no orders at all)
+    const deletedCustomer = {
+      id: customer._id,
+      customerCode: customer.customerCode,
+      fullName: customer.fullName
+    };
+
+    await Customer.findByIdAndDelete(request.params.id);
 
     response.json({
       success: true,
-      message: 'Customer deactivated successfully',
-      data: {
-        id: customer._id,
-        customerCode: customer.customerCode,
-        fullName: customer.fullName,
-        isActive: customer.isActive
-      }
+      message: 'Customer permanently deleted',
+      action: 'deleted',
+      data: deletedCustomer
     });
   } catch (error) {
     console.error('Delete customer error:', error);

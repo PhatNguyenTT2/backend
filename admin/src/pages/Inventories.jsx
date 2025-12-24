@@ -192,12 +192,6 @@ export const Inventories = () => {
     alert('Edit inventory settings modal - To be implemented');
   };
 
-  const handleUpdateLocation = (item) => {
-    // TODO: Implement update location modal
-    console.log('Update location:', item);
-    alert('Update location modal - To be implemented');
-  };
-
   const handleViewMovementHistory = (item) => {
     setMovementHistoryModal({ isOpen: true, item });
   };
@@ -257,7 +251,6 @@ export const Inventories = () => {
             sortOrder={sortOrder}
             onViewDetail={handleViewDetail}
             onEdit={handleEdit}
-            onUpdateLocation={handleUpdateLocation}
             onViewMovementHistory={handleViewMovementHistory}
           />
 

@@ -41,12 +41,6 @@ const inventorySchema = new mongoose.Schema({
     type: Number,
     default: 10,
     min: [0, 'Reorder point cannot be negative']
-  },
-
-  warehouseLocation: {
-    type: String,
-    trim: true,
-    default: null
   }
 
 }, {

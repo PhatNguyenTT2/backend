@@ -407,11 +407,13 @@ export const CustomerList = ({ customers = [], onSort, sortField, sortOrder, add
 
               <button
                 onClick={() => {
-                  onDelete ? onDelete(customer) : console.log('Delete customer:', customer.id);
-                  setActiveDropdown(null);
+                  if (customer.isActive === false) {
+                    onDelete ? onDelete(customer) : console.log('Delete customer:', customer.id);
+                    setActiveDropdown(null);
+                  }
                 }}
-                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${customer.isActive !== false ? 'text-gray-400 cursor-not-allowed opacity-50' : 'text-gray-700 hover:bg-red-50 hover:text-red-600'}`}
-                title={customer.isActive !== false ? 'Customer must be deactivated before deletion' : 'Delete customer'}
+                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${customer.isActive === false ? 'text-gray-700 hover:bg-red-50 hover:text-red-600' : 'text-gray-400 cursor-not-allowed opacity-50'}`}
+                title={customer.isActive === false ? 'Delete customer permanently' : 'Customer must be inactive before deletion'}
                 disabled={customer.isActive !== false}
               >
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">

@@ -11,7 +11,8 @@
     "build:ui": "rm -rf dist && cd ../admin && npm run build && cp -r dist ../backend/dist",
     "deploy:full": "npm run build:ui && git add . && git commit -m uibuild && git push",
     "lint": "eslint .",
-    "start:test": "cross-env NODE_ENV=test node --watch index.js"
+    "start:test": "cross-env NODE_ENV=test node --watch index.js",
+    "migrate:location-capacity": "node migrations/add-location-max-capacity.js"
   },
   "dependencies": {
     "axios": "^1.12.2",

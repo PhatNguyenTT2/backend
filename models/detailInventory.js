@@ -42,10 +42,50 @@ const detailInventorySchema = new mongoose.Schema({
   },
 
   location: {
-    type: String,
-    trim: true,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'LocationMaster',
     default: null,
-    maxlength: [100, 'Location must be at most 100 characters']
+    validate: {
+      validator: async function (locationId) {
+        // Allow null (batch not assigned to location yet)
+        if (!locationId) return true;
+
+        // Check if location exists and is active
+        const LocationMaster = mongoose.model('LocationMaster');
+        const location = await LocationMaster.findById(locationId);
+
+        if (!location) return false;
+        if (!location.isActive) return false;
+
+        // Check if location has enough capacity for this batch
+        // Only check on new assignment or location change
+        if (this.isModified('location')) {
+          const batchQuantity = this.totalQuantity || (this.quantityOnHand + this.quantityOnShelf);
+
+          // Get current occupied capacity (excluding this batch if it's already assigned)
+          const DetailInventory = mongoose.model('DetailInventory');
+          const existingBatches = await DetailInventory.find({
+            location: locationId,
+            _id: { $ne: this._id } // Exclude current batch
+          });
+
+          const occupiedCapacity = existingBatches.reduce((total, batch) =>
+            total + (batch.quantityOnHand + batch.quantityOnShelf), 0
+          );
+
+          const availableCapacity = location.maxCapacity - occupiedCapacity;
+
+          if (batchQuantity > availableCapacity) {
+            throw new Error(
+              `Location capacity exceeded. Available: ${availableCapacity}, Required: ${batchQuantity}`
+            );
+          }
+        }
+
+        return true;
+      },
+      message: 'Location validation failed: {VALUE}'
+    }
   }
 
 }, {

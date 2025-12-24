@@ -49,8 +49,8 @@ const Customers = () => {
       const params = {
         page: filters.page,
         limit: filters.per_page,
-        sort: sortField,
-        order: sortOrder
+        sortBy: sortField,
+        sortOrder: sortOrder
       };
 
       // Add search if exists

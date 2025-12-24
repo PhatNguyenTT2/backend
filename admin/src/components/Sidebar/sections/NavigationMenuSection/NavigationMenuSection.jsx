@@ -116,7 +116,8 @@ export const NavigationMenuSection = () => {
           permission: PERMISSIONS.MANAGE_INVENTORY,
           submenu: [
             { name: 'Management', href: '/inventory/management' },
-            { name: 'Purchase Orders', href: '/inventory/purchase-orders' }
+            { name: 'Purchase Orders', href: '/inventory/purchase-orders' },
+            { name: 'Locations', href: '/inventory/locations' }
           ]
         },
         {

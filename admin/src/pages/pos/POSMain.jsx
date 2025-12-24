@@ -1076,7 +1076,7 @@ export const POSMain = () => {
 
     } catch (error) {
       console.error('❌ VNPay complete error:', error);
-      showToast('error', 'Không thể hoàn tất thanh toán');
+      // showToast('error', error.message || 'Thanh toán VNPay thất bại');
     }
   };
 
