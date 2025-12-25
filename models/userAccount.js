@@ -60,8 +60,9 @@ const userAccountSchema = new mongoose.Schema({
     },
     createdAt: {
       type: Date,
-      default: Date.now,
-      expires: 604800 // 7 days (7 * 24 * 60 * 60)
+      default: Date.now
+      // ✅ Removed 'expires' - validate token expiry in application logic instead
+      // Using TTL index here would DELETE the entire UserAccount document after 7 days!
     }
   }],
 

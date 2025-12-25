@@ -272,7 +272,7 @@ export const DetailInventoryList = ({
                   {/* Location */}
                   <div className="flex-1 min-w-[100px] px-3 flex items-center">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {item.location || 'N/A'}
+                      {item.location?.name || item.location || 'N/A'}
                     </p>
                   </div>
 

@@ -83,6 +83,10 @@ detailInventoriesRouter.get('/', async (request, response) => {
           }
         }
       })
+      .populate({
+        path: 'location',
+        select: 'locationCode name maxCapacity isActive'
+      })
       .skip(skip)
       .limit(parseInt(limit))
       .sort({ createdAt: -1 });
@@ -178,6 +182,10 @@ detailInventoriesRouter.get('/:id', async (request, response) => {
             select: 'name categoryCode'
           }
         }
+      })
+      .populate({
+        path: 'location',
+        select: 'locationCode name maxCapacity isActive'
       });
 
     if (!detailInventory) {

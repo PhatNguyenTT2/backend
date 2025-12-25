@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { AddLocationModal, EditLocationModal, WarehouseMapBuilder, WarehouseMapView } from '../components/Location';
+import { AddLocationModal, EditLocationModal, WarehouseMapBuilder, EditWarehouseMapModal, WarehouseMapView } from '../components/Location';
 import locationService from '../services/locationService';
 
 export const Locations = () => {
@@ -16,6 +16,7 @@ export const Locations = () => {
   // Modals
   const [addModal, setAddModal] = useState(false);
   const [mapBuilderModal, setMapBuilderModal] = useState(false);
+  const [editMapModal, setEditMapModal] = useState(false);
   const [editModal, setEditModal] = useState({ isOpen: false, location: null });
 
   // Breadcrumb
@@ -143,6 +144,12 @@ export const Locations = () => {
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setEditMapModal(true)}
+            className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-sm font-medium"
+          >
+            Edit Map
+          </button>
+          <button
             onClick={() => setMapBuilderModal(true)}
             className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
           >
@@ -174,6 +181,12 @@ export const Locations = () => {
       <WarehouseMapBuilder
         isOpen={mapBuilderModal}
         onClose={() => setMapBuilderModal(false)}
+        onSuccess={fetchLocations}
+      />
+
+      <EditWarehouseMapModal
+        isOpen={editMapModal}
+        onClose={() => setEditMapModal(false)}
         onSuccess={fetchLocations}
       />
 

@@ -12,6 +12,7 @@ export const EditLocationModal = ({ isOpen, onClose, onSuccess, location }) => {
 
   useEffect(() => {
     if (location && isOpen) {
+      console.log('EditLocationModal opened with location:', location);
       setFormData({
         name: location.name || '',
         maxCapacity: location.maxCapacity || 100,
@@ -34,13 +35,18 @@ export const EditLocationModal = ({ isOpen, onClose, onSuccess, location }) => {
 
     try {
       const locationService = (await import('../../services/locationService')).default;
-      await locationService.updateLocation(location.id, formData);
+      const result = await locationService.updateLocation(location.id, formData);
+
+      console.log('Location updated successfully:', result);
+      alert('Location updated successfully!');
 
       if (onSuccess) onSuccess();
       if (onClose) onClose();
     } catch (err) {
       console.error('Error updating location:', err);
-      setError(err.response?.data?.error || 'Failed to update location');
+      const errorMessage = err.response?.data?.error || 'Failed to update location';
+      setError(errorMessage);
+      alert('❌ Error: ' + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -57,8 +63,8 @@ export const EditLocationModal = ({ isOpen, onClose, onSuccess, location }) => {
   const batchCount = location.currentBatches?.length || 0;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100]">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>

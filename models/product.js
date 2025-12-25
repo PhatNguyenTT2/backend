@@ -197,8 +197,11 @@ productSchema.set('toJSON', {
   virtuals: true,
   getters: true,
   transform: (document, returnedObject) => {
-    returnedObject.id = returnedObject._id.toString();
-    delete returnedObject._id;
+    // Safety check for _id
+    if (returnedObject._id) {
+      returnedObject.id = returnedObject._id.toString();
+      delete returnedObject._id;
+    }
     delete returnedObject.__v;
 
     // Convert Decimal128 to number

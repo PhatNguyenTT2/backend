@@ -42,10 +42,10 @@ locationMastersRouter.get('/', async (request, response) => {
     const locations = await LocationMaster.find(filter)
       .populate({
         path: 'currentBatches',
-        select: 'batchId quantityOnHand quantityOnShelf',
+        select: 'batchId quantityOnHand quantityOnShelf quantityReserved quantityAvailable',
         populate: {
           path: 'batchId',
-          select: 'batchCode product',
+          select: 'batchCode product expiryDate quantity',
           populate: {
             path: 'product',
             select: 'name productCode'
@@ -97,9 +97,10 @@ locationMastersRouter.get('/occupied', async (request, response) => {
     const allLocations = await LocationMaster.find()
       .populate({
         path: 'currentBatches',
+        select: 'batchId quantityOnHand quantityOnShelf quantityReserved quantityAvailable',
         populate: {
           path: 'batchId',
-          select: 'batchCode product expirationDate',
+          select: 'batchCode product expiryDate quantity',
           populate: {
             path: 'product',
             select: 'name productCode'
@@ -131,8 +132,10 @@ locationMastersRouter.get('/:id', async (request, response) => {
     const location = await LocationMaster.findById(request.params.id)
       .populate({
         path: 'currentBatches',
+        select: 'batchId quantityOnHand quantityOnShelf quantityReserved quantityAvailable',
         populate: {
           path: 'batchId',
+          select: 'batchCode product expiryDate quantity',
           populate: {
             path: 'product',
             select: 'name productCode'
@@ -220,7 +223,7 @@ locationMastersRouter.post('/', userExtractor, async (request, response) => {
  */
 locationMastersRouter.put('/:id', userExtractor, async (request, response) => {
   try {
-    const { name, isActive } = request.body;
+    const { name, isActive, maxCapacity } = request.body;
 
     // Find location
     const location = await LocationMaster.findById(request.params.id);
@@ -248,12 +251,13 @@ locationMastersRouter.put('/:id', userExtractor, async (request, response) => {
     // Update fields
     if (name !== undefined) location.name = name.trim();
     if (isActive !== undefined) location.isActive = isActive;
+    if (maxCapacity !== undefined) location.maxCapacity = maxCapacity;
 
     const updatedLocation = await location.save();
 
     // Populate for response
     await updatedLocation.populate({
-      path: 'currentBatch',
+      path: 'currentBatches',
       populate: {
         path: 'batchId',
         populate: {
