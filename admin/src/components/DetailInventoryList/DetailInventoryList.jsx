@@ -46,16 +46,50 @@ export const DetailInventoryList = ({
     }
   };
 
-  // Toggle dropdown
+  // Toggle dropdown with auto-position adjustment
   const toggleDropdown = (dropdownId, event) => {
     if (activeDropdown === dropdownId) {
       setActiveDropdown(null);
     } else {
       const buttonRect = event.currentTarget.getBoundingClientRect();
-      const leftPosition = buttonRect.right - 160;
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+
+      // Dropdown dimensions
+      const dropdownHeight = 130; // Height for 3 menu items
+      const dropdownWidth = 192; // w-48 = 12rem = 192px
+
+      // Check if dropdown fits below button
+      const spaceBelow = viewportHeight - buttonRect.bottom;
+      const spaceAbove = buttonRect.top;
+      const fitsBelow = spaceBelow >= dropdownHeight;
+
+      // Check if dropdown fits on the right side
+      const spaceRight = viewportWidth - buttonRect.right;
+      const fitsRight = spaceRight >= dropdownWidth;
+
+      // Calculate vertical position
+      let topPosition;
+      if (fitsBelow) {
+        topPosition = buttonRect.bottom + 8;
+      } else if (spaceAbove >= dropdownHeight) {
+        topPosition = buttonRect.top - dropdownHeight - 8;
+      } else {
+        // Not enough space either way, position with max visibility
+        topPosition = Math.max(10, Math.min(buttonRect.bottom + 8, viewportHeight - dropdownHeight - 10));
+      }
+
+      // Calculate horizontal position
+      let leftPosition;
+      if (fitsRight) {
+        leftPosition = buttonRect.right - dropdownWidth;
+      } else {
+        // Align to right edge with padding
+        leftPosition = Math.max(10, viewportWidth - dropdownWidth - 10);
+      }
 
       setDropdownPosition({
-        top: buttonRect.bottom + 4,
+        top: topPosition,
         left: leftPosition
       });
       setActiveDropdown(dropdownId);
@@ -364,24 +398,6 @@ export const DetailInventoryList = ({
               </svg>
               Adjust Stock
             </button>
-
-            {/* Stock Out */}
-            <button
-              onClick={() => {
-                if (onStockOut) {
-                  onStockOut(item);
-                }
-                setActiveDropdown(null);
-              }}
-              className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center gap-2"
-            >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 4V12M8 12L5 9M8 12L11 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M2 4H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Stock Out
-            </button>
-
             <div className="border-t border-gray-200 my-1"></div>
 
             {/* Update Location */}

@@ -1,9 +1,8 @@
 const mongoose = require('mongoose');
 
 /**
- * StockOutOrder Model
- * Manages stock-out orders (warehouse to shelf transfers)
- * Main function: Move products from warehouse to shelf for sales
+ * StockOutOrder Model (Stock Out - SO)
+ * Manages outbound inventory movements
  * References: Employee (many-to-one)
  * Related: DetailStockOutOrder (one-to-many)
  */
@@ -23,71 +22,34 @@ const stockOutOrderSchema = new mongoose.Schema({
     required: [true, 'Order date is required']
   },
 
-  expectedDeliveryDate: {
+  completedDate: {
     type: Date,
-    default: null,
-    validate: {
-      validator: function (value) {
-        if (!value) return true;
-        return value >= this.orderDate;
-      },
-      message: 'Expected delivery date must be after order date'
-    }
+    default: null
   },
 
-  shippingFee: {
-    type: mongoose.Schema.Types.Decimal128,
-    default: 0,
-    min: [0, 'Shipping fee cannot be negative'],
-    get: function (value) {
-      if (value) {
-        return parseFloat(value.toString());
-      }
-      return 0;
-    }
+  reason: {
+    type: String,
+    enum: {
+      values: ['sales', 'transfer', 'damage', 'expired', 'return_to_supplier', 'internal_use', 'other'],
+      message: '{VALUE} is not a valid reason'
+    },
+    required: [true, 'Reason is required'],
+    default: 'sales'
   },
 
-  discountPercentage: {
-    type: mongoose.Schema.Types.Decimal128,
-    default: 0,
-    min: [0, 'Discount percentage cannot be negative'],
-    max: [100, 'Discount percentage cannot exceed 100'],
-    get: function (value) {
-      if (value) {
-        return parseFloat(value.toString());
-      }
-      return 0;
-    }
-  },
-
-  totalPrice: {
-    type: mongoose.Schema.Types.Decimal128,
-    default: 0,
-    min: [0, 'Total price cannot be negative'],
-    get: function (value) {
-      if (value) {
-        return parseFloat(value.toString());
-      }
-      return 0;
-    }
+  destination: {
+    type: String,
+    trim: true,
+    maxlength: [200, 'Destination must be at most 200 characters']
   },
 
   status: {
     type: String,
     enum: {
-      values: ['pending', 'processing', 'completed', 'cancelled'],
+      values: ['draft', 'pending', 'approved', 'completed', 'cancelled'],
       message: '{VALUE} is not a valid status'
     },
-    default: 'pending'
-  },
-
-  paymentStatus: {
-    type: String,
-    enum: {
-      values: ['unpaid', 'partial', 'paid'],
-      message: '{VALUE} is not a valid payment status'
-    },
-    default: 'unpaid'
+    default: 'draft'
   },
 
   notes: {
@@ -98,19 +60,20 @@ const stockOutOrderSchema = new mongoose.Schema({
 
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Employee'
+    ref: 'Employee',
+    required: [true, 'Created by is required']
   }
 
 }, {
   timestamps: true,
-  toJSON: { virtuals: true, getters: true },
-  toObject: { virtuals: true, getters: true }
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
 });
 
 // ============ INDEXES ============
 stockOutOrderSchema.index({ soNumber: 1 });
 stockOutOrderSchema.index({ status: 1 });
-stockOutOrderSchema.index({ paymentStatus: 1 });
+stockOutOrderSchema.index({ reason: 1 });
 stockOutOrderSchema.index({ orderDate: -1 });
 stockOutOrderSchema.index({ createdBy: 1 });
 
@@ -122,60 +85,30 @@ stockOutOrderSchema.virtual('details', {
   foreignField: 'stockOutOrder'
 });
 
-// Virtual: Calculate subtotal from details (when populated)
-stockOutOrderSchema.virtual('subtotal').get(function () {
-  if (this.details && Array.isArray(this.details)) {
-    return this.details.reduce((sum, detail) => {
-      const price = detail.unitPrice || 0;
-      const quantity = detail.quantity || 0;
-      return sum + (price * quantity);
-    }, 0);
-  }
-  return 0;
-});
-
-// Virtual: Calculate discount amount
-stockOutOrderSchema.virtual('discountAmount').get(function () {
-  const subtotal = this.subtotal || 0;
-  const discountPercent = this.discountPercentage || 0;
-  return parseFloat((subtotal * (discountPercent / 100)).toFixed(2));
-});
-
-// Virtual: Check if order is overdue
-stockOutOrderSchema.virtual('isOverdue').get(function () {
-  if (!this.expectedDeliveryDate) return false;
-  if (this.status === 'completed' || this.status === 'cancelled') return false;
-  return new Date() > this.expectedDeliveryDate;
-});
-
-// Virtual: Days until delivery
-stockOutOrderSchema.virtual('daysUntilDelivery').get(function () {
-  if (!this.expectedDeliveryDate) return null;
-  if (this.status === 'completed' || this.status === 'cancelled') return null;
-  const today = new Date();
-  const expected = new Date(this.expectedDeliveryDate);
-  const diffTime = expected - today;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
-});
-
-// Virtual: Check if order is in progress
-stockOutOrderSchema.virtual('isInProgress').get(function () {
-  return this.status === 'processing';
+// Virtual: Count of items (when details populated)
+stockOutOrderSchema.virtual('itemCount').get(function () {
+  return this.details ? this.details.length : 0;
 });
 
 // ============ MIDDLEWARE ============
-// Auto-generate SO number before saving
+/**
+ * Pre-save hook: Auto-generate soNumber
+ * Format: SO[YEAR][SEQUENCE]
+ * Example: SO2025000001
+ */
 stockOutOrderSchema.pre('save', async function (next) {
-  if (!this.soNumber) {
+  if (this.isNew && !this.soNumber) {
     try {
+      const StockOutOrder = mongoose.model('StockOutOrder');
       const currentYear = new Date().getFullYear();
 
       // Find the last SO number for the current year
-      const lastSO = await this.constructor
-        .findOne({ soNumber: new RegExp(`^SO${currentYear}`) })
+      const lastSO = await StockOutOrder
+        .findOne(
+          { soNumber: new RegExp(`^SO${currentYear}`) },
+          { soNumber: 1 }
+        )
         .sort({ soNumber: -1 })
-        .select('soNumber')
         .lean();
 
       let sequenceNumber = 1;
@@ -184,18 +117,67 @@ stockOutOrderSchema.pre('save', async function (next) {
         // Extract the sequence number from the last SO number
         const match = lastSO.soNumber.match(/\d{6}$/);
         if (match) {
-          sequenceNumber = parseInt(match[0]) + 1;
+          sequenceNumber = parseInt(match[0], 10) + 1;
         }
       }
 
-      // Generate new SO number with 6-digit padding
+      // Generate new SO number: SO + YEAR + 6-digit sequence
       this.soNumber = `SO${currentYear}${String(sequenceNumber).padStart(6, '0')}`;
     } catch (error) {
       return next(error);
     }
   }
+
+  // Set completedDate when status changes to completed
+  if (this.isModified('status') && this.status === 'completed' && !this.completedDate) {
+    this.completedDate = new Date();
+  }
+
   next();
 });
+
+// ============ INSTANCE METHODS ============
+/**
+ * Check if SO can be submitted (move from draft to pending)
+ */
+stockOutOrderSchema.methods.canSubmit = function () {
+  return this.status === 'draft';
+};
+
+/**
+ * Check if SO can be approved
+ */
+stockOutOrderSchema.methods.canApprove = function () {
+  return this.status === 'pending';
+};
+
+/**
+ * Check if SO can be completed (only from approved status)
+ */
+stockOutOrderSchema.methods.canComplete = function () {
+  return this.status === 'approved';
+};
+
+/**
+ * Check if SO can be cancelled
+ */
+stockOutOrderSchema.methods.canCancel = function () {
+  return ['draft', 'pending', 'approved'].includes(this.status);
+};
+
+/**
+ * Check if SO can be edited
+ */
+stockOutOrderSchema.methods.canEdit = function () {
+  return ['draft', 'pending'].includes(this.status);
+};
+
+/**
+ * Check if SO can be deleted
+ */
+stockOutOrderSchema.methods.canDelete = function () {
+  return this.status === 'draft';
+};
 
 // ============ JSON TRANSFORMATION ============
 stockOutOrderSchema.set('toJSON', {
@@ -203,17 +185,6 @@ stockOutOrderSchema.set('toJSON', {
     returnedObject.id = returnedObject._id.toString();
     delete returnedObject._id;
     delete returnedObject.__v;
-
-    // Convert Decimal128 to number
-    if (returnedObject.shippingFee && typeof returnedObject.shippingFee === 'object') {
-      returnedObject.shippingFee = parseFloat(returnedObject.shippingFee.toString());
-    }
-    if (returnedObject.discountPercentage && typeof returnedObject.discountPercentage === 'object') {
-      returnedObject.discountPercentage = parseFloat(returnedObject.discountPercentage.toString());
-    }
-    if (returnedObject.totalPrice && typeof returnedObject.totalPrice === 'object') {
-      returnedObject.totalPrice = parseFloat(returnedObject.totalPrice.toString());
-    }
   }
 });
 

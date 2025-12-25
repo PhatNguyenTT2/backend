@@ -19,7 +19,7 @@ const detailStockOutOrderSchema = new mongoose.Schema({
     required: [true, 'Product is required']
   },
 
-  batch: {
+  batchId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ProductBatch',
     required: [true, 'Batch is required']
@@ -53,6 +53,12 @@ const detailStockOutOrderSchema = new mongoose.Schema({
       }
       return 0;
     }
+  },
+
+  notes: {
+    type: String,
+    trim: true,
+    maxlength: [500, 'Notes must be at most 500 characters']
   }
 
 }, {
@@ -64,7 +70,7 @@ const detailStockOutOrderSchema = new mongoose.Schema({
 // ============ INDEXES ============
 detailStockOutOrderSchema.index({ stockOutOrder: 1 });
 detailStockOutOrderSchema.index({ product: 1 });
-detailStockOutOrderSchema.index({ batch: 1 });
+detailStockOutOrderSchema.index({ batchId: 1 });
 detailStockOutOrderSchema.index({ stockOutOrder: 1, product: 1 });
 
 // ============ VIRTUALS ============
@@ -78,78 +84,12 @@ detailStockOutOrderSchema.virtual('calculatedTotal').get(function () {
 // ============ MIDDLEWARE ============
 // Pre-save: Calculate total before saving
 detailStockOutOrderSchema.pre('save', function (next) {
-  // Auto-calculate total from quantity * unitPrice
-  this.total = this.quantity * parseFloat(this.unitPrice.toString());
+  // Auto-calculate total = quantity × unitPrice
+  const qty = this.quantity || 0;
+  const price = this.unitPrice ? parseFloat(this.unitPrice.toString()) : 0;
+  this.total = qty * price;
   next();
 });
-
-// Post-save: Update StockOutOrder totalPrice
-detailStockOutOrderSchema.post('save', async function (doc) {
-  try {
-    await updateStockOutOrderTotal(doc.stockOutOrder);
-  } catch (error) {
-    console.error('Error updating StockOutOrder totalPrice:', error);
-  }
-});
-
-// Post-remove: Update StockOutOrder totalPrice after deletion
-detailStockOutOrderSchema.post('remove', async function (doc) {
-  try {
-    await updateStockOutOrderTotal(doc.stockOutOrder);
-  } catch (error) {
-    console.error('Error updating StockOutOrder totalPrice:', error);
-  }
-});
-
-// Post-findOneAndDelete: Update StockOutOrder totalPrice after deletion
-detailStockOutOrderSchema.post('findOneAndDelete', async function (doc) {
-  if (doc) {
-    try {
-      await updateStockOutOrderTotal(doc.stockOutOrder);
-    } catch (error) {
-      console.error('Error updating StockOutOrder totalPrice:', error);
-    }
-  }
-});
-
-// Helper function to update StockOutOrder totalPrice
-async function updateStockOutOrderTotal(stockOutOrderId) {
-  const StockOutOrder = mongoose.model('StockOutOrder');
-  const DetailStockOutOrder = mongoose.model('DetailStockOutOrder');
-
-  try {
-    // Calculate subtotal from all details
-    const details = await DetailStockOutOrder.find({
-      stockOutOrder: stockOutOrderId
-    }).lean();
-
-    const subtotal = details.reduce((sum, detail) => {
-      const total = detail.total ? parseFloat(detail.total.toString()) : 0;
-      return sum + total;
-    }, 0);
-
-    // Get stock-out order to apply shipping and discount
-    const so = await StockOutOrder.findById(stockOutOrderId);
-
-    if (so) {
-      const shippingFee = so.shippingFee ? parseFloat(so.shippingFee.toString()) : 0;
-      const discountPercentage = so.discountPercentage ? parseFloat(so.discountPercentage.toString()) : 0;
-
-      // Calculate discount amount
-      const discountAmount = subtotal * (discountPercentage / 100);
-
-      // Calculate total: subtotal - discount + shipping
-      const totalPrice = subtotal - discountAmount + shippingFee;
-
-      // Update StockOutOrder
-      so.totalPrice = totalPrice;
-      await so.save();
-    }
-  } catch (error) {
-    console.error('Error in updateStockOutOrderTotal:', error);
-    throw error;
-  }
-}
 
 // ============ JSON TRANSFORMATION ============
 detailStockOutOrderSchema.set('toJSON', {

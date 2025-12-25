@@ -9,6 +9,7 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
   const [formData, setFormData] = useState({
     quantity: '',
     adjustmentType: 'increase',
+    targetLocation: 'onHand', // 'onHand' or 'onShelf'
     reason: '',
     date: new Date().toISOString().split('T')[0],
     performedBy: '',
@@ -24,6 +25,7 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
       setFormData({
         quantity: '',
         adjustmentType: 'increase',
+        targetLocation: 'onHand',
         reason: '',
         date: new Date().toISOString().split('T')[0],
         performedBy: '',
@@ -70,9 +72,13 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
 
     // For decrease, check if there's enough stock
     if (formData.adjustmentType === 'decrease') {
-      const totalQty = (detailInventory?.quantityOnHand || 0) + (detailInventory?.quantityOnShelf || 0);
-      if (quantity > totalQty) {
-        setError(`Insufficient stock for decrease. Total available: ${totalQty}`);
+      const targetQty = formData.targetLocation === 'onHand'
+        ? (detailInventory?.quantityOnHand || 0)
+        : (detailInventory?.quantityOnShelf || 0);
+
+      if (quantity > targetQty) {
+        const locationName = formData.targetLocation === 'onHand' ? 'On Hand' : 'On Shelf';
+        setError(`Insufficient stock for decrease. ${locationName}: ${targetQty}`);
         return;
       }
     }
@@ -89,6 +95,7 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
         inventoryDetail: detailInventoryId,
         movementType: 'adjustment',
         quantity: formData.adjustmentType === 'increase' ? quantity : -quantity,
+        targetLocation: formData.targetLocation, // 'onHand' or 'onShelf'
         reason: formData.reason,
         date: new Date(formData.date),
         performedBy: formData.performedBy || undefined,
@@ -160,6 +167,23 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
 
             <div>
               <label className="block text-[13px] font-semibold text-[#212529] mb-2">
+                Target Location <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.targetLocation}
+                onChange={(e) => setFormData({ ...formData, targetLocation: e.target.value })}
+                required
+                className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="onHand">On Hand (Warehouse)</option>
+                <option value="onShelf">On Shelf (Display)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[13px] font-semibold text-[#212529] mb-2">
                 Quantity <span className="text-red-500">*</span>
               </label>
               <input
@@ -170,20 +194,26 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
                 required
                 className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
+              <p className="text-[11px] text-gray-600 mt-1">
+                Current {formData.targetLocation === 'onHand' ? 'On Hand' : 'On Shelf'}: {' '}
+                {formData.targetLocation === 'onHand'
+                  ? (detailInventory?.quantityOnHand || 0)
+                  : (detailInventory?.quantityOnShelf || 0)} units
+              </p>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-[13px] font-semibold text-[#212529] mb-2">
-              Date <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="date"
-              value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              required
-              className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
+            <div>
+              <label className="block text-[13px] font-semibold text-[#212529] mb-2">
+                Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                required
+                className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-orange-500"
+              />
+            </div>
           </div>
 
           <div>

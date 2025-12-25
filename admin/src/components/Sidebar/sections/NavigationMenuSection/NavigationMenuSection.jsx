@@ -117,6 +117,7 @@ export const NavigationMenuSection = () => {
           submenu: [
             { name: 'Management', href: '/inventory/management' },
             { name: 'Purchase Orders', href: '/inventory/purchase-orders' },
+            { name: 'Stock Outs', href: '/inventory/stock-outs' },
             { name: 'Locations', href: '/inventory/locations' }
           ]
         },

@@ -12,6 +12,7 @@ export { default as Suppliers } from "./Suppliers";
 export { default as PurchaseOrders } from "./PurchaseOrders";
 export { default as Inventories } from "./Inventories";
 export { default as DetailInventories } from "./DetailInventories";
+export { StockOuts } from "./StockOuts";
 export { default as POSManagement } from "./POSManagement";
 export { default as Settings } from "./Settings";
 export { default as NoAccess } from "./NoAccess";

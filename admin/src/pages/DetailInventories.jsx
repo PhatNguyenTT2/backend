@@ -3,10 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { DetailInventoryList, DetailInventoryListHeader, UpdateLocationModal } from '../components/DetailInventoryList';
 import {
-  StockOutBatchModal,
   AdjustStockBatchModal,
   MovementHistoryBatchModal
 } from '../components/DetailInventoryList/BatchMovementModals';
+// StockOutBatchModal removed - now using CreateStockOutOrderModal at Inventory level
 import detailInventoryService from '../services/detailInventoryService';
 import productService from '../services/productService';
 
@@ -37,7 +37,7 @@ export const DetailInventories = () => {
 
   // Modals state
   const [stockInModal, setStockInModal] = useState({ isOpen: false, item: null });
-  const [stockOutModal, setStockOutModal] = useState({ isOpen: false, item: null });
+  // stockOutModal removed - use CreateStockOutOrderModal at Inventory level instead
   const [adjustModal, setAdjustModal] = useState({ isOpen: false, item: null });
   const [transferModal, setTransferModal] = useState({ isOpen: false, item: null });
   const [historyModal, setHistoryModal] = useState({ isOpen: false, item: null });
@@ -213,8 +213,10 @@ export const DetailInventories = () => {
     setStockInModal({ isOpen: true, item });
   };
 
+  // handleStockOut removed - redirect to Inventory page to create StockOutOrder
   const handleStockOut = (item) => {
-    setStockOutModal({ isOpen: true, item });
+    alert('Please use "Create Stock Out" button on the Inventory Management page to create a stock out order with multiple batches.');
+    navigate('/inventory/management');
   };
 
   const handleAdjust = (item) => {
@@ -436,12 +438,7 @@ export const DetailInventories = () => {
       )}
 
       {/* Modals */}
-      <StockOutBatchModal
-        isOpen={stockOutModal.isOpen}
-        onClose={() => setStockOutModal({ isOpen: false, item: null })}
-        onSuccess={handleMovementSuccess}
-        detailInventory={stockOutModal.item}
-      />
+      {/* StockOutBatchModal removed - use CreateStockOutOrderModal at Inventory level */}
 
       <AdjustStockBatchModal
         isOpen={adjustModal.isOpen}
