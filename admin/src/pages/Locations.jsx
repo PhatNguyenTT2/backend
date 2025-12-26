@@ -31,6 +31,30 @@ export const Locations = () => {
     fetchLocations();
   }, []);
 
+  // Auto-refresh when window/tab becomes visible again
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchLocations();
+      }
+    };
+
+    const handleWindowFocus = () => {
+      fetchLocations();
+    };
+
+    // Listen for visibility changes (tab switching)
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Listen for window focus (switching between windows)
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, []);
+
   // Apply filters
   useEffect(() => {
     let result = [...locations];
@@ -175,6 +199,7 @@ export const Locations = () => {
       <WarehouseMapView
         locations={filteredLocations}
         onLocationClick={handleEdit}
+        onRefresh={fetchLocations}
       />
 
       {/* Modals */}

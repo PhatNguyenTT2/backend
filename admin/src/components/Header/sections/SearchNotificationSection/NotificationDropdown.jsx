@@ -37,17 +37,13 @@ export const NotificationDropdown = () => {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      console.log('🔔 NotificationDropdown: Fetching all notifications...');
       const response = await notificationService.getAllNotifications();
-      console.log('📊 NotificationDropdown: Response:', response);
       if (response.success) {
-        console.log('✅ Notifications:', response.data.notifications.length);
-        console.log('✅ Counts:', response.data.counts);
         setNotifications(response.data.notifications);
         setCounts(response.data.counts);
       }
     } catch (error) {
-      console.error('❌ Error fetching notifications:', error);
+      console.error('Error fetching notifications:', error);
     } finally {
       setLoading(false);
     }

@@ -196,7 +196,7 @@ export const MovementHistoryBatchModal = ({ isOpen, onClose, detailInventory }) 
 
                       {movement.performedBy && (
                         <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif] mt-2">
-                          By: {movement.performedBy.firstName} {movement.performedBy.lastName}
+                          By: {movement.performedBy.fullName || movement.performedBy.employeeCode || 'N/A'}
                         </p>
                       )}
 

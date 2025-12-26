@@ -35,6 +35,15 @@ export const EditWarehouseMapModal = ({ isOpen, onClose, onSuccess }) => {
         groups[blockName].push(loc);
       });
 
+      // Sort locations within each block by number
+      Object.keys(groups).forEach(blockName => {
+        groups[blockName].sort((a, b) => {
+          const numA = parseInt(a.name.split('-')[1]) || 0;
+          const numB = parseInt(b.name.split('-')[1]) || 0;
+          return numA - numB;
+        });
+      });
+
       setBlockGroups(groups);
 
       // Load column gaps from localStorage

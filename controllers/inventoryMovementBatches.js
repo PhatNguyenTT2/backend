@@ -244,6 +244,7 @@ inventoryMovementBatchesRouter.post('/', userExtractor, async (request, response
       inventoryDetail,
       movementType,
       quantity,
+      targetLocation,
       reason,
       date,
       performedBy,
@@ -361,16 +362,44 @@ inventoryMovementBatchesRouter.post('/', userExtractor, async (request, response
 
       case 'adjustment':
         // Adjustment can be positive or negative
-        if (quantity > 0) {
-          existingDetailInventory.quantityOnHand += quantity;
-        } else {
-          const adjustQuantity = Math.abs(quantity);
-          if (existingDetailInventory.quantityOnHand >= adjustQuantity) {
-            existingDetailInventory.quantityOnHand -= adjustQuantity;
+        // Target location determines which field to adjust (onHand or onShelf)
+        const target = targetLocation || 'onHand';
+
+        if (target === 'onHand') {
+          // Adjust warehouse quantity
+          if (quantity > 0) {
+            existingDetailInventory.quantityOnHand += quantity;
           } else {
-            const remaining = adjustQuantity - existingDetailInventory.quantityOnHand;
-            existingDetailInventory.quantityOnHand = 0;
-            existingDetailInventory.quantityOnShelf = Math.max(0, existingDetailInventory.quantityOnShelf - remaining);
+            const adjustQuantity = Math.abs(quantity);
+            if (existingDetailInventory.quantityOnHand >= adjustQuantity) {
+              existingDetailInventory.quantityOnHand -= adjustQuantity;
+            } else {
+              return response.status(400).json({
+                success: false,
+                error: {
+                  message: 'Insufficient warehouse stock for adjustment',
+                  code: 'INSUFFICIENT_WAREHOUSE_STOCK'
+                }
+              });
+            }
+          }
+        } else if (target === 'onShelf') {
+          // Adjust shelf quantity
+          if (quantity > 0) {
+            existingDetailInventory.quantityOnShelf += quantity;
+          } else {
+            const adjustQuantity = Math.abs(quantity);
+            if (existingDetailInventory.quantityOnShelf >= adjustQuantity) {
+              existingDetailInventory.quantityOnShelf -= adjustQuantity;
+            } else {
+              return response.status(400).json({
+                success: false,
+                error: {
+                  message: 'Insufficient shelf stock for adjustment',
+                  code: 'INSUFFICIENT_SHELF_STOCK'
+                }
+              });
+            }
           }
         }
         break;

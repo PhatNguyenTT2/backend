@@ -83,7 +83,7 @@ detailStockOutOrdersRouter.get('/', async (request, response) => {
     if (withStockOutOrder === 'true') {
       query = query.populate({
         path: 'stockOutOrder',
-        select: 'woNumber orderDate status reason destination createdBy',
+        select: 'soNumber orderDate status reason destination createdBy',
         populate: {
           path: 'createdBy',
           select: 'fullName employeeCode'
@@ -134,7 +134,7 @@ detailStockOutOrdersRouter.get('/:id', async (request, response) => {
     const detailStockOutOrder = await DetailStockOutOrder.findById(request.params.id)
       .populate({
         path: 'stockOutOrder',
-        select: 'woNumber orderDate status reason destination',
+        select: 'soNumber orderDate status reason destination',
         populate: {
           path: 'createdBy',
           select: 'fullName employeeCode'
@@ -259,7 +259,7 @@ detailStockOutOrdersRouter.post('/', userExtractor, async (request, response) =>
     await savedDetail.populate([
       {
         path: 'stockOutOrder',
-        select: 'woNumber orderDate status'
+        select: 'soNumber orderDate status'
       },
       {
         path: 'product',
@@ -344,7 +344,7 @@ detailStockOutOrdersRouter.put('/:id', userExtractor, async (request, response) 
     await updatedDetail.populate([
       {
         path: 'stockOutOrder',
-        select: 'woNumber orderDate status'
+        select: 'soNumber orderDate status'
       },
       {
         path: 'product',

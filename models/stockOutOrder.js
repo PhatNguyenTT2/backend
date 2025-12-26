@@ -46,7 +46,7 @@ const stockOutOrderSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: {
-      values: ['draft', 'pending', 'approved', 'completed', 'cancelled'],
+      values: ['draft', 'pending', 'completed', 'cancelled'],
       message: '{VALUE} is not a valid status'
     },
     default: 'draft'
@@ -58,6 +58,18 @@ const stockOutOrderSchema = new mongoose.Schema({
     maxlength: [1000, 'Notes must be at most 1000 characters']
   },
 
+  totalPrice: {
+    type: mongoose.Schema.Types.Decimal128,
+    default: 0,
+    min: [0, 'Total price cannot be negative'],
+    get: function (value) {
+      if (value) {
+        return parseFloat(value.toString());
+      }
+      return 0;
+    }
+  },
+
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Employee',
@@ -66,8 +78,8 @@ const stockOutOrderSchema = new mongoose.Schema({
 
 }, {
   timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toJSON: { virtuals: true, getters: true },
+  toObject: { virtuals: true, getters: true }
 });
 
 // ============ INDEXES ============
@@ -88,6 +100,17 @@ stockOutOrderSchema.virtual('details', {
 // Virtual: Count of items (when details populated)
 stockOutOrderSchema.virtual('itemCount').get(function () {
   return this.details ? this.details.length : 0;
+});
+
+// Virtual: Calculate subtotal from details (when populated)
+stockOutOrderSchema.virtual('subtotal').get(function () {
+  if (!this.details || this.details.length === 0) return 0;
+  return this.details.reduce((sum, detail) => {
+    const total = detail.total && detail.total.$numberDecimal
+      ? parseFloat(detail.total.$numberDecimal)
+      : detail.total || 0;
+    return sum + total;
+  }, 0);
 });
 
 // ============ MIDDLEWARE ============
@@ -133,6 +156,27 @@ stockOutOrderSchema.pre('save', async function (next) {
     this.completedDate = new Date();
   }
 
+  // Auto-calculate totalPrice from details if not explicitly set
+  // This ensures totalPrice stays consistent with detail items
+  if (!this.isModified('totalPrice') || this.totalPrice === 0) {
+    try {
+      const DetailStockOutOrder = mongoose.model('DetailStockOutOrder');
+      const details = await DetailStockOutOrder.find({ stockOutOrder: this._id });
+
+      if (details && details.length > 0) {
+        const total = details.reduce((sum, detail) => {
+          const itemTotal = detail.quantity * parseFloat(detail.unitPrice || 0);
+          return sum + itemTotal;
+        }, 0);
+
+        this.totalPrice = total;
+      }
+    } catch (error) {
+      // If calculation fails, continue without setting totalPrice
+      console.error('Error calculating totalPrice:', error);
+    }
+  }
+
   next();
 });
 
@@ -152,17 +196,17 @@ stockOutOrderSchema.methods.canApprove = function () {
 };
 
 /**
- * Check if SO can be completed (only from approved status)
+ * Check if SO can be completed (only from pending status)
  */
 stockOutOrderSchema.methods.canComplete = function () {
-  return this.status === 'approved';
+  return this.status === 'pending';
 };
 
 /**
  * Check if SO can be cancelled
  */
 stockOutOrderSchema.methods.canCancel = function () {
-  return ['draft', 'pending', 'approved'].includes(this.status);
+  return ['draft', 'pending'].includes(this.status);
 };
 
 /**
@@ -185,6 +229,11 @@ stockOutOrderSchema.set('toJSON', {
     returnedObject.id = returnedObject._id.toString();
     delete returnedObject._id;
     delete returnedObject.__v;
+
+    // Convert Decimal128 to number
+    if (returnedObject.totalPrice && typeof returnedObject.totalPrice === 'object') {
+      returnedObject.totalPrice = parseFloat(returnedObject.totalPrice.toString());
+    }
   }
 });
 

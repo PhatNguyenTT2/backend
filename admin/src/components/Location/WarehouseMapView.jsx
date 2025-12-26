@@ -1,11 +1,31 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { MapPin, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LocationDetailModal } from './LocationDetailModal';
+import locationService from '../../services/locationService';
 
-export const WarehouseMapView = ({ locations, onLocationClick }) => {
+export const WarehouseMapView = ({ locations, onLocationClick, onRefresh }) => {
   const [currentBlockIndex, setCurrentBlockIndex] = useState(0);
   const [blockColumnGaps, setBlockColumnGaps] = useState({});
   const [selectedLocation, setSelectedLocation] = useState(null);
+
+  // Handle location update after batch assignment
+  const handleLocationUpdate = async () => {
+    // Refresh the selected location with fresh data
+    if (selectedLocation) {
+      try {
+        const locationId = selectedLocation._id || selectedLocation.id;
+        const updatedLocation = await locationService.getLocationById(locationId);
+        setSelectedLocation(updatedLocation);
+      } catch (error) {
+        console.error('Error refreshing location:', error);
+      }
+    }
+
+    // Notify parent to refresh all locations
+    if (onRefresh) {
+      onRefresh();
+    }
+  };
 
   // Group locations by block (first letter/character before hyphen)
   const blockGroups = useMemo(() => {
@@ -76,7 +96,7 @@ export const WarehouseMapView = ({ locations, onLocationClick }) => {
     // Calculate capacity for location
     const getLocationCapacity = (location) => {
       const occupiedCapacity = location.currentBatches?.reduce((total, batch) => {
-        return total + (batch.quantityOnHand || 0) + (batch.quantityOnShelf || 0);
+        return total + (batch.quantityOnHand || 0);
       }, 0) || 0;
       const maxCapacity = location.maxCapacity || 100;
       const capacityPercent = (occupiedCapacity / maxCapacity) * 100;
@@ -104,7 +124,7 @@ export const WarehouseMapView = ({ locations, onLocationClick }) => {
 
     const fullCount = blockLocations.filter(l => {
       const { capacityPercent } = getLocationCapacity(l);
-      return capacityPercent >= 100;
+      return capacityPercent > 90;
     }).length;
 
     return (
@@ -158,7 +178,7 @@ export const WarehouseMapView = ({ locations, onLocationClick }) => {
                         if (!active) {
                           bgColor = 'bg-gray-300 border-gray-400';
                           textColor = 'text-gray-600';
-                        } else if (capacityPercent >= 100) {
+                        } else if (capacityPercent > 90) {
                           bgColor = 'bg-red-500 border-red-600 hover:bg-red-600';
                           textColor = 'text-white';
                         } else if (capacityPercent > 80) {
@@ -268,7 +288,7 @@ export const WarehouseMapView = ({ locations, onLocationClick }) => {
           </div>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-red-500 border-2 border-red-600 rounded"></div>
-            <span className="text-sm text-gray-700 font-medium">Full (≥100%)</span>
+            <span className="text-sm text-gray-700 font-medium">Full (&gt;90%)</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-gray-300 border-2 border-gray-400 rounded"></div>
@@ -289,6 +309,7 @@ export const WarehouseMapView = ({ locations, onLocationClick }) => {
         isOpen={!!selectedLocation}
         location={selectedLocation}
         onClose={() => setSelectedLocation(null)}
+        onSuccess={handleLocationUpdate}
       />
     </div>
   );

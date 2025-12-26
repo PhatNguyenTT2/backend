@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { InvoiceStockOutModal } from './InvoiceStockOutModal';
 
 const StockOutList = ({
   stockOutOrders = [],
@@ -11,6 +12,7 @@ const StockOutList = ({
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [invoiceModal, setInvoiceModal] = useState(null);
 
   // Handle sort click
   const handleSortClick = (field) => {
@@ -113,6 +115,12 @@ const StockOutList = ({
     return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
+  // Format currency (VND)
+  const formatCurrency = (amount) => {
+    if (amount === null || amount === undefined) return '₫0';
+    return `₫${amount.toLocaleString('vi-VN')}`;
+  };
+
   // Status badge styles
   const getStatusStyles = (status) => {
     const map = {
@@ -140,37 +148,15 @@ const StockOutList = ({
   };
 
   // Handle View Details
-  const handleViewDetails = async (wo) => {
-    try {
-      const stockOutOrderService = (await import('../../services/stockOutOrderService')).default;
-      const detailStockOutOrderService = (await import('../../services/detailStockOutOrderService')).default;
-
-      const orderDetails = await stockOutOrderService.getStockOutOrderById(wo._id || wo.id);
-      const items = await detailStockOutOrderService.getDetailsByStockOutOrder(wo._id || wo.id);
-
-      const details = `
-Stock Out Order: ${orderDetails.soNumber}
-Status: ${orderDetails.status}
-Reason: ${orderDetails.reason}
-Order Date: ${formatDate(orderDetails.orderDate)}
-Destination: ${orderDetails.destination || 'N/A'}
-Notes: ${orderDetails.notes || 'N/A'}
-
-Items (${items.length}):
-${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: ${item.batchId?.batchCode || 'N/A'} - Qty: ${item.quantity}`).join('\n')}
-      `.trim();
-
-      alert(details);
-    } catch (error) {
-      console.error('Error fetching details:', error);
-      alert('Failed to load details');
-    }
+  const handleViewDetails = (wo) => {
+    setInvoiceModal(wo);
+    setActiveDropdown(null);
   };
 
   // Handle Delete
   const handleDelete = async (wo) => {
-    if (wo.status !== 'cancelled' && wo.status !== 'draft') {
-      alert('Only draft or cancelled orders can be deleted.');
+    if (wo.status !== 'cancelled' && wo.status !== 'draft' && wo.status !== 'completed') {
+      alert('Only draft, completed, or cancelled orders can be deleted.');
       return;
     }
 
@@ -206,11 +192,9 @@ ${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: 
     }
 
     // Confirm critical status changes
-    if (newStatus === 'approved' || newStatus === 'completed') {
-      const action = newStatus === 'approved' ? 'approve' : 'mark as completed';
+    if (newStatus === 'completed') {
       const confirmed = window.confirm(
-        `Are you sure you want to ${action} Stock Out Order ${wo.soNumber}?${newStatus === 'completed' ? '\n\nThis will finalize the stock release.' : ''
-        }`
+        `Are you sure you want to mark as completed Stock Out Order ${wo.soNumber}?\n\nThis will finalize the stock release and create inventory movements.`
       );
 
       if (!confirmed) {
@@ -219,9 +203,9 @@ ${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: 
       }
     }
 
-    if (newStatus === 'cancelled' && oldStatus === 'approved') {
+    if (newStatus === 'cancelled' && oldStatus === 'pending') {
       const confirmed = window.confirm(
-        `Are you sure you want to cancel ${wo.soNumber}?\n\n⚠️ Warning: This order was already APPROVED.`
+        `Are you sure you want to cancel ${wo.soNumber}?\n\n⚠️ Warning: This order was already PENDING.`
       );
 
       if (!confirmed) {
@@ -256,24 +240,24 @@ ${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: 
         <div className="min-w-[1000px]">
           {/* Table Header */}
           <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
-            {/* SO Number Column - Sortable */}
+            {/* ID Column - Sortable */}
             <div
               className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('soNumber')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
-                SO Number
+                ID
                 {getSortIcon('soNumber')}
               </p>
             </div>
 
-            {/* Order Date Column - Sortable */}
+            {/*Date Column - Sortable */}
             <div
               className="w-[110px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('orderDate')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
-                Order Date
+                Date
                 {getSortIcon('orderDate')}
               </p>
             </div>
@@ -289,17 +273,10 @@ ${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: 
               </p>
             </div>
 
-            {/* Destination Column */}
-            <div className="flex-1 min-w-[150px] px-3 flex items-center">
+            {/* Total Column */}
+            <div className="flex-1 min-w-[120px] px-3 flex items-center">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Destination
-              </p>
-            </div>
-
-            {/* Items Column */}
-            <div className="w-[80px] px-3 flex items-center flex-shrink-0">
-              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
-                Items
+                Total
               </p>
             </div>
 
@@ -376,17 +353,10 @@ ${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: 
                     </span>
                   </div>
 
-                  {/* Destination */}
-                  <div className="flex-1 min-w-[150px] px-3 flex items-center">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {wo.destination || '-'}
-                    </p>
-                  </div>
-
-                  {/* Items */}
-                  <div className="w-[80px] px-3 flex items-center flex-shrink-0">
+                  {/* Total */}
+                  <div className="flex-1 min-w-[120px] px-3 flex items-center">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      {wo.itemCount || 0}
+                      {formatCurrency(wo.totalPrice || 0)}
                     </p>
                   </div>
 
@@ -406,17 +376,26 @@ ${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: 
 
                   {/* Status - Dropdown */}
                   <div className="w-[120px] px-3 flex items-center flex-shrink-0">
-                    <button
-                      onClick={(e) => toggleDropdown(`status-${wo._id || wo.id}`, e)}
-                      className={`${getStatusStyles(wo.status)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
-                    >
-                      <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
-                        {wo.status}
-                      </span>
-                      <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M1 1L4 4L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </button>
+                    {(wo.status === 'draft' || wo.status === 'pending') ? (
+                      <button
+                        onClick={(e) => toggleDropdown(`status-${wo._id || wo.id}`, e)}
+                        disabled={updatingStatus}
+                        className={`${getStatusStyles(wo.status)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
+                          {wo.status}
+                        </span>
+                        <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M1 1L4 4L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <div className={`${getStatusStyles(wo.status)} px-2 py-1 rounded inline-flex items-center`}>
+                        <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
+                          {wo.status}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}
@@ -451,15 +430,24 @@ ${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: 
 
         // Render Status Dropdown
         if (isStatusDropdown) {
-          const statusOptions = [
-            { value: 'draft', label: 'Draft', color: 'bg-[#6b7280]' },
-            { value: 'pending', label: 'Pending', color: 'bg-[#f59e0b]' },
-            { value: 'approved', label: 'Approved', color: 'bg-[#3b82f6]' },
-            { value: 'completed', label: 'Completed', color: 'bg-[#10b981]' },
-            { value: 'cancelled', label: 'Cancelled', color: 'bg-[#ef4444]' }
-          ];
+          // Define available status transitions based on current status
+          let statusOptions = [];
 
-          const isDisabled = wo.status === 'completed' || wo.status === 'cancelled';
+          if (wo.status === 'draft') {
+            statusOptions = [
+              { value: 'draft', label: 'Draft', color: 'bg-[#6b7280]' },
+              { value: 'pending', label: 'Pending', color: 'bg-[#f59e0b]' },
+              { value: 'cancelled', label: 'Cancelled', color: 'bg-[#ef4444]' }
+            ];
+          } else if (wo.status === 'pending') {
+            statusOptions = [
+              { value: 'pending', label: 'Pending', color: 'bg-[#f59e0b]' },
+              { value: 'completed', label: 'Completed', color: 'bg-[#10b981]' },
+              { value: 'cancelled', label: 'Cancelled', color: 'bg-[#ef4444]' }
+            ];
+          }
+
+          const availableOptions = statusOptions;
 
           return (
             <div
@@ -470,28 +458,29 @@ ${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: 
                 left: `${dropdownPosition.left}px`
               }}
             >
-              {statusOptions.map((option) => {
+              {availableOptions.map((option) => {
                 const isCurrentStatus = wo.status === option.value;
 
                 return (
                   <button
                     key={option.value}
                     onClick={() => {
-                      if (!isDisabled && !isCurrentStatus) {
+                      if (!isCurrentStatus) {
                         handleStatusChange(wo, option.value);
                       }
                     }}
-                    disabled={isDisabled || isCurrentStatus}
-                    className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
+                    disabled={updatingStatus || isCurrentStatus}
+                    className={`w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${isCurrentStatus ? 'bg-gray-50' : ''
+                      }`}
                   >
                     <span className={`${option.color} w-2 h-2 rounded-full`}></span>
-                    <span className={`text-[12px] font-['Poppins',sans-serif] ${isCurrentStatus ? 'text-red-600 font-medium' : isDisabled ? 'text-gray-400' : 'text-[#212529]'
+                    <span className={`text-[12px] font-['Poppins',sans-serif] ${isCurrentStatus ? 'text-emerald-600 font-semibold' : 'text-[#212529]'
                       }`}>
                       {option.label}
                     </span>
                     {isCurrentStatus && (
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="ml-auto">
-                        <path d="M10 3L4.5 8.5L2 6" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M10 3L4.5 8.5L2 6" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     )}
                   </button>
@@ -503,7 +492,7 @@ ${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: 
 
         // Render Actions Dropdown
         if (isActionsDropdown) {
-          const canDelete = wo.status === 'cancelled' || wo.status === 'draft';
+          const canDelete = wo.status === 'cancelled' || wo.status === 'draft' || wo.status === 'completed';
 
           return (
             <div
@@ -515,17 +504,14 @@ ${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: 
               }}
             >
               <button
-                onClick={() => {
-                  handleViewDetails(wo);
-                  setActiveDropdown(null);
-                }}
+                onClick={() => handleViewDetails(wo)}
                 className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
               >
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M1 8C1 8 3 3 8 3C13 3 15 8 15 8C15 8 13 13 8 13C3 13 1 8 1 8Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                View Details
+                View Invoice
               </button>
 
               <div className="border-t border-gray-200 my-1"></div>
@@ -543,7 +529,7 @@ ${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: 
                 title={
                   canDelete
                     ? 'Delete stock out order'
-                    : 'Only draft or cancelled orders can be deleted'
+                    : 'Only draft, completed, or cancelled orders can be deleted'
                 }
               >
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -558,6 +544,14 @@ ${items.map((item, idx) => `${idx + 1}. ${item.product?.name || 'N/A'} - Batch: 
 
         return null;
       })()}
+
+      {/* Invoice Modal */}
+      {invoiceModal && (
+        <InvoiceStockOutModal
+          stockOutOrder={invoiceModal}
+          onClose={() => setInvoiceModal(null)}
+        />
+      )}
     </div>
   );
 };

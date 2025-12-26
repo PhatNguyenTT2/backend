@@ -11,7 +11,7 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
     adjustmentType: 'increase',
     targetLocation: 'onHand', // 'onHand' or 'onShelf'
     reason: '',
-    date: new Date().toISOString().split('T')[0],
+    date: new Date().toISOString().slice(0, 16),
     performedBy: '',
     notes: ''
   });
@@ -27,7 +27,7 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
         adjustmentType: 'increase',
         targetLocation: 'onHand',
         reason: '',
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toISOString().slice(0, 16),
         performedBy: '',
         notes: ''
       });
@@ -204,10 +204,10 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
 
             <div>
               <label className="block text-[13px] font-semibold text-[#212529] mb-2">
-                Date <span className="text-red-500">*</span>
+                Date & Time <span className="text-red-500">*</span>
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 required
@@ -252,14 +252,13 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
 
           <div>
             <label className="block text-[13px] font-semibold text-[#212529] mb-2">
-              Notes <span className="text-red-500">*</span>
+              Notes
             </label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows="3"
-              required
-              placeholder="Detailed explanation for this adjustment..."
+              placeholder="Optional: Detailed explanation for this adjustment..."
               className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
             />
           </div>

@@ -1,8 +1,205 @@
-import React from 'react';
-import { MapPin, X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { MapPin, X, Plus } from 'lucide-react';
+import productService from '../../services/productService';
+import detailInventoryService from '../../services/detailInventoryService';
+import locationService from '../../services/locationService';
 
-export const LocationDetailModal = ({ isOpen, location, onClose }) => {
-  if (!isOpen || !location) return null;
+export const LocationDetailModal = ({ isOpen, location, onClose, onSuccess }) => {
+  const [products, setProducts] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState('');
+  const [batches, setBatches] = useState([]);
+  const [selectedBatch, setSelectedBatch] = useState('');
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [loadingBatches, setLoadingBatches] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [error, setError] = useState('');
+  const [showAssignForm, setShowAssignForm] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState(location);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  // Sync currentLocation with location prop when it changes
+  useEffect(() => {
+    if (location) {
+      setCurrentLocation(location);
+    }
+  }, [location]);
+
+  // Fetch products on modal open
+  useEffect(() => {
+    if (isOpen) {
+      fetchProducts();
+      setShowAssignForm(false);
+      setSelectedProduct('');
+      setSelectedBatch('');
+      setBatches([]);
+      setError('');
+    }
+  }, [isOpen]);
+
+  // Fetch batches when product is selected
+  useEffect(() => {
+    if (selectedProduct) {
+      fetchBatchesForProduct(selectedProduct);
+    } else {
+      setBatches([]);
+      setSelectedBatch('');
+    }
+  }, [selectedProduct]);
+
+  const fetchProducts = async () => {
+    try {
+      setLoadingProducts(true);
+      // Fetch all detail inventories (backend will populate batchId -> product)
+      const response = await detailInventoryService.getAllDetailInventories();
+
+      // Handle different response structures
+      let inventoryData = [];
+      if (response?.data?.detailInventories) {
+        inventoryData = response.data.detailInventories;
+      } else if (response?.detailInventories) {
+        inventoryData = response.detailInventories;
+      } else if (Array.isArray(response)) {
+        inventoryData = response;
+      }
+
+      // Extract unique products from inventory that have batches without location and with stock
+      const productMap = new Map();
+
+      inventoryData.forEach(invItem => {
+        // Only include batches without location and with stock
+        const hasNoLocation = !invItem.location;
+        const hasStock = (invItem.quantityOnHand || 0) + (invItem.quantityOnShelf || 0) > 0;
+
+        if (hasNoLocation && hasStock && invItem.batchId?.product) {
+          const product = invItem.batchId.product;
+          const productId = product._id || product.id;
+
+          if (!productMap.has(productId)) {
+            productMap.set(productId, {
+              id: productId,
+              _id: productId,
+              name: product.name,
+              productCode: product.productCode,
+              image: product.image,
+              category: product.category
+            });
+          }
+        }
+      });
+
+      setProducts(Array.from(productMap.values()));
+    } catch (err) {
+      console.error('Error fetching products:', err);
+      setProducts([]);
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  const fetchBatchesForProduct = async (productId) => {
+    try {
+      setLoadingBatches(true);
+      // Fetch with productId filter - backend will populate batchId and product
+      const response = await detailInventoryService.getAllDetailInventories({ productId });
+
+      // Handle different response structures
+      let data = [];
+      if (response?.data?.detailInventories) {
+        data = response.data.detailInventories;
+      } else if (response?.detailInventories) {
+        data = response.detailInventories;
+      } else if (Array.isArray(response)) {
+        data = response;
+      }
+
+      // Filter batches that don't have a location and have stock
+      const availableBatches = data.filter(detail => {
+        const hasNoLocation = !detail.location;
+        const hasStock = (detail.quantityOnHand || 0) + (detail.quantityOnShelf || 0) > 0;
+        return hasNoLocation && hasStock;
+      });
+
+      setBatches(availableBatches);
+    } catch (err) {
+      console.error('Error fetching batches:', err);
+      setBatches([]);
+    } finally {
+      setLoadingBatches(false);
+    }
+  };
+
+  const handleAssignBatch = async () => {
+    if (!selectedBatch) {
+      setError('Please select a batch to assign');
+      return;
+    }
+
+    try {
+      setAssigning(true);
+      setError('');
+      setSuccessMessage('');
+
+      // Get the batch quantity before assigning
+      const selectedBatchData = batches.find(b => (b._id || b.id) === selectedBatch);
+      const batchQuantity = selectedBatchData?.quantityOnHand || 0;
+
+      await detailInventoryService.updateDetailInventory(selectedBatch, {
+        location: location._id || location.id
+      });
+
+      // Show success message first
+      setSuccessMessage('Batch assigned successfully! Location has been updated.');
+
+      // Reset form
+      setShowAssignForm(false);
+      setSelectedProduct('');
+      setSelectedBatch('');
+      setBatches([]);
+
+      // Notify parent to refresh (this will update location prop and trigger currentLocation sync)
+      if (onSuccess) onSuccess();
+
+      // Auto-clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccessMessage('');
+      }, 3000);
+    } catch (err) {
+      console.error('Error assigning batch:', err);
+
+      // Get the batch quantity for error message
+      const selectedBatchData = batches.find(b => (b._id || b.id) === selectedBatch);
+      const batchQuantity = selectedBatchData?.quantityOnHand || 0;
+      const currentCapacity = occupiedCapacity;
+      const wouldBeCapacity = currentCapacity + batchQuantity;
+
+      // Check if it's a capacity/validation error
+      const errorMessage = err.response?.data?.error?.message || '';
+      const isValidationError = errorMessage.toLowerCase().includes('validation') ||
+        errorMessage.toLowerCase().includes('capacity') ||
+        errorMessage.toLowerCase().includes('exceed');
+
+      // If validation error or would exceed capacity, show detailed message
+      if (isValidationError || wouldBeCapacity > maxCapacity) {
+        setError(
+          `Cannot assign batch: Adding ${batchQuantity} units would exceed location capacity. ` +
+          `Current: ${currentCapacity}/${maxCapacity} units. ` +
+          `Would be: ${wouldBeCapacity}/${maxCapacity} units. ` +
+          `Available space: ${maxCapacity - currentCapacity} units.`
+        );
+      } else {
+        setError(errorMessage || 'Failed to assign batch to location');
+      }
+
+      // Ensure currentLocation stays valid even on error
+      if (!currentLocation) {
+        setCurrentLocation(location);
+      }
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  if (!isOpen || !location || !currentLocation) return null;
 
   // Format date helper
   const formatDate = (dateString) => {
@@ -31,10 +228,10 @@ export const LocationDetailModal = ({ isOpen, location, onClose }) => {
     );
   };
 
-  const occupiedCapacity = location.currentBatches?.reduce((total, batch) => {
-    return total + (batch.quantityOnHand || 0) + (batch.quantityOnShelf || 0);
+  const occupiedCapacity = currentLocation?.currentBatches?.reduce((total, batch) => {
+    return total + (batch.quantityOnHand || 0);
   }, 0) || 0;
-  const maxCapacity = location.maxCapacity || 100;
+  const maxCapacity = currentLocation?.maxCapacity || 100;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
@@ -43,10 +240,10 @@ export const LocationDetailModal = ({ isOpen, location, onClose }) => {
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">
-              Location {location.name}
+              Location {currentLocation?.name || 'N/A'}
             </h2>
             <p className="text-sm text-gray-600 mt-1">
-              Code: {location.locationCode} • Capacity: {occupiedCapacity} / {maxCapacity}
+              Code: {currentLocation?.locationCode || 'N/A'} • Capacity: {occupiedCapacity} / {maxCapacity}
             </p>
           </div>
           <button
@@ -59,7 +256,149 @@ export const LocationDetailModal = ({ isOpen, location, onClose }) => {
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6">
-          {location.currentBatches && location.currentBatches.length > 0 ? (
+          {/* Success Message */}
+          {successMessage && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm text-green-600">{successMessage}</p>
+            </div>
+          )}
+
+          {/* Assign Batch Section */}
+          {!showAssignForm ? (
+            <div className="mb-6">
+              <button
+                onClick={() => setShowAssignForm(true)}
+                className="w-full py-3 border-2 border-dashed border-emerald-300 rounded-lg text-emerald-600 hover:border-emerald-400 hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2 font-medium"
+              >
+                <Plus className="w-5 h-5" />
+                Assign Batch to This Location
+              </button>
+            </div>
+          ) : (
+            <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-emerald-900">Assign New Batch</h3>
+                <button
+                  onClick={() => {
+                    setShowAssignForm(false);
+                    setSelectedProduct('');
+                    setSelectedBatch('');
+                    setError('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-600">{error}</p>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                {/* Product Selection */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    1. Select Product
+                  </label>
+                  {loadingProducts ? (
+                    <div className="flex items-center justify-center py-3">
+                      <svg className="animate-spin h-5 w-5 text-emerald-600" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedProduct}
+                      onChange={(e) => setSelectedProduct(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    >
+                      <option value="">-- Select Product --</option>
+                      {products.map(product => (
+                        <option key={product._id || product.id} value={product._id || product.id}>
+                          {product.name} ({product.productCode})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Batch Selection */}
+                {selectedProduct && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      2. Select Batch (without location)
+                    </label>
+                    {loadingBatches ? (
+                      <div className="flex items-center justify-center py-3">
+                        <svg className="animate-spin h-5 w-5 text-emerald-600" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      </div>
+                    ) : batches.length === 0 ? (
+                      <div className="py-3 px-4 bg-gray-50 border border-gray-200 rounded-lg text-center">
+                        <p className="text-sm text-gray-500">No available batches without location for this product</p>
+                      </div>
+                    ) : (
+                      <>
+                        <select
+                          value={selectedBatch}
+                          onChange={(e) => setSelectedBatch(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        >
+                          <option value="">-- Select Batch --</option>
+                          {batches.map(batch => (
+                            <option key={batch._id || batch.id} value={batch._id || batch.id}>
+                              {batch.batchId?.batchCode} - On Hand: {batch.quantityOnHand || 0}, On Shelf: {batch.quantityOnShelf || 0}
+                              {batch.batchId?.expiryDate && ` - Exp: ${new Date(batch.batchId.expiryDate).toLocaleDateString()}`}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {batches.length} batch(es) available
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Assign Button */}
+                {selectedBatch && (
+                  <button
+                    onClick={handleAssignBatch}
+                    disabled={assigning}
+                    className="w-full px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {assigning ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Assigning...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        Assign to Location {currentLocation?.name || 'N/A'}
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Current Batches Section */}
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Current Batches in This Location</h3>
+          </div>
+
+          {currentLocation?.currentBatches && currentLocation.currentBatches.length > 0 ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               {/* Table Header */}
               <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
@@ -129,7 +468,7 @@ export const LocationDetailModal = ({ isOpen, location, onClose }) => {
 
               {/* Table Body */}
               <div className="flex flex-col">
-                {location.currentBatches.map((batch, index) => {
+                {currentLocation.currentBatches.map((batch, index) => {
                   // Try both field names for expiry date
                   const expiryDateStr = batch.batchId?.expiryDate || batch.batchId?.expirationDate;
                   const expiryDate = expiryDateStr ? new Date(expiryDateStr) : null;
@@ -138,7 +477,7 @@ export const LocationDetailModal = ({ isOpen, location, onClose }) => {
                   return (
                     <div
                       key={batch._id || index}
-                      className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== location.currentBatches.length - 1 ? 'border-b border-gray-100' : ''
+                      className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== currentLocation.currentBatches.length - 1 ? 'border-b border-gray-100' : ''
                         }`}
                     >
                       {/* Batch Code */}

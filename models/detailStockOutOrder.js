@@ -91,6 +91,79 @@ detailStockOutOrderSchema.pre('save', function (next) {
   next();
 });
 
+// Post-save: Update StockOutOrder totalPrice
+detailStockOutOrderSchema.post('save', async function (doc) {
+  try {
+    await updateStockOutOrderTotal(doc.stockOutOrder);
+  } catch (error) {
+    console.error('Error updating StockOutOrder totalPrice:', error);
+  }
+});
+
+// Post-remove: Update StockOutOrder totalPrice after deletion
+detailStockOutOrderSchema.post('remove', async function (doc) {
+  try {
+    await updateStockOutOrderTotal(doc.stockOutOrder);
+  } catch (error) {
+    console.error('Error updating StockOutOrder totalPrice:', error);
+  }
+});
+
+// Post-findOneAndDelete: Update StockOutOrder totalPrice after deletion
+detailStockOutOrderSchema.post('findOneAndDelete', async function (doc) {
+  if (doc) {
+    try {
+      await updateStockOutOrderTotal(doc.stockOutOrder);
+    } catch (error) {
+      console.error('Error updating StockOutOrder totalPrice after deletion:', error);
+    }
+  }
+});
+
+// Post-deleteMany: Update affected StockOutOrders
+detailStockOutOrderSchema.post('deleteMany', async function (result) {
+  // Note: deleteMany doesn't provide deleted docs, so we can't update here
+  // Controller should handle updateStockOutOrderTotal manually after deleteMany
+});
+
+// Helper function to update StockOutOrder totalPrice
+async function updateStockOutOrderTotal(stockOutOrderId) {
+  const StockOutOrder = mongoose.model('StockOutOrder');
+
+  try {
+    // Use aggregation for better performance
+    const result = await mongoose.model('DetailStockOutOrder').aggregate([
+      { $match: { stockOutOrder: stockOutOrderId } },
+      {
+        $group: {
+          _id: null,
+          totalPrice: {
+            $sum: {
+              $convert: {
+                input: '$total',
+                to: 'double',
+                onError: 0,
+                onNull: 0
+              }
+            }
+          }
+        }
+      }
+    ]);
+
+    const totalPrice = result.length > 0 ? result[0].totalPrice : 0;
+
+    // Update StockOutOrder (skip middleware to avoid infinite loop)
+    await StockOutOrder.updateOne(
+      { _id: stockOutOrderId },
+      { $set: { totalPrice: totalPrice.toFixed(2) } }
+    );
+  } catch (error) {
+    console.error('Error in updateStockOutOrderTotal:', error);
+    throw error;
+  }
+}
+
 // ============ JSON TRANSFORMATION ============
 detailStockOutOrderSchema.set('toJSON', {
   transform: (document, returnedObject) => {

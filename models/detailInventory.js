@@ -60,7 +60,7 @@ const detailInventorySchema = new mongoose.Schema({
         // Check if location has enough capacity for this batch
         // Only check on new assignment or location change
         if (this.isModified('location')) {
-          const batchQuantity = this.totalQuantity || (this.quantityOnHand + this.quantityOnShelf);
+          const batchQuantity = this.quantityOnHand || 0;
 
           // Get current occupied capacity (excluding this batch if it's already assigned)
           const DetailInventory = mongoose.model('DetailInventory');
@@ -70,7 +70,7 @@ const detailInventorySchema = new mongoose.Schema({
           });
 
           const occupiedCapacity = existingBatches.reduce((total, batch) =>
-            total + (batch.quantityOnHand + batch.quantityOnShelf), 0
+            total + (batch.quantityOnHand || 0), 0
           );
 
           const availableCapacity = location.maxCapacity - occupiedCapacity;

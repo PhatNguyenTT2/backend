@@ -53,7 +53,7 @@ locationMasterSchema.virtual('currentBatches', {
 locationMasterSchema.virtual('occupiedCapacity').get(async function () {
   const DetailInventory = mongoose.model('DetailInventory');
   const batches = await DetailInventory.find({ location: this._id });
-  return batches.reduce((total, batch) => total + batch.totalQuantity, 0);
+  return batches.reduce((total, batch) => total + (batch.quantityOnHand || 0), 0);
 });
 
 // Virtual: Calculate available capacity
@@ -128,7 +128,7 @@ locationMasterSchema.statics.checkCapacity = async function (locationId, additio
 
   const DetailInventory = mongoose.model('DetailInventory');
   const batches = await DetailInventory.find({ location: locationId });
-  const occupiedCapacity = batches.reduce((total, batch) => total + batch.totalQuantity, 0);
+  const occupiedCapacity = batches.reduce((total, batch) => total + (batch.quantityOnHand || 0), 0);
   const availableCapacity = location.maxCapacity - occupiedCapacity;
 
   return {

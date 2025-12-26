@@ -38,7 +38,7 @@ stockOutOrdersRouter.get('/', async (request, response) => {
 
     if (search) {
       filter.$or = [
-        { woNumber: new RegExp(search, 'i') },
+        { soNumber: new RegExp(search, 'i') },
         { destination: new RegExp(search, 'i') },
         { notes: new RegExp(search, 'i') }
       ];
@@ -304,6 +304,10 @@ stockOutOrdersRouter.put('/:id', userExtractor, async (request, response) => {
 /**
  * DELETE /api/stock-out-orders/:id
  * Delete stock out order
+ * 
+ * Note: Can delete draft, completed, or cancelled stock out orders
+ * Cannot delete pending or approved orders (they must be cancelled first or completed)
+ * All related DetailStockOutOrder records will be deleted automatically
  */
 stockOutOrdersRouter.delete('/:id', userExtractor, async (request, response) => {
   try {
@@ -311,35 +315,61 @@ stockOutOrdersRouter.delete('/:id', userExtractor, async (request, response) => 
 
     if (!stockOutOrder) {
       return response.status(404).json({
-        error: 'Stock out order not found'
+        success: false,
+        error: {
+          message: 'Stock out order not found',
+          code: 'STOCK_OUT_ORDER_NOT_FOUND'
+        }
       });
     }
 
-    // Check if order can be deleted
-    if (!stockOutOrder.canDelete()) {
+    // Only allow deletion of draft, completed, or cancelled orders
+    // Note: Pending and approved orders should not be deleted as they may have active processes
+    if (stockOutOrder.status === 'pending' || stockOutOrder.status === 'approved') {
       return response.status(400).json({
-        error: `Cannot delete stock out order in ${stockOutOrder.status} status`
+        success: false,
+        error: {
+          message: 'Cannot delete pending or approved stock out orders',
+          code: 'INVALID_STATUS_FOR_DELETION',
+          details: {
+            currentStatus: stockOutOrder.status,
+            message: 'Pending or approved stock out orders cannot be deleted. Please cancel the order first or wait until it is completed.'
+          }
+        }
       });
     }
 
-    // Delete associated details
-    await DetailStockOutOrder.deleteMany({ stockOutOrder: stockOutOrder._id });
+    // Check if stock out order has details
+    const detailsCount = await DetailStockOutOrder.countDocuments({
+      stockOutOrder: stockOutOrder._id
+    });
 
-    // Delete the order
-    await StockOutOrder.findByIdAndDelete(stockOutOrder._id);
+    // Delete all detail stock out orders first
+    if (detailsCount > 0) {
+      await DetailStockOutOrder.deleteMany({ stockOutOrder: stockOutOrder._id });
+    }
+
+    // Delete the stock out order
+    await StockOutOrder.findByIdAndDelete(request.params.id);
 
     response.json({
+      success: true,
       message: 'Stock out order deleted successfully',
-      deletedOrder: {
+      data: {
         id: stockOutOrder._id,
-        woNumber: stockOutOrder.woNumber
+        soNumber: stockOutOrder.soNumber,
+        status: stockOutOrder.status,
+        deletedDetails: detailsCount
       }
     });
   } catch (error) {
     console.error('Delete stock out order error:', error);
     response.status(500).json({
-      error: 'Failed to delete stock out order',
-      details: error.message
+      success: false,
+      error: {
+        message: 'Failed to delete stock out order',
+        details: error.message
+      }
     });
   }
 });
@@ -371,8 +401,7 @@ stockOutOrdersRouter.put('/:id/status', userExtractor, async (request, response)
     // Validate status transitions
     const validTransitions = {
       draft: ['pending', 'cancelled'],
-      pending: ['approved', 'cancelled'],
-      approved: ['completed', 'cancelled'],
+      pending: ['completed', 'cancelled'],
       completed: [],
       cancelled: []
     };
@@ -432,7 +461,7 @@ stockOutOrdersRouter.put('/:id/status', userExtractor, async (request, response)
             inventoryDetail: detailInventory._id,
             movementType: 'out',
             quantity: detail.quantity, // Positive number for out movement
-            reason: `Stock Out Order: ${stockOutOrder.woNumber} - ${stockOutOrder.reason}`,
+            reason: `Stock Out Order: ${stockOutOrder.soNumber} - ${stockOutOrder.reason}`,
             date: new Date(),
             performedBy: stockOutOrder.createdBy?._id || null,
             notes: stockOutOrder.notes || null
@@ -440,15 +469,10 @@ stockOutOrdersRouter.put('/:id/status', userExtractor, async (request, response)
 
           await movement.save();
 
-          // Update detail inventory - reduce from shelf first, then warehouse
+          // Update detail inventory - Stock out reduces from warehouse (quantityOnHand)
+          // This is different from sales which reduces from shelf
           const outQuantity = detail.quantity;
-          if (detailInventory.quantityOnShelf >= outQuantity) {
-            detailInventory.quantityOnShelf -= outQuantity;
-          } else {
-            const remaining = outQuantity - detailInventory.quantityOnShelf;
-            detailInventory.quantityOnShelf = 0;
-            detailInventory.quantityOnHand -= remaining;
-          }
+          detailInventory.quantityOnHand -= outQuantity;
 
           await detailInventory.save();
 

@@ -273,17 +273,17 @@ export const InventoryMovementBatchList = ({
                 {/* Product Name */}
                 <div className="flex-1 min-w-[180px] px-3 flex items-center">
                   <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                    {item.batchId?.productId?.name || 'N/A'}
+                    {item.batchId?.product?.name || 'N/A'}
                   </p>
                 </div>
 
                 {/* Quantity */}
                 <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                   <p className={`text-[13px] font-semibold font-['Poppins',sans-serif] leading-[20px] ${item.movementType === 'in' || (item.movementType === 'adjustment' && item.quantity > 0)
-                      ? 'text-green-600'
-                      : item.movementType === 'out' || (item.movementType === 'adjustment' && item.quantity < 0)
-                        ? 'text-red-600'
-                        : 'text-blue-600'
+                    ? 'text-green-600'
+                    : item.movementType === 'out' || (item.movementType === 'adjustment' && item.quantity < 0)
+                      ? 'text-red-600'
+                      : 'text-blue-600'
                     }`}>
                     {formatQuantity(item)}
                   </p>
@@ -299,9 +299,13 @@ export const InventoryMovementBatchList = ({
                 {/* Performed By */}
                 <div className="w-[150px] px-3 flex items-center flex-shrink-0">
                   <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                    {item.performedBy
-                      ? `${item.performedBy.firstName || ''} ${item.performedBy.lastName || ''}`.trim() || item.performedBy.employeeCode
-                      : 'System'}
+                    {(() => {
+                      // Debug: Log the performedBy data
+                      if (index === 0) console.log('Movement item:', item, 'PerformedBy:', item.performedBy);
+                      return item.performedBy
+                        ? item.performedBy.fullName || item.performedBy.employeeCode || 'N/A'
+                        : 'System';
+                    })()}
                   </p>
                 </div>
 

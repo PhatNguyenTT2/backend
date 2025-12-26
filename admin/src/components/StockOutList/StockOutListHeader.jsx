@@ -66,7 +66,7 @@ export const StockOutListHeader = ({
             <div className="relative h-[36px]">
               <input
                 type="text"
-                placeholder="Search by WO Number, Destination..."
+                placeholder="Search by ID, Destination..."
                 value={searchQuery}
                 onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
                 className="w-full h-full bg-white border border-[#ced4da] rounded-lg pl-3 pr-10 py-2 text-[12px] font-['Poppins',sans-serif] text-gray-900 placeholder:text-[#6c757d] focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"

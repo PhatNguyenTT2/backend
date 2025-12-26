@@ -180,15 +180,12 @@ const notificationService = {
    */
   getSupplierCreditNotifications: async () => {
     try {
-      console.log('🔔 Fetching supplier credit notifications...');
       const response = await api.get('/suppliers', {
         params: {
           isActive: true,
           limit: 1000
         }
       })
-
-      console.log('📊 Suppliers response:', response.data);
 
       if (!response.data.success) {
         throw new Error('Failed to fetch suppliers')
@@ -197,25 +194,19 @@ const notificationService = {
       const suppliers = response.data.data.suppliers || []
       const notifications = []
 
-      console.log(`👥 Processing ${suppliers.length} suppliers for credit notifications...`);
-
       suppliers.forEach(supplier => {
         const currentDebt = supplier.currentDebt || 0
         const creditLimit = supplier.creditLimit || 0
         const creditUtilization = supplier.creditUtilization || 0
 
-        console.log(`Supplier: ${supplier.companyName}, Debt: ${currentDebt}, Limit: ${creditLimit}, Utilization: ${creditUtilization}%`);
-
         // Skip if no credit limit set
         if (creditLimit === 0) {
-          console.log(`  ⏭️ Skipping ${supplier.companyName} - no credit limit set`);
           return;
         }
 
         // Critical: Credit limit exceeded
         if (currentDebt > creditLimit) {
           const excessAmount = currentDebt - creditLimit
-          console.log(`  🚨 CRITICAL: ${supplier.companyName} exceeded by ${excessAmount}`);
           notifications.push({
             id: `supplier-exceeded-${supplier.id}`,
             type: 'credit_exceeded',
@@ -235,7 +226,6 @@ const notificationService = {
         // High: 90-100% credit utilization
         else if (creditUtilization >= 90) {
           const remainingCredit = creditLimit - currentDebt
-          console.log(`  ⚠️ HIGH: ${supplier.companyName} at ${creditUtilization}%`);
           notifications.push({
             id: `supplier-near-limit-${supplier.id}`,
             type: 'credit_near_limit',
@@ -255,7 +245,6 @@ const notificationService = {
         // Warning: 80-89% credit utilization
         else if (creditUtilization >= 80) {
           const remainingCredit = creditLimit - currentDebt
-          console.log(`  ⚡ WARNING: ${supplier.companyName} at ${creditUtilization}%`);
           notifications.push({
             id: `supplier-high-utilization-${supplier.id}`,
             type: 'credit_high_utilization',
@@ -273,8 +262,6 @@ const notificationService = {
           })
         }
       })
-
-      console.log(`✅ Generated ${notifications.length} supplier credit notifications`);
 
       // Sort by severity and utilization
       const severityOrder = { critical: 0, high: 1, warning: 2 }
@@ -298,7 +285,7 @@ const notificationService = {
         }
       }
     } catch (error) {
-      console.error('❌ Error fetching supplier credit notifications:', error)
+      console.error('Error fetching supplier credit notifications:', error)
       throw error
     }
   },
@@ -309,24 +296,17 @@ const notificationService = {
    */
   getAllNotifications: async () => {
     try {
-      console.log('🔔 Fetching all notifications...');
       const [inventoryNotifications, lowStockNotifications, supplierCreditNotifications] = await Promise.all([
         notificationService.getInventoryNotifications(),
         notificationService.getLowStockNotifications(),
         notificationService.getSupplierCreditNotifications()
       ])
 
-      console.log('📦 Inventory notifications:', inventoryNotifications.data.counts);
-      console.log('📉 Low stock notifications:', lowStockNotifications.data.count);
-      console.log('💰 Supplier credit notifications:', supplierCreditNotifications.data.counts);
-
       const allNotifications = [
         ...inventoryNotifications.data.notifications,
         ...lowStockNotifications.data.notifications,
         ...supplierCreditNotifications.data.notifications
       ]
-
-      console.log(`📊 Total notifications: ${allNotifications.length}`);
 
       return {
         success: true,
@@ -341,7 +321,7 @@ const notificationService = {
         }
       }
     } catch (error) {
-      console.error('❌ Error fetching all notifications:', error)
+      console.error('Error fetching all notifications:', error)
       throw error
     }
   }
