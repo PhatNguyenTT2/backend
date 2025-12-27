@@ -38,7 +38,8 @@ const toggleDropdown = (dropdownId, event) => {
     const viewportWidth = window.innerWidth;
     
     // Dropdown dimensions (adjust based on your dropdown size)
-    const dropdownHeight = 130; // Adjust based on number of items (e.g., 130px for 3 items)
+    // Formula: (number of items × 40px) + (number of dividers × 2px) + (container padding ~10px)
+    const dropdownHeight = 130; // Example: 3 items × 40px + 10px = ~130px
     const dropdownWidth = 192; // w-48 = 12rem = 192px
     
     // Check if dropdown fits below button
@@ -156,10 +157,20 @@ useEffect(() => {
 
 **Điều chỉnh Dropdown Height:**
 ```javascript
-// Calculate: (number of items × item height) + padding
-// Example: 3 items × 40px + 10px padding = 130px
-const dropdownHeight = 130; // For 3 menu items
-const dropdownHeight = 250; // For 6+ menu items
+// Calculate: (number of items × item height) + (dividers × 2px) + padding
+// Each menu item: py-2 (16px) + text (12px) + gap (2px) + icon = ~40px
+// Each divider: border-t with my-1 = ~2px
+// Container padding: py-1 = ~10px
+
+// Examples:
+const dropdownHeight = 130;  // 3 items × 40px + 10px = 130px
+const dropdownHeight = 170;  // 4 items × 40px + 10px = 170px  
+const dropdownHeight = 210;  // 5 items × 40px + 10px = 210px (EmployeeList)
+const dropdownHeight = 250;  // 6 items × 40px + 10px = 250px
+const dropdownHeight = 290;  // 7 items × 40px + 10px = 290px
+
+// With dividers:
+const dropdownHeight = 212;  // 5 items × 40px + 2 dividers × 2px + 8px = 212px
 ```
 
 **Điều chỉnh Dropdown Width:**

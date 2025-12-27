@@ -226,6 +226,57 @@ userAccountsRouter.put('/:id', async (request, response) => {
       })
     }
 
+    // 🔒 SECURITY: Prevent users from modifying their own role or account status
+    const currentUserId = request.user?.id || request.user?._id // Assuming middleware sets request.user
+    const targetUserId = request.params.id
+
+    if (currentUserId && currentUserId.toString() === targetUserId.toString()) {
+      // Check if trying to modify role
+      if (role && role.toString() !== user.role._id.toString()) {
+        return response.status(403).json({
+          success: false,
+          error: {
+            message: 'You cannot change your own role. Please contact another administrator.',
+            code: 'SELF_MODIFICATION_DENIED'
+          }
+        })
+      }
+
+      // Check if trying to deactivate own account
+      if (isActive === false) {
+        return response.status(403).json({
+          success: false,
+          error: {
+            message: 'You cannot deactivate your own account. Please contact another administrator.',
+            code: 'SELF_MODIFICATION_DENIED'
+          }
+        })
+      }
+    }
+
+    // 🔒 SECURITY: Only super admin can assign super admin role
+    if (role && role.toString() !== user.role._id.toString()) {
+      const Role = require('../models/role')
+      const newRole = await Role.findById(role)
+
+      // Check if trying to assign super admin role
+      if (newRole && newRole.permissions && newRole.permissions.includes('all')) {
+        // Check if current user is super admin
+        const currentUser = await UserAccount.findById(currentUserId).populate('role')
+        const isCurrentUserSuperAdmin = currentUser?.role?.permissions?.includes('all')
+
+        if (!isCurrentUserSuperAdmin) {
+          return response.status(403).json({
+            success: false,
+            error: {
+              message: 'Only Super Admin can assign Super Admin role to other users',
+              code: 'INSUFFICIENT_PERMISSIONS'
+            }
+          })
+        }
+      }
+    }
+
     // 🔒 Check if trying to modify protected account's critical fields
     if (user.isProtected) {
       // Check if trying to change role

@@ -12,6 +12,26 @@ export const UserAccountModal = ({ isOpen, onClose, onSuccess, employee }) => {
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState(null);
+  const [isEditingSelf, setIsEditingSelf] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [filteredRoles, setFilteredRoles] = useState([]);
+
+  // Check if user is editing their own account
+  useEffect(() => {
+    if (isOpen && employee) {
+      // Get current logged-in user from localStorage
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const currentUserId = currentUser.id || currentUser._id;
+      const targetUserId = employee.userAccount?.id || employee.userAccount?._id;
+
+      setIsEditingSelf(currentUserId === targetUserId);
+
+      // Check if current user is super admin
+      const userRole = currentUser.role || {};
+      const permissions = userRole.permissions || [];
+      setIsSuperAdmin(permissions.includes('all'));
+    }
+  }, [isOpen, employee]);
 
   // Load roles and user account data when modal opens
   useEffect(() => {
@@ -24,13 +44,25 @@ export const UserAccountModal = ({ isOpen, onClose, onSuccess, employee }) => {
       });
       setError(null);
     }
-  }, [isOpen, employee]);
+  }, [isOpen, employee, isSuperAdmin]);
 
   const loadRoles = async () => {
     try {
       setLoadingData(true);
       const response = await roleService.getAllRoles();
-      setRoles(response.data?.roles || []);
+      const allRoles = response.data?.roles || [];
+      setRoles(allRoles);
+
+      // Filter roles based on current user permissions
+      // Only super admin can assign super admin role
+      if (!isSuperAdmin) {
+        const nonSuperAdminRoles = allRoles.filter(role =>
+          !role.permissions || !role.permissions.includes('all')
+        );
+        setFilteredRoles(nonSuperAdminRoles);
+      } else {
+        setFilteredRoles(allRoles);
+      }
     } catch (err) {
       console.error('Error loading roles:', err);
       setError('Failed to load roles');
@@ -197,6 +229,26 @@ export const UserAccountModal = ({ isOpen, onClose, onSuccess, employee }) => {
                 </div>
               </div>
 
+              {/* Self-Edit Warning */}
+              {isEditingSelf && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <svg className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-red-800 mb-1">
+                        Self-Modification Restricted
+                      </p>
+                      <p className="text-[12px] font-['Poppins',sans-serif] text-red-700">
+                        You cannot modify your own role or account status for security reasons.
+                        Please contact another administrator to make changes to your account.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Account Settings */}
               <div className="space-y-4">
                 <h3 className="text-[15px] font-semibold font-['Poppins',sans-serif] text-gray-700 border-b pb-2">
@@ -212,17 +264,22 @@ export const UserAccountModal = ({ isOpen, onClose, onSuccess, employee }) => {
                     value={formData.role}
                     onChange={(e) => handleChange('role', e.target.value)}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    disabled={isEditingSelf}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     <option value="">Select a role</option>
-                    {roles.map((role) => (
+                    {filteredRoles.map((role) => (
                       <option key={role.id} value={role.id}>
                         {role.roleName} - {role.description}
                       </option>
                     ))}
                   </select>
                   <p className="mt-1 text-[11px] text-gray-500 font-['Poppins',sans-serif]">
-                    Select the role that defines this user's permissions
+                    {isEditingSelf
+                      ? 'You cannot change your own role'
+                      : !isSuperAdmin
+                        ? 'Only Super Admin can assign Super Admin role'
+                        : 'Select the role that defines this user\'s permissions'}
                   </p>
                 </div>
 
@@ -240,7 +297,8 @@ export const UserAccountModal = ({ isOpen, onClose, onSuccess, employee }) => {
                         name="accountStatus"
                         checked={formData.isActive === true}
                         onChange={() => handleChange('isActive', true)}
-                        className="mt-1 w-4 h-4 text-emerald-600 border-gray-300 focus:ring-emerald-500"
+                        disabled={isEditingSelf}
+                        className="mt-1 w-4 h-4 text-emerald-600 border-gray-300 focus:ring-emerald-500 disabled:cursor-not-allowed"
                       />
                       <div className="ml-3">
                         <span className="text-[13px] font-medium font-['Poppins',sans-serif] text-gray-900">
@@ -259,7 +317,8 @@ export const UserAccountModal = ({ isOpen, onClose, onSuccess, employee }) => {
                         name="accountStatus"
                         checked={formData.isActive === false}
                         onChange={() => handleChange('isActive', false)}
-                        className="mt-1 w-4 h-4 text-red-600 border-gray-300 focus:ring-red-500"
+                        disabled={isEditingSelf}
+                        className="mt-1 w-4 h-4 text-red-600 border-gray-300 focus:ring-red-500 disabled:cursor-not-allowed"
                       />
                       <div className="ml-3">
                         <span className="text-[13px] font-medium font-['Poppins',sans-serif] text-gray-900">
@@ -271,6 +330,11 @@ export const UserAccountModal = ({ isOpen, onClose, onSuccess, employee }) => {
                       </div>
                     </label>
                   </div>
+                  {isEditingSelf && (
+                    <p className="mt-2 text-[11px] text-red-600 font-['Poppins',sans-serif]">
+                      🔒 You cannot deactivate your own account
+                    </p>
+                  )}
                 </div>
 
                 {/* Change Summary */}
@@ -328,7 +392,7 @@ export const UserAccountModal = ({ isOpen, onClose, onSuccess, employee }) => {
             </button>
             <button
               type="submit"
-              disabled={loading || loadingData}
+              disabled={loading || loadingData || isEditingSelf}
               className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-[13px] font-['Poppins',sans-serif] font-medium disabled:opacity-50 flex items-center gap-2"
             >
               {loading ? (
@@ -338,6 +402,13 @@ export const UserAccountModal = ({ isOpen, onClose, onSuccess, employee }) => {
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                   Updating...
+                </>
+              ) : isEditingSelf ? (
+                <>
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                  Cannot Modify Own Account
                 </>
               ) : (
                 'Update Account'
