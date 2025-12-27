@@ -114,18 +114,28 @@ export const POSCart = ({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onUpdateQuantity(item.id, item.quantity - 1)}
-                      className="w-8 h-8 bg-white rounded border border-gray-300 hover:bg-gray-100 flex items-center justify-center"
+                      className="w-8 h-8 bg-white rounded border border-gray-300 hover:bg-gray-100 flex items-center justify-center transition-colors"
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                         <path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                       </svg>
                     </button>
-                    <span className="w-12 text-center text-[14px] font-semibold font-['Poppins',sans-serif]">
-                      {item.quantity}
-                    </span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={item.quantity}
+                      onChange={(e) => {
+                        const newQty = parseInt(e.target.value) || 1;
+                        if (newQty >= 1) {
+                          onUpdateQuantity(item.id, newQty);
+                        }
+                      }}
+                      onFocus={(e) => e.target.select()}
+                      className="w-16 h-8 text-center text-[14px] font-semibold font-['Poppins',sans-serif] border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
                     <button
                       onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
-                      className="w-8 h-8 bg-white rounded border border-gray-300 hover:bg-gray-100 flex items-center justify-center"
+                      className="w-8 h-8 bg-white rounded border border-gray-300 hover:bg-gray-100 flex items-center justify-center transition-colors"
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                         <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />

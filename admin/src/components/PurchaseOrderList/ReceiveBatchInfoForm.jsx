@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import locationService from '../../services/locationService';
 
 /**
  * ReceiveBatchInfoForm
@@ -15,11 +16,39 @@ export const ReceiveBatchInfoForm = ({
     quantityReceived: poDetail?.quantity || '',
     mfgDate: '',
     expiryDate: '',
-    warehouseLocation: '',
+    location: '', // LocationMaster ID (optional)
     notes: ''
   });
 
   const [errors, setErrors] = useState({});
+  const [locations, setLocations] = useState([]);
+  const [loadingLocations, setLoadingLocations] = useState(false);
+
+  // Fetch locations on mount
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        setLoadingLocations(true);
+        const response = await locationService.getAllLocations();
+
+        // Extract locations array from response
+        const locationsList = response.success && response.data
+          ? (response.data.locations || response.data)
+          : (Array.isArray(response) ? response : []);
+
+        // Filter active locations only
+        const activeLocations = locationsList.filter(loc => loc.isActive !== false);
+        setLocations(activeLocations);
+      } catch (error) {
+        console.error('Error fetching locations:', error);
+        setLocations([]);
+      } finally {
+        setLoadingLocations(false);
+      }
+    };
+
+    fetchLocations();
+  }, []);
 
   // Reset form when poDetail changes
   useEffect(() => {
@@ -28,7 +57,7 @@ export const ReceiveBatchInfoForm = ({
         quantityReceived: poDetail.quantity || '',
         mfgDate: '',
         expiryDate: '',
-        warehouseLocation: '',
+        location: '',
         notes: ''
       });
       setErrors({});
@@ -72,10 +101,8 @@ export const ReceiveBatchInfoForm = ({
       }
     }
 
-    // Warehouse location validation
-    if (!formData.warehouseLocation?.trim()) {
-      newErrors.warehouseLocation = 'Warehouse location is required';
-    }
+    // Location validation - Optional, no validation needed
+    // Location can be assigned later if not selected during receiving
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -236,27 +263,47 @@ export const ReceiveBatchInfoForm = ({
         </div>
       </div>
 
-      {/* Warehouse Location */}
+      {/* Warehouse Location - Optional */}
       <div>
         <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
-          Warehouse Location <span className="text-red-500">*</span>
+          Warehouse Location <span className="text-gray-400 font-normal">(Optional)</span>
         </label>
-        <input
-          type="text"
-          name="warehouseLocation"
-          value={formData.warehouseLocation}
+        <select
+          name="location"
+          value={formData.location}
           onChange={handleChange}
-          placeholder="e.g., A1-B2, Shelf 3, Zone C"
-          maxLength={50}
-          className={`w-full px-3 py-2 border rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.warehouseLocation ? 'border-red-500' : 'border-gray-300'
+          className={`w-full px-3 py-2 border rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.location ? 'border-red-500' : 'border-gray-300'
             }`}
-          disabled={loading}
-        />
-        {errors.warehouseLocation && (
-          <p className="mt-1 text-[11px] text-red-600 font-['Poppins',sans-serif]">
-            {errors.warehouseLocation}
+          disabled={loading || loadingLocations}
+        >
+          <option value="">-- Assign later --</option>
+          {locations.map((loc) => (
+            <option key={loc._id || loc.id} value={loc._id || loc.id}>
+              {loc.locationCode} - {loc.name}
+            </option>
+          ))}
+        </select>
+        {loadingLocations && (
+          <p className="mt-1 text-[11px] text-gray-500 font-['Poppins',sans-serif]">
+            Loading locations...
           </p>
         )}
+        {!loadingLocations && locations.length === 0 && (
+          <p className="mt-1 text-[11px] text-orange-600 font-['Poppins',sans-serif]">
+            ⚠️ No active locations available. You can assign location later.
+          </p>
+        )}
+        {formData.location && (() => {
+          const selectedLoc = locations.find(loc => (loc._id || loc.id) === formData.location);
+          if (selectedLoc) {
+            return (
+              <p className="mt-1 text-[11px] text-emerald-600 font-['Poppins',sans-serif]">
+                Selected: {selectedLoc.locationCode} - {selectedLoc.name}
+              </p>
+            );
+          }
+          return null;
+        })()}
       </div>
 
       {/* Notes */}

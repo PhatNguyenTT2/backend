@@ -255,6 +255,89 @@ export const CreateStockOutOrderModal = ({ isOpen, onClose, onSuccess, inventory
     setShowBatchDropdown({ ...showBatchDropdown, [index]: false });
   };
 
+  const selectAllBatches = (index) => {
+    const item = items[index];
+    if (!item || !item.product) return;
+
+    // Get all batches for selected product with onHand stock > 0
+    const productBatches = inventoryList.filter(invItem => {
+      const product = invItem.batchId?.product || invItem.batchId?.productId;
+      const productId = product?._id || product?.id;
+      const onHand = invItem.quantityOnHand || 0;
+      return productId === item.product && onHand > 0;
+    });
+
+    if (productBatches.length === 0) {
+      setError('No batches available for this product');
+      return;
+    }
+
+    // Create new items array - replace current item with multiple batch items
+    const newItems = [...items];
+    const itemsBefore = newItems.slice(0, index);
+    const itemsAfter = newItems.slice(index + 1);
+
+    // Create one item per batch
+    const batchItems = productBatches.map(invItem => {
+      const batchId = invItem.batchId?._id || invItem.batchId?.id;
+      const batchCode = invItem.batchId?.batchCode;
+      const onHand = invItem.quantityOnHand || 0;
+      const unitPrice = invItem.batchId?.unitPrice?.$numberDecimal
+        ? parseFloat(invItem.batchId.unitPrice.$numberDecimal)
+        : (typeof invItem.batchId?.unitPrice === 'number'
+          ? invItem.batchId.unitPrice
+          : 0);
+
+      return {
+        product: item.product,
+        batch: batchId,
+        quantity: Math.min(onHand, 1), // Default to 1 or max available
+        unitPrice: unitPrice,
+        onHandQty: onHand,
+        batchCode: batchCode,
+        expiryDate: invItem.batchId?.expiryDate
+      };
+    });
+
+    // Rebuild items array
+    const updatedItems = [...itemsBefore, ...batchItems, ...itemsAfter];
+    setItems(updatedItems);
+
+    // Update search terms and dropdowns for new indices
+    const newProductSearchTerms = {};
+    const newShowProductDropdown = {};
+    const newBatchSearchTerms = {};
+    const newShowBatchDropdown = {};
+
+    updatedItems.forEach((itm, idx) => {
+      if (idx < index) {
+        // Keep old values for items before
+        newProductSearchTerms[idx] = productSearchTerms[idx] || '';
+        newBatchSearchTerms[idx] = batchSearchTerms[idx] || '';
+      } else if (idx >= index && idx < index + batchItems.length) {
+        // Set values for new batch items
+        const products = getUniqueProducts();
+        const prod = products.find(p => p.id === itm.product);
+        newProductSearchTerms[idx] = prod?.name || '';
+        newBatchSearchTerms[idx] = itm.batchCode || '';
+      } else {
+        // Shift indices for items after
+        const oldIdx = idx - batchItems.length + 1;
+        newProductSearchTerms[idx] = productSearchTerms[oldIdx] || '';
+        newBatchSearchTerms[idx] = batchSearchTerms[oldIdx] || '';
+      }
+      newShowProductDropdown[idx] = false;
+      newShowBatchDropdown[idx] = false;
+    });
+
+    setProductSearchTerms(newProductSearchTerms);
+    setShowProductDropdown(newShowProductDropdown);
+    setBatchSearchTerms(newBatchSearchTerms);
+    setShowBatchDropdown(newShowBatchDropdown);
+
+    setError(null);
+  };
+
   const getFilteredBatches = (index) => {
     const item = items[index];
     if (!item || !item.product) return [];
@@ -501,9 +584,24 @@ export const CreateStockOutOrderModal = ({ isOpen, onClose, onSuccess, inventory
                         {/* Product Selection */}
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-[12px] font-semibold font-['Poppins',sans-serif] text-gray-700 mb-1">
-                              Product <span className="text-red-500">*</span>
-                            </label>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="block text-[12px] font-semibold font-['Poppins',sans-serif] text-gray-700">
+                                Product <span className="text-red-500">*</span>
+                              </label>
+                              {item.product && !item.batch && (
+                                <button
+                                  type="button"
+                                  onClick={() => selectAllBatches(index)}
+                                  className="px-2 py-0.5 bg-blue-600 text-white rounded text-[10px] font-['Poppins',sans-serif] font-medium hover:bg-blue-700 transition-colors flex items-center gap-1"
+                                  title="Select all available batches for this product"
+                                >
+                                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+                                    <path d="M2 8h12M8 2v12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                  </svg>
+                                  All Batches
+                                </button>
+                              )}
+                            </div>
                             <div ref={el => dropdownRefs.current[`product-${index}`] = el} className="relative">
                               <input
                                 type="text"

@@ -134,9 +134,10 @@ const PurchaseOrderList = ({
   };
 
   const handleDelete = async (po) => {
-    // Only allow delete when status is cancelled or received
-    if (po.status !== 'cancelled' && po.status !== 'received') {
-      alert('Cannot delete purchase order. Only cancelled or received purchase orders can be deleted.');
+    // Only allow delete when status is draft, cancelled, or received
+    // Cannot delete pending or approved orders (active workflow states)
+    if (po.status !== 'draft' && po.status !== 'cancelled' && po.status !== 'received') {
+      alert('Cannot delete purchase order. Only draft, cancelled, or received purchase orders can be deleted.');
       return;
     }
 
@@ -576,12 +577,12 @@ const PurchaseOrderList = ({
                   handleDelete(po);
                   setActiveDropdown(null);
                 }}
-                disabled={po.status !== 'cancelled' && po.status !== 'received'}
-                className={`w-full px-3 py-2 text-left transition-colors flex items-center gap-2 ${po.status !== 'cancelled' && po.status !== 'received'
+                disabled={po.status !== 'draft' && po.status !== 'cancelled' && po.status !== 'received'}
+                className={`w-full px-3 py-2 text-left transition-colors flex items-center gap-2 ${po.status !== 'draft' && po.status !== 'cancelled' && po.status !== 'received'
                   ? 'text-gray-400 cursor-not-allowed opacity-50'
                   : 'hover:bg-red-50 hover:text-red-600 text-gray-700'
                   }`}
-                title={po.status !== 'cancelled' && po.status !== 'received' ? 'Only cancelled or received purchase orders can be deleted' : 'Delete purchase order'}
+                title={po.status !== 'draft' && po.status !== 'cancelled' && po.status !== 'received' ? 'Only draft, cancelled, or received purchase orders can be deleted' : 'Delete purchase order'}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M2 4H3.33333H14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

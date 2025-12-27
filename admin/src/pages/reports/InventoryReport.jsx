@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Breadcrumb } from '../components/Breadcrumb';
-import { PermissionAlert } from '../components/PermissionAlert';
+import { Breadcrumb } from '../../components/Breadcrumb';
+import { PermissionAlert } from '../../components/PermissionAlert';
 import {
   InventoryReportSummaryCards,
   StockStatusOverview,
   StockDistributionChart,
   StockMovementChart,
   InventoryProductList
-} from '../components/InventoryReport';
-import api from '../services/api';
+} from '../../components/InventoryReport';
+import api from '../../services/api';
 
 export const InventoryReport = () => {
   const [reportData, setReportData] = useState(null);
@@ -154,3 +154,5 @@ export const InventoryReport = () => {
     </div>
   );
 };
+
+export default InventoryReport;

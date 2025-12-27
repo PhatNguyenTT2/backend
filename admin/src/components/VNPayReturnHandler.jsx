@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import vnpayService from '../services/vnpayService';
 import orderService from '../services/orderService';
@@ -8,7 +8,7 @@ export const VNPayReturnHandler = ({ onPaymentComplete, onPaymentFailed }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [processing, setProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Đang xử lý thanh toán...');
-  const [processed, setProcessed] = useState(false); // Prevent re-processing
+  const processedRef = useRef(false); // Use ref instead of state to prevent re-renders
 
   useEffect(() => {
     const handleVNPayReturn = async () => {
@@ -18,21 +18,26 @@ export const VNPayReturnHandler = ({ onPaymentComplete, onPaymentFailed }) => {
       const errorMessage = searchParams.get('message');
 
       // Skip if not VNPay return or already processed
-      if (!paymentStatus || processed) return;
+      if (!paymentStatus || processedRef.current) return;
 
       // Mark as processed to prevent infinite loop
-      setProcessed(true);
+      processedRef.current = true;
       setProcessing(true);
+
+      console.log('🔔 VNPayReturnHandler triggered:', { paymentStatus, vnpTxnRef });
 
       try {
         if (paymentStatus === 'success' && vnpTxnRef) {
           // Payment success - fetch order from VNPay record
           setStatusMessage('Thanh toán thành công! Đang tải thông tin đơn hàng...');
 
+          console.log('✅ VNPay payment success - Fetching VNPay record:', vnpTxnRef);
+
           // Get VNPay transaction to find orderId
           const vnpayRecord = await vnpayService.checkPaymentStatus(vnpTxnRef);
 
           if (!vnpayRecord || !vnpayRecord.orderId) {
+            console.error('❌ VNPay record not found or missing orderId:', vnpayRecord);
             throw new Error('Không tìm thấy thông tin đơn hàng');
           }
 
@@ -50,19 +55,29 @@ export const VNPayReturnHandler = ({ onPaymentComplete, onPaymentFailed }) => {
           const orderResponse = await orderService.getOrderById(orderId);
 
           if (!orderResponse.success) {
+            console.error('❌ Failed to fetch order:', orderResponse);
             throw new Error('Không thể tải thông tin đơn hàng');
           }
 
           const completeOrder = orderResponse.data.order;
 
+          console.log('✅ Order fetched successfully:', completeOrder.orderNumber);
           setStatusMessage('Thanh toán hoàn tất!');
 
           // Clear URL params BEFORE calling parent handler
           setSearchParams({});
 
-          // Call parent handler to show invoice
+          // Call parent handler to show invoice (wrap in try-catch)
           if (onPaymentComplete) {
-            onPaymentComplete(completeOrder);
+            try {
+              console.log('📞 Calling onPaymentComplete...');
+              await onPaymentComplete(completeOrder);
+              console.log('✅ onPaymentComplete executed successfully');
+            } catch (completeError) {
+              // Don't show failed UI if only parent handler fails
+              // Parent should handle its own errors
+              console.error('⚠️ onPaymentComplete error (handled by parent):', completeError);
+            }
           }
 
         } else {
@@ -100,7 +115,7 @@ export const VNPayReturnHandler = ({ onPaymentComplete, onPaymentFailed }) => {
     };
 
     handleVNPayReturn();
-  }, [searchParams]); // Only depend on searchParams, not on callbacks
+  }, [searchParams]); // searchParams changes trigger useEffect, but processedRef prevents re-execution
 
   if (!processing && !searchParams.get('payment')) {
     return null; // Don't render if not processing VNPay return

@@ -136,7 +136,8 @@ export const NavigationMenuSection = () => {
             { name: 'Sales', href: '/reports/sales' },
             { name: 'Purchase', href: '/reports/purchase' },
             { name: 'Profit', href: '/reports/profit' },
-            { name: 'Inventory', href: '/reports/inventory' }
+            { name: 'Inventory', href: '/reports/inventory' },
+            { name: 'Employee Sales', href: '/reports/employee-sales' }
           ]
         },
       ],

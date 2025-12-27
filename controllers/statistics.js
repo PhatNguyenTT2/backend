@@ -1357,4 +1357,185 @@ statisticsRouter.get('/inventory', async (request, response) => {
   }
 })
 
+/**
+ * GET /api/statistics/employee-sales
+ * Get employee sales performance report
+ * Query params: startDate (required), endDate (required), employeeId (optional)
+ */
+statisticsRouter.get('/employee-sales', async (request, response) => {
+  try {
+    const { startDate, endDate, employeeId } = request.query
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return response.status(400).json({
+        success: false,
+        error: 'Missing required parameters: startDate and endDate'
+      })
+    }
+
+    // Build query for orders
+    const orderQuery = {
+      orderDate: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      },
+      status: 'delivered',
+      paymentStatus: 'paid',
+      createdBy: { $exists: true, $ne: null } // Only orders with employee
+    }
+
+    if (employeeId) {
+      orderQuery.createdBy = employeeId
+    }
+
+    logger.info('Fetching employee sales statistics', { startDate, endDate, employeeId })
+
+    // Find all delivered and paid orders in date range
+    const orders = await Order.find(orderQuery)
+      .populate({
+        path: 'createdBy',
+        select: 'fullName userAccount',
+        populate: {
+          path: 'userAccount',
+          select: 'userCode'
+        }
+      })
+      .populate('customer', 'fullName phone')
+      .sort({ orderDate: -1 })
+
+    if (orders.length === 0) {
+      return response.json({
+        success: true,
+        data: {
+          summary: {
+            totalEmployees: 0,
+            totalOrders: 0,
+            totalRevenue: 0,
+            totalQuantitySold: 0,
+            averageOrderValue: 0,
+            topEmployee: null
+          },
+          employees: [],
+          dateRange: {
+            startDate,
+            endDate
+          }
+        }
+      })
+    }
+
+    const orderIds = orders.map(order => order._id)
+
+    // Get order details for quantity calculation
+    const orderDetails = await OrderDetail.find({ order: { $in: orderIds } })
+
+    // Map to organize data by employee
+    const employeeSalesMap = new Map()
+
+    orders.forEach(order => {
+      const employeeId = order.createdBy?._id?.toString()
+      const employeeName = order.createdBy?.fullName || 'Unknown'
+      const employeeCode = order.createdBy?.userAccount?.userCode || 'N/A'
+
+      if (!employeeId) return
+
+      if (!employeeSalesMap.has(employeeId)) {
+        employeeSalesMap.set(employeeId, {
+          employeeId,
+          employeeName,
+          employeeCode,
+          totalOrders: 0,
+          totalRevenue: 0,
+          totalQuantity: 0,
+          ordersList: []
+        })
+      }
+
+      const employeeData = employeeSalesMap.get(employeeId)
+
+      // Calculate quantity for this order
+      const orderQuantity = orderDetails
+        .filter(detail => detail.order.toString() === order._id.toString())
+        .reduce((sum, detail) => sum + detail.quantity, 0)
+
+      employeeData.totalOrders += 1
+      employeeData.totalRevenue += order.total
+      employeeData.totalQuantity += orderQuantity
+      employeeData.ordersList.push({
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        customer: order.customer?.fullName || 'Guest',
+        phone: order.customer?.phone || 'N/A',
+        total: order.total,
+        orderDate: order.orderDate,
+        itemCount: orderQuantity
+      })
+    })
+
+    // Convert Map to Array and calculate additional metrics
+    const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0)
+    const totalQuantitySold = orderDetails.reduce((sum, detail) => sum + detail.quantity, 0)
+
+    const employees = Array.from(employeeSalesMap.values()).map(emp => ({
+      employeeId: emp.employeeId,
+      employeeName: emp.employeeName,
+      employeeCode: emp.employeeCode,
+      totalOrders: emp.totalOrders,
+      totalRevenue: emp.totalRevenue,
+      totalQuantity: emp.totalQuantity,
+      averageOrderValue: emp.totalRevenue / emp.totalOrders,
+      revenuePercentage: totalRevenue > 0 ? Math.round((emp.totalRevenue / totalRevenue) * 100) : 0,
+      orders: emp.ordersList.sort((a, b) => b.orderDate - a.orderDate)
+    }))
+
+    // Sort by revenue descending and assign ranks
+    employees.sort((a, b) => b.totalRevenue - a.totalRevenue)
+    employees.forEach((emp, index) => {
+      emp.rank = index + 1
+    })
+
+    // Calculate summary statistics
+    const summary = {
+      totalEmployees: employees.length,
+      totalOrders: orders.length,
+      totalRevenue,
+      totalQuantitySold,
+      averageOrderValue: totalRevenue / orders.length,
+      topEmployee: employees.length > 0 ? {
+        id: employees[0].employeeId,
+        name: employees[0].employeeName,
+        code: employees[0].employeeCode,
+        revenue: employees[0].totalRevenue,
+        orders: employees[0].totalOrders
+      } : null
+    }
+
+    logger.info('Employee sales statistics calculated', {
+      totalEmployees: employees.length,
+      totalOrders: summary.totalOrders,
+      totalRevenue: summary.totalRevenue
+    })
+
+    response.json({
+      success: true,
+      data: {
+        summary,
+        employees,
+        dateRange: {
+          startDate,
+          endDate
+        }
+      }
+    })
+  } catch (error) {
+    logger.error('Error getting employee sales statistics:', error)
+    response.status(500).json({
+      success: false,
+      error: 'Failed to get employee sales statistics',
+      message: error.message
+    })
+  }
+})
+
 module.exports = statisticsRouter

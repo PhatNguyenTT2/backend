@@ -136,9 +136,11 @@ export const StockOuts = () => {
 
   const fetchInventoryList = async () => {
     try {
+      // Stock out operates on warehouse inventory (onHand), not shelf stock
+      // So we only filter by hasWarehouseStock to get all batches with inventory in warehouse
       const response = await detailInventoryService.getAllDetailInventories({
-        hasWarehouseStock: true,
-        hasShelfStock: true
+        hasWarehouseStock: true
+        // Removed hasShelfStock filter - stock out can process batches regardless of shelf stock
       });
 
       console.log('DEBUG: fetchInventoryList response:', response);

@@ -814,6 +814,50 @@ export const POSMain = () => {
     }
   };
 
+  // ⭐ Helper: Check if cart has changed from existing order
+  const hasCartChanged = () => {
+    if (!existingOrder || !existingOrder.details) return true;
+
+    const orderDetails = existingOrder.details;
+
+    // Check if number of items changed
+    if (cart.length !== orderDetails.length) {
+      console.log('📊 Cart length changed:', cart.length, 'vs', orderDetails.length);
+      return true;
+    }
+
+    // Check if any item changed (quantity, product, or batch)
+    const changed = cart.some(cartItem => {
+      const matchingDetail = orderDetails.find(detail => {
+        const detailProductId = detail.product?._id || detail.product?.id || detail.product;
+        const cartProductId = cartItem.productId || cartItem.id;
+
+        // For fresh products with batch, also match batch
+        if (cartItem.batch?.id) {
+          const detailBatchId = detail.batch?._id || detail.batch?.id || detail.batch;
+          return detailProductId === cartProductId && detailBatchId === cartItem.batch.id;
+        }
+
+        return detailProductId === cartProductId;
+      });
+
+      if (!matchingDetail) {
+        console.log('📊 New item in cart:', cartItem.name);
+        return true; // Item not found in order = changed
+      }
+
+      // Check if quantity changed
+      if (matchingDetail.quantity !== cartItem.quantity) {
+        console.log('📊 Quantity changed for', cartItem.name, ':', matchingDetail.quantity, '→', cartItem.quantity);
+        return true;
+      }
+
+      return false;
+    });
+
+    return changed;
+  };
+
   // ⭐ UNIFIED FLOW: Handle checkout - create draft order BEFORE showing payment modal
   const handleCheckout = async () => {
     // Step 1: Validate cart
@@ -830,8 +874,57 @@ export const POSMain = () => {
 
     // Step 3: Check if order already exists (held order scenario)
     if (existingOrder) {
-      console.log('✅ Using existing held order:', existingOrder.orderNumber);
-      setShowPaymentModal(true); // Go directly to payment
+      // ⭐ NEW: Check if cart has changed from original order
+      if (hasCartChanged()) {
+        console.log('📝 Cart changed - updating held order before payment...');
+
+        try {
+          setLoading(true);
+
+          // Prepare updated items
+          const items = cart.map(item => ({
+            product: item.productId || item.id,
+            batch: item.batch?.id || null,
+            quantity: item.quantity,
+            unitPrice: item.price
+          }));
+
+          // Update order via API
+          const orderId = existingOrder._id || existingOrder.id;
+          const updateResponse = await orderService.updateOrder(orderId, {
+            items: items,
+            customer: selectedCustomer.id === 'virtual-guest'
+              ? 'virtual-guest'
+              : selectedCustomer.id
+          });
+
+          if (!updateResponse.success) {
+            throw new Error(updateResponse.error?.message || 'Failed to update order');
+          }
+
+          // ⭐ CRITICAL: Update existingOrder with latest data
+          const updatedOrder = updateResponse.data.order;
+          updatedOrder.wasHeldOrder = existingOrder.wasHeldOrder; // Preserve flag
+          updatedOrder.vnpayProcessing = existingOrder.vnpayProcessing; // Preserve VNPay flag
+          setExistingOrder(updatedOrder);
+
+          console.log('✅ Held order updated:', updatedOrder.orderNumber);
+          showToast('success', 'Order updated successfully');
+
+        } catch (error) {
+          console.error('❌ Failed to update held order:', error);
+          showToast('error', error.message || 'Failed to update order');
+          setLoading(false);
+          return; // Stop checkout if update failed
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        console.log('✅ Using existing held order without changes:', existingOrder.orderNumber);
+      }
+
+      // Show payment modal (order is up-to-date now)
+      setShowPaymentModal(true);
       return;
     }
 
@@ -918,7 +1011,13 @@ export const POSMain = () => {
       setShowPaymentModal(false);
 
       if (paymentMethod === 'bank_transfer') {
-        // VNPay flow
+        // ⭐ VNPAY FLOW: Mark order with payment method before redirect
+        console.log('🏦 VNPay flow selected - marking order');
+        setExistingOrder(prev => ({
+          ...prev,
+          selectedPaymentMethod: 'bank_transfer',
+          vnpayProcessing: true
+        }));
         await handleVNPayPayment(orderId);
         return;
       }
@@ -1031,9 +1130,57 @@ export const POSMain = () => {
 
     try {
       const orderId = order._id || order.id;
+      console.log('🏦 VNPay return callback - Processing order:', order.orderNumber);
 
-      // Step 1: Create payment
-      console.log('💳 Creating payment...');
+      // ⭐ NOTE: After VNPay redirect, page reloads and all React state is lost
+      // So we cannot rely on existingOrder state here
+      // VNPayReturnHandler only triggers when URL has VNPay params, so that's our flag
+
+      // Fetch fresh order data from backend
+      const fullOrderResponse = await orderService.getOrderById(orderId);
+      if (!fullOrderResponse.success) {
+        throw new Error('Failed to fetch order');
+      }
+
+      const completeOrder = fullOrderResponse.data.order;
+      console.log('📦 Order status:', {
+        orderNumber: completeOrder.orderNumber,
+        paymentStatus: completeOrder.paymentStatus,
+        status: completeOrder.status,
+        hasPayments: completeOrder.payments?.length || 0
+      });
+
+      // ⭐ CHECK 1: If already paid, just show invoice (payment already created)
+      if (completeOrder.paymentStatus === 'paid' || completeOrder.paymentStatus === 'completed') {
+        console.log('✅ Payment already processed by IPN callback or previous call');
+
+        // Update order status to delivered if needed
+        if (completeOrder.status !== 'delivered') {
+          await orderService.updateOrder(orderId, {
+            status: 'delivered'
+          });
+          console.log('✅ Order status updated to delivered');
+        }
+
+        // Show invoice
+        completeOrder.paymentMethod = 'bank_transfer';
+        setInvoiceOrder(completeOrder);
+        setShowInvoiceModal(true);
+
+        // Clear state
+        setShowPaymentModal(false);
+        setCart([]);
+        setSelectedCustomer(null);
+        setExistingOrder(null);
+
+        showToast('success', `Thanh toán VNPay thành công! Đơn hàng: ${order.orderNumber}`);
+        return;
+      }
+
+      // ⭐ CHECK 2: Payment not created yet - create it now
+      // This happens when IPN callback hasn't run yet (rare)
+      console.log('📝 Creating payment record for VNPay transaction...');
+
       const paymentResponse = await posLoginService.createPaymentForOrder(
         orderId,
         'bank_transfer',
@@ -1041,33 +1188,30 @@ export const POSMain = () => {
       );
 
       if (!paymentResponse.success) {
-        throw new Error(paymentResponse.error?.message);
+        throw new Error(paymentResponse.error?.message || 'Failed to create payment');
       }
 
-      console.log('✅ Payment created');
+      console.log('✅ Payment created:', paymentResponse.data.payment.paymentNumber);
 
-      // Step 2: Update order
-      console.log('🔄 Updating order...');
+      // Update order status
       await orderService.updateOrder(orderId, {
         status: 'delivered',
         paymentStatus: 'paid'
       });
 
-      console.log('✅ Order updated');
+      console.log('✅ Order updated to delivered/paid');
 
-      // Step 3: Fetch full order
-      const fullOrderResponse = await orderService.getOrderById(orderId);
-      const completeOrder = fullOrderResponse.data.order;
-      completeOrder.paymentMethod = 'bank_transfer';
+      // Fetch final order state
+      const finalOrderResponse = await orderService.getOrderById(orderId);
+      const finalOrder = finalOrderResponse.data.order;
+      finalOrder.paymentMethod = 'bank_transfer';
 
-      // Step 4: Close payment modal (if still open)
-      setShowPaymentModal(false);
-
-      // Step 5: Show invoice modal
-      setInvoiceOrder(completeOrder);
+      // Show invoice
+      setInvoiceOrder(finalOrder);
       setShowInvoiceModal(true);
 
-      // Step 6: Clear cart and customer
+      // Clear state
+      setShowPaymentModal(false);
       setCart([]);
       setSelectedCustomer(null);
       setExistingOrder(null);
@@ -1076,7 +1220,16 @@ export const POSMain = () => {
 
     } catch (error) {
       console.error('❌ VNPay complete error:', error);
-      // showToast('error', error.message || 'Thanh toán VNPay thất bại');
+
+      // Clear VNPay processing flag
+      if (existingOrder) {
+        setExistingOrder(prev => ({
+          ...prev,
+          vnpayProcessing: false
+        }));
+      }
+
+      showToast('error', error.message || 'Có lỗi xảy ra khi xử lý thanh toán VNPay');
     }
   };
 
@@ -1094,8 +1247,13 @@ export const POSMain = () => {
       } catch (deleteError) {
         console.error('Failed to delete draft:', deleteError);
       }
-    } else {
+    } else if (existingOrder) {
       console.log('ℹ️ Keeping held order (can retry payment)');
+      // Clear VNPay processing flag
+      setExistingOrder(prev => ({
+        ...prev,
+        vnpayProcessing: false
+      }));
     }
 
     showToast('error', error.message || 'Thanh toán VNPay thất bại');
