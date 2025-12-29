@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { Dashboard, ViewProduct, Products, ProductBatches, LoginSignup, Orders, Categories, Employees, Customers, Suppliers, Inventories, DetailInventories, PurchaseReports, SalesReports, ProfitReports, Roles, POSManagement, Settings, NoAccess } from "./pages";
 import InventoryReport from "./pages/reports/InventoryReport";
 import EmployeeSalesReport from "./pages/reports/EmployeeSales";
+import CustomerSalesReport from "./pages/reports/CustomerSales";
 import { ProductQRCodes } from "./pages/ProductQRCodes";
 import { StockOuts } from "./pages/StockOuts";
 import Locations from "./pages/Locations";
@@ -224,6 +225,14 @@ function App() {
             element={
               <ProtectedRoute requiredPermission={PERMISSIONS.VIEW_REPORTS}>
                 <EmployeeSalesReport />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reports/customer-sales"
+            element={
+              <ProtectedRoute requiredPermission={PERMISSIONS.VIEW_REPORTS}>
+                <CustomerSalesReport />
               </ProtectedRoute>
             }
           />

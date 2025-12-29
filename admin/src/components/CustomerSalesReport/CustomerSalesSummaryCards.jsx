@@ -1,7 +1,7 @@
 import React from 'react';
 import { Users, ShoppingCart, TrendingUp, Award } from 'lucide-react';
 
-export const EmployeeSalesSummaryCards = ({ summary }) => {
+export const CustomerSalesSummaryCards = ({ summary }) => {
   if (!summary) return null;
 
   const formatCurrency = (amount) => {
@@ -17,11 +17,11 @@ export const EmployeeSalesSummaryCards = ({ summary }) => {
 
   return (
     <div className="grid grid-cols-4 gap-4">
-      {/* Total Employees */}
-      <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-blue-500">
-        <p className="text-[11px] text-gray-600 font-medium uppercase tracking-wider">Total Employees</p>
-        <p className="text-[20px] font-bold text-blue-600 mt-1">
-          {summary.totalEmployees || 0}
+      {/* Total Customers */}
+      <div className="bg-white rounded-lg shadow-sm p-4 border-l-4 border-purple-500">
+        <p className="text-[11px] text-gray-600 font-medium uppercase tracking-wider">Total Customers</p>
+        <p className="text-[20px] font-bold text-purple-600 mt-1">
+          {summary.totalCustomers || 0}
         </p>
       </div>
 

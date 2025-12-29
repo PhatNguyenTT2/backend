@@ -1,19 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Breadcrumb } from '../../components/Breadcrumb';
 import {
-  EmployeeSalesSummaryCards,
-  EmployeeSalesComparisonChart,
-  EmployeeSalesList
-} from '../../components/EmployeeSalesReport';
+  CustomerSalesSummaryCards,
+  CustomerSalesComparisonChart,
+  CustomerSalesList
+} from '../../components/CustomerSalesReport';
 import { Users, Calendar } from 'lucide-react';
 import api from '../../services/api';
 
-const EmployeeSalesReport = () => {
+const CustomerSalesReport = () => {
   // Breadcrumb items
   const breadcrumbItems = [
     { label: 'Dashboard', href: '/dashboard' },
     { label: 'Reports', href: '/reports' },
-    { label: 'Employee Sales', href: null }
+    { label: 'Customer Sales', href: null }
   ];
 
   // State management
@@ -25,6 +25,7 @@ const EmployeeSalesReport = () => {
   const [periodType, setPeriodType] = useState('month');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [includeGuests, setIncludeGuests] = useState(false);
 
   // Initialize dates based on period type
   useEffect(() => {
@@ -70,8 +71,8 @@ const EmployeeSalesReport = () => {
     setEndDate(end);
   };
 
-  // Fetch employee sales report
-  const fetchEmployeeSales = async () => {
+  // Fetch customer sales report
+  const fetchCustomerSales = async () => {
     if (!startDate || !endDate) {
       setError('Please select a date range');
       return;
@@ -86,21 +87,22 @@ const EmployeeSalesReport = () => {
       setLoading(true);
       setError(null);
 
-      const response = await api.get('/statistics/employee-sales', {
+      const response = await api.get('/statistics/customer-sales', {
         params: {
           startDate,
-          endDate
+          endDate,
+          includeGuests: includeGuests.toString()
         }
       });
 
       if (response.data.success) {
         setSalesData(response.data.data);
       } else {
-        setError('Failed to load employee sales report');
+        setError('Failed to load customer sales report');
       }
     } catch (err) {
-      console.error('Error fetching employee sales report:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to load employee sales report');
+      console.error('Error fetching customer sales report:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to load customer sales report');
     } finally {
       setLoading(false);
     }
@@ -109,11 +111,9 @@ const EmployeeSalesReport = () => {
   // Auto fetch when dates change (but not on initial render with empty dates)
   useEffect(() => {
     if (startDate && endDate) {
-      fetchEmployeeSales();
+      fetchCustomerSales();
     }
-  }, [startDate, endDate]);
-
-
+  }, [startDate, endDate, includeGuests]);
 
   return (
     <div className="space-y-6">
@@ -125,10 +125,10 @@ const EmployeeSalesReport = () => {
         <div className="flex items-center gap-3">
           <div>
             <h1 className="text-[24px] font-semibold text-gray-900">
-              Employee Sales Reports
+              Customer Sales Reports
             </h1>
             <p className="text-[13px] text-gray-600 mt-1">
-              Track and analyze employee sales performance by date range
+              Track and analyze customer purchase behavior by date range
             </p>
           </div>
         </div>
@@ -155,7 +155,7 @@ const EmployeeSalesReport = () => {
                   key={period.value}
                   type="button"
                   className={`px-4 py-2 rounded-lg border text-[13px] font-medium transition-colors ${periodType === period.value
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                      ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                     }`}
                   onClick={() => handlePeriodTypeChange(period.value)}
@@ -166,8 +166,8 @@ const EmployeeSalesReport = () => {
             </div>
           </div>
 
-          {/* Date Range */}
-          <div className="grid grid-cols-3 gap-4">
+          {/* Date Range and Guest Toggle */}
+          <div className="grid grid-cols-4 gap-4">
             <div>
               <label className="block text-[13px] font-medium text-gray-700 mb-2 flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
@@ -178,7 +178,7 @@ const EmployeeSalesReport = () => {
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 max={new Date().toISOString().split('T')[0]}
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               />
             </div>
             <div>
@@ -191,14 +191,27 @@ const EmployeeSalesReport = () => {
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 max={new Date().toISOString().split('T')[0]}
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               />
             </div>
             <div className="flex items-end">
+              <label className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg border-2 border-gray-300 cursor-pointer hover:bg-gray-100 transition-colors w-full">
+                <input
+                  type="checkbox"
+                  checked={includeGuests}
+                  onChange={(e) => setIncludeGuests(e.target.checked)}
+                  className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                />
+                <span className="text-[13px] font-medium text-gray-700">
+                  Include Walk-in Guests
+                </span>
+              </label>
+            </div>
+            <div className="flex items-end">
               <button
-                onClick={fetchEmployeeSales}
+                onClick={fetchCustomerSales}
                 disabled={loading || !startDate || !endDate}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-[13px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
+                className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-[13px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm hover:shadow-md"
               >
                 {loading ? (
                   <>
@@ -229,21 +242,21 @@ const EmployeeSalesReport = () => {
 
       {/* Summary Cards */}
       {salesData && salesData.summary && (
-        <EmployeeSalesSummaryCards summary={salesData.summary} />
+        <CustomerSalesSummaryCards summary={salesData.summary} />
       )}
 
       {/* Comparison Chart */}
-      {salesData && salesData.employees && salesData.employees.length > 0 && (
-        <EmployeeSalesComparisonChart employees={salesData.employees} />
+      {salesData && salesData.customers && salesData.customers.length > 0 && (
+        <CustomerSalesComparisonChart customers={salesData.customers} />
       )}
 
-      {/* Employee List */}
-      <EmployeeSalesList
-        employees={salesData?.employees || []}
+      {/* Customer List */}
+      <CustomerSalesList
+        customers={salesData?.customers || []}
         loading={loading}
       />
     </div>
   );
 };
 
-export default EmployeeSalesReport;
+export default CustomerSalesReport;

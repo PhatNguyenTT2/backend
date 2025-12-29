@@ -1538,4 +1538,239 @@ statisticsRouter.get('/employee-sales', async (request, response) => {
   }
 })
 
+/**
+ * GET /api/statistics/customer-sales
+ * Get customer sales ranking report
+ * Query params: startDate (required), endDate (required), customerId (optional), includeGuests (optional, default: false)
+ */
+statisticsRouter.get('/customer-sales', async (request, response) => {
+  try {
+    const { startDate, endDate, customerId, includeGuests } = request.query
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return response.status(400).json({
+        success: false,
+        error: 'Start date and end date are required'
+      })
+    }
+
+    const shouldIncludeGuests = includeGuests === 'true'
+
+    logger.info('Fetching customer sales statistics', { startDate, endDate, customerId, includeGuests: shouldIncludeGuests })
+
+    // Build query for orders
+    const orderQuery = {
+      orderDate: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      },
+      status: 'delivered',
+      paymentStatus: 'paid'
+    }
+
+    if (customerId) {
+      orderQuery.customer = customerId
+    }
+
+    // Find all delivered and paid orders in date range
+    const orders = await Order.find(orderQuery)
+      .populate({
+        path: 'customer',
+        select: 'customerCode fullName phone email customerType totalSpent'
+      })
+      .populate('createdBy', 'fullName')
+      .sort({ orderDate: -1 })
+
+    if (orders.length === 0) {
+      return response.json({
+        success: true,
+        data: {
+          summary: {
+            totalCustomers: 0,
+            totalOrders: 0,
+            totalRevenue: 0,
+            totalQuantity: 0,
+            averageOrderValue: 0,
+            guestOrders: 0,
+            guestRevenue: 0,
+            topCustomer: null
+          },
+          customers: [],
+          dateRange: { startDate, endDate }
+        }
+      })
+    }
+
+    const orderIds = orders.map(order => order._id)
+
+    // Get order details for quantity calculation
+    const orderDetails = await OrderDetail.find({ order: { $in: orderIds } })
+
+    // Map to organize data by customer
+    const customerSalesMap = new Map()
+    let guestOrdersData = {
+      totalOrders: 0,
+      totalRevenue: 0,
+      totalQuantity: 0,
+      ordersList: []
+    }
+
+    orders.forEach(order => {
+      const customer = order.customer
+
+      // Handle orders without customer (virtual guests) or guest customers
+      if (!customer || customer.customerType === 'guest') {
+        if (shouldIncludeGuests) {
+          const orderDetailsForThisOrder = orderDetails.filter(d => d.order.toString() === order._id.toString())
+          const orderQuantity = orderDetailsForThisOrder.reduce((sum, d) => sum + d.quantity, 0)
+
+          guestOrdersData.totalOrders += 1
+          guestOrdersData.totalRevenue += order.total
+          guestOrdersData.totalQuantity += orderQuantity
+          guestOrdersData.ordersList.push({
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            customerName: customer?.fullName || 'Walk-in Customer',
+            customerPhone: customer?.phone || 'N/A',
+            itemCount: orderDetailsForThisOrder.length,
+            total: order.total,
+            orderDate: order.orderDate,
+            employee: order.createdBy?.fullName || 'N/A'
+          })
+        }
+        return
+      }
+
+      const customerId = customer._id.toString()
+      const customerName = customer.fullName || 'Unknown'
+      const customerCode = customer.customerCode || 'N/A'
+      const customerPhone = customer.phone || 'N/A'
+      const customerEmail = customer.email || 'N/A'
+      const customerType = customer.customerType || 'retail'
+
+      if (!customerSalesMap.has(customerId)) {
+        customerSalesMap.set(customerId, {
+          customerId,
+          customerName,
+          customerCode,
+          customerPhone,
+          customerEmail,
+          customerType,
+          totalOrders: 0,
+          totalRevenue: 0,
+          totalQuantity: 0,
+          ordersList: []
+        })
+      }
+
+      const custData = customerSalesMap.get(customerId)
+      custData.totalOrders += 1
+      custData.totalRevenue += order.total
+
+      // Get order details quantity
+      const orderDetailsForThisOrder = orderDetails.filter(d => d.order.toString() === order._id.toString())
+      const orderQuantity = orderDetailsForThisOrder.reduce((sum, d) => sum + d.quantity, 0)
+      custData.totalQuantity += orderQuantity
+
+      custData.ordersList.push({
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        itemCount: orderDetailsForThisOrder.length,
+        total: order.total,
+        orderDate: order.orderDate,
+        employee: order.createdBy?.fullName || 'N/A'
+      })
+    })
+
+    // Convert Map to Array and calculate additional metrics
+    const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0)
+    const totalQuantity = orderDetails.reduce((sum, detail) => sum + detail.quantity, 0)
+
+    const customers = Array.from(customerSalesMap.values()).map(cust => ({
+      customerId: cust.customerId,
+      customerName: cust.customerName,
+      customerCode: cust.customerCode,
+      customerPhone: cust.customerPhone,
+      customerEmail: cust.customerEmail,
+      customerType: cust.customerType,
+      totalOrders: cust.totalOrders,
+      totalRevenue: cust.totalRevenue,
+      totalQuantity: cust.totalQuantity,
+      averageOrderValue: cust.totalRevenue / cust.totalOrders,
+      revenuePercentage: totalRevenue > 0 ? Math.round((cust.totalRevenue / totalRevenue) * 100) : 0,
+      orders: cust.ordersList.sort((a, b) => b.orderDate - a.orderDate)
+    }))
+
+    // Add guest data if included and has orders
+    if (shouldIncludeGuests && guestOrdersData.totalOrders > 0) {
+      customers.push({
+        customerId: 'GUEST',
+        customerName: 'Walk-in Customers',
+        customerCode: 'GUEST',
+        customerPhone: 'N/A',
+        customerEmail: 'N/A',
+        customerType: 'guest',
+        totalOrders: guestOrdersData.totalOrders,
+        totalRevenue: guestOrdersData.totalRevenue,
+        totalQuantity: guestOrdersData.totalQuantity,
+        averageOrderValue: guestOrdersData.totalRevenue / guestOrdersData.totalOrders,
+        revenuePercentage: totalRevenue > 0 ? Math.round((guestOrdersData.totalRevenue / totalRevenue) * 100) : 0,
+        orders: guestOrdersData.ordersList.sort((a, b) => b.orderDate - a.orderDate)
+      })
+    }
+
+    // Sort by revenue descending and assign ranks
+    customers.sort((a, b) => b.totalRevenue - a.totalRevenue)
+    customers.forEach((cust, index) => {
+      cust.rank = index + 1
+    })
+
+    // Calculate summary statistics
+    const summary = {
+      totalCustomers: customers.length,
+      totalOrders: orders.length,
+      totalRevenue,
+      totalQuantity,
+      averageOrderValue: totalRevenue / orders.length,
+      guestOrders: guestOrdersData.totalOrders,
+      guestRevenue: guestOrdersData.totalRevenue,
+      topCustomer: customers.length > 0 ? {
+        id: customers[0].customerId,
+        name: customers[0].customerName,
+        code: customers[0].customerCode,
+        type: customers[0].customerType,
+        revenue: customers[0].totalRevenue,
+        orders: customers[0].totalOrders
+      } : null
+    }
+
+    logger.info('Customer sales statistics calculated', {
+      totalCustomers: customers.length,
+      totalOrders: summary.totalOrders,
+      totalRevenue: summary.totalRevenue,
+      guestOrders: summary.guestOrders
+    })
+
+    response.json({
+      success: true,
+      data: {
+        summary,
+        customers,
+        dateRange: {
+          startDate,
+          endDate
+        }
+      }
+    })
+  } catch (error) {
+    logger.error('Error getting customer sales statistics:', error)
+    response.status(500).json({
+      success: false,
+      error: 'Failed to get customer sales statistics',
+      message: error.message
+    })
+  }
+})
+
 module.exports = statisticsRouter
