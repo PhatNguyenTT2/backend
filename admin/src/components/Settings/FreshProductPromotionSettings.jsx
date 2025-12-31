@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import settingsService from '../../services/settingsService';
+import { PromotionResultModal } from './PromotionResultModal';
 
 /**
  * FreshProductPromotionSettings Component
@@ -22,6 +23,8 @@ export const FreshProductPromotionSettings = () => {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
   const [successMessage, setSuccessMessage] = useState('');
+  const [promotionResult, setPromotionResult] = useState(null);
+  const [showResultModal, setShowResultModal] = useState(false);
 
   // Load settings on mount
   useEffect(() => {
@@ -104,10 +107,31 @@ export const FreshProductPromotionSettings = () => {
     setErrors({});
 
     try {
+      // Validate settings first
+      if (!validateSettings()) {
+        setSaving(false);
+        return;
+      }
+
+      // Save current settings before running promotion
+      const saveResponse = await settingsService.updateSettings({
+        freshProductPromotion: settings
+      });
+
+      if (!saveResponse.success) {
+        throw new Error('Failed to save settings before running promotion');
+      }
+
+      // Now run promotion with saved settings
       const response = await settingsService.runPromotionNow();
 
       if (response.success) {
         setSuccessMessage(`Promotion applied! ${response.data.applied} batches updated, ${response.data.removed} expired promotions removed.`);
+
+        // Show result modal with batch details
+        setPromotionResult(response.data);
+        setShowResultModal(true);
+
         setTimeout(() => setSuccessMessage(''), 5000);
       }
     } catch (error) {
@@ -361,6 +385,17 @@ export const FreshProductPromotionSettings = () => {
           </button>
         </div>
       </div>
+
+      {/* Promotion Result Modal */}
+      {showResultModal && (
+        <PromotionResultModal
+          result={promotionResult}
+          onClose={() => {
+            setShowResultModal(false);
+            setPromotionResult(null);
+          }}
+        />
+      )}
     </div>
   );
 };

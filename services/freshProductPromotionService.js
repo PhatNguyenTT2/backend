@@ -85,24 +85,26 @@ class FreshProductPromotionService {
       console.log(`\n✨ Found ${eligibleBatches.length} eligible batches for promotion`);
 
       // Apply promotions
-      const appliedCount = await this._applyPromotionsToBatches(
+      const appliedResult = await this._applyPromotionsToBatches(
         eligibleBatches,
         promotionConfig.discountPercentage
       );
 
       // Remove promotions from expired batches
-      const removedCount = await this._removeExpiredPromotions(freshProductIds, now);
+      const removedResult = await this._removeExpiredPromotions(freshProductIds, now);
 
       console.log('\n📊 Summary:');
-      console.log(`  ✅ Applied promotions: ${appliedCount} batches`);
-      console.log(`  ❌ Removed promotions: ${removedCount} batches`);
+      console.log(`  ✅ Applied promotions: ${appliedResult.count} batches`);
+      console.log(`  ❌ Removed promotions: ${removedResult.count} batches`);
       console.log('🌿 ======= FRESH PRODUCT AUTO-PROMOTION END =======\n');
 
       return {
         success: true,
         message: 'Auto-promotion completed successfully',
-        applied: appliedCount,
-        removed: removedCount,
+        applied: appliedResult.count,
+        removed: removedResult.count,
+        appliedBatches: appliedResult.batches,
+        removedBatches: removedResult.batches,
         timestamp: now
       };
 
@@ -185,6 +187,7 @@ class FreshProductPromotionService {
    */
   static async _applyPromotionsToBatches(batches, discountPercentage) {
     let appliedCount = 0;
+    const appliedBatches = [];
 
     for (const batch of batches) {
       try {
@@ -202,6 +205,20 @@ class FreshProductPromotionService {
         batch.discountPercentage = discountPercentage;
         await batch.save();
 
+        // Calculate prices using unitPrice from model
+        const originalPrice = parseFloat(batch.unitPrice?.toString() || batch.unitPrice || 0);
+        const discountedPrice = originalPrice * (1 - discountPercentage / 100);
+
+        appliedBatches.push({
+          batchCode: batch.batchCode,
+          productName: batch.product?.name || 'Unknown',
+          originalPrice,
+          discountedPrice,
+          discountPercentage,
+          quantity: batch.quantity,
+          expiryDate: batch.expiryDate
+        });
+
         console.log(`    ✅ Applied ${discountPercentage}% discount to batch ${batch.batchCode}`);
         appliedCount++;
       } catch (error) {
@@ -209,7 +226,7 @@ class FreshProductPromotionService {
       }
     }
 
-    return appliedCount;
+    return { count: appliedCount, batches: appliedBatches };
   }
 
   /**
@@ -225,14 +242,21 @@ class FreshProductPromotionService {
         product: { $in: freshProductIds },
         expiryDate: { $lt: now },
         promotionApplied: { $ne: 'none' }
-      });
+      }).populate('product');
 
       console.log(`  Found ${expiredBatches.length} expired batches with promotions`);
 
       let removedCount = 0;
+      const removedBatches = [];
 
       for (const batch of expiredBatches) {
         try {
+          removedBatches.push({
+            batchCode: batch.batchCode,
+            productName: batch.product?.name || 'Unknown',
+            expiryDate: batch.expiryDate
+          });
+
           batch.promotionApplied = 'none';
           batch.discountPercentage = 0;
           batch.status = 'expired'; // Also update status
@@ -245,7 +269,7 @@ class FreshProductPromotionService {
         }
       }
 
-      return removedCount;
+      return { count: removedCount, batches: removedBatches };
     } catch (error) {
       console.error('❌ Error in _removeExpiredPromotions:', error);
       return 0;

@@ -473,6 +473,8 @@ settingsRouter.post('/fresh-promotion/run', async (request, response) => {
       data: {
         applied: result.applied,
         removed: result.removed,
+        appliedBatches: result.appliedBatches || [],
+        removedBatches: result.removedBatches || [],
         timestamp: result.timestamp
       }
     });

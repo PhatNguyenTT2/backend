@@ -19,6 +19,7 @@ import {
   Users,
   User2Icon,
   LogOut,
+  Menu,
   CarTaxiFront,
   CassetteTapeIcon,
   BookAIcon,
@@ -30,7 +31,7 @@ import {
 import authService from '../../../../services/authService';
 import { hasPermission, PERMISSIONS } from '../../../../utils/permissions';
 
-export const NavigationMenuSection = () => {
+export const NavigationMenuSection = ({ isCollapsed, toggleCollapse }) => {
   // Lấy trạng thái từ localStorage khi component mount
   const [openDropdowns, setOpenDropdowns] = useState(() => {
     const savedState = localStorage.getItem('sidebarDropdownState');
@@ -220,9 +221,11 @@ export const NavigationMenuSection = () => {
       <div className="flex-1">
         {filteredMenuItems.map((menu, index) => (
           <div key={index}>
-            <h3 className="text-xs text-gray-500 uppercase tracking-wider font-bold my-4 px-4">
-              {menu.category}
-            </h3>
+            {!isCollapsed && (
+              <h3 className="text-xs text-gray-500 uppercase tracking-wider font-bold my-4 px-4">
+                {menu.category}
+              </h3>
+            )}
             <ul>
               {menu.items.map((item, itemIndex) => {
                 const isActive = item.href === location.pathname;
@@ -233,66 +236,86 @@ export const NavigationMenuSection = () => {
                     <div>
                       {item.arrow ? (
                         <div
-                          onClick={() => toggleDropdown(item.name)}
-                          className={`flex items-center justify-between py-2 px-4 rounded-full text-sm cursor-pointer ${hasActiveSubmenu
-                            ? 'bg-emerald-50 text-emerald-600'
-                            : 'text-gray-700 hover:bg-emerald-50'
+                          onClick={() => {
+                            if (isCollapsed) {
+                              toggleCollapse();
+                              // Set dropdown to open after sidebar expands
+                              setTimeout(() => toggleDropdown(item.name), 100);
+                            } else {
+                              toggleDropdown(item.name);
+                            }
+                          }}
+                          className={`flex items-center justify-between py-2 rounded-full text-sm cursor-pointer ${isCollapsed ? 'px-2 justify-center' : 'px-4'
+                            } ${hasActiveSubmenu
+                              ? 'bg-emerald-50 text-emerald-600'
+                              : 'text-gray-700 hover:bg-emerald-50'
                             }`}
+                          title={isCollapsed ? item.name : ''}
                         >
-                          <div className="flex items-center">
+                          <div className={`flex items-center ${isCollapsed ? '' : ''}`}>
                             <div className="p-2 rounded-full">
                               <item.icon className="w-5 h-5 text-gray-500" />
                             </div>
-                            <span className="ml-3">{item.name}</span>
+                            {!isCollapsed && <span className="ml-3">{item.name}</span>}
                           </div>
-                          {item.badge && (
-                            <span className="bg-emerald-500 text-white text-xs font-bold rounded-full px-2 py-1">
-                              {item.badge}
-                            </span>
-                          )}
-                          {openDropdowns[item.name] ? (
-                            <ChevronDown className="w-4 h-4 text-gray-500" />
-                          ) : (
-                            <ChevronRight className="w-4 h-4 text-gray-500" />
-                          )}
-                          {item.new && (
-                            <span className="bg-emerald-500 text-white text-xs font-bold rounded-md px-2 py-1">
-                              New
-                            </span>
+                          {!isCollapsed && (
+                            <>
+                              {item.badge && (
+                                <span className="bg-emerald-500 text-white text-xs font-bold rounded-full px-2 py-1">
+                                  {item.badge}
+                                </span>
+                              )}
+                              {openDropdowns[item.name] ? (
+                                <ChevronDown className="w-4 h-4 text-gray-500" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-gray-500" />
+                              )}
+                              {item.new && (
+                                <span className="bg-emerald-500 text-white text-xs font-bold rounded-md px-2 py-1">
+                                  New
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
                       ) : (
                         <Link
                           to={item.href}
-                          className={`flex items-center justify-between py-2 px-4 rounded-full text-sm ${isActive
-                            ? 'bg-emerald-500 text-white'
-                            : 'text-gray-700 hover:bg-emerald-50'
+                          className={`flex items-center justify-between py-2 rounded-full text-sm ${isCollapsed ? 'px-2 justify-center' : 'px-4'
+                            } ${isActive
+                              ? 'bg-emerald-500 text-white'
+                              : 'text-gray-700 hover:bg-emerald-50'
                             }`}
+                          title={isCollapsed ? item.name : ''}
                         >
-                          <div className="flex items-center">
+                          <div className={`flex items-center ${isCollapsed ? '' : ''}`}>
                             <div className={`p-2 rounded-full ${isActive ? 'bg-emerald-100' : ''}`}>
                               <item.icon
                                 className={`w-5 h-5 ${isActive ? 'text-emerald-600' : 'text-gray-500'
                                   }`}
                               />
                             </div>
-                            <span className="ml-3">{item.name}</span>
+                            {!isCollapsed && <span className="ml-3">{item.name}</span>}
                           </div>
-                          {item.badge && (
-                            <span className="bg-emerald-500 text-white text-xs font-bold rounded-full px-2 py-1">
-                              {item.badge}
-                            </span>
-                          )}
-                          {item.new && (
-                            <span className="bg-emerald-500 text-white text-xs font-bold rounded-md px-2 py-1">
-                              New
-                            </span>
+                          {!isCollapsed && (
+                            <>
+                              {item.badge && (
+                                <span className="bg-emerald-500 text-white text-xs font-bold rounded-full px-2 py-1">
+                                  {item.badge}
+                                </span>
+                              )}
+                              {item.new && (
+                                <span className="bg-emerald-500 text-white text-xs font-bold rounded-md px-2 py-1">
+                                  New
+                                </span>
+                              )}
+                            </>
                           )}
                         </Link>
                       )}
 
                       {/* Submenu dropdown */}
-                      {item.arrow && item.submenu && openDropdowns[item.name] && (
+                      {item.arrow && item.submenu && !isCollapsed && openDropdowns[item.name] && (
                         <ul className="ml-8 mt-1 mb-2 space-y-1">
                           {item.submenu.map((subitem, subIndex) => {
                             const isSubmenuActive = subitem.href === location.pathname;
@@ -322,16 +345,33 @@ export const NavigationMenuSection = () => {
         ))}
       </div>
 
-      {/* Sign Out Button - Đồng bộ với menu */}
+      {/* Collapse Button - Menu item style */}
       <div className="mt-4 px-4">
         <button
+          onClick={toggleCollapse}
+          className={`w-full flex items-center py-2 rounded-full text-sm text-gray-700 hover:bg-emerald-50 transition-colors ${isCollapsed ? 'px-2 justify-center' : 'px-4'
+            }`}
+          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <div className="p-2 rounded-full">
+            <Menu className="w-5 h-5 text-gray-500" />
+          </div>
+          {!isCollapsed && <span className="ml-3">Collapse</span>}
+        </button>
+      </div>
+
+      {/* Sign Out Button - Đồng bộ với menu */}
+      <div className="px-4 pb-4">
+        <button
           onClick={handleSignOut}
-          className="w-full flex items-center py-2 px-4 rounded-full text-sm text-gray-700 hover:bg-emerald-50 transition-colors"
+          className={`w-full flex items-center py-2 rounded-full text-sm text-gray-700 hover:bg-emerald-50 transition-colors ${isCollapsed ? 'px-2 justify-center' : 'px-4'
+            }`}
+          title={isCollapsed ? 'Sign Out' : ''}
         >
           <div className="p-2 rounded-full">
             <LogOut className="w-5 h-5 text-gray-500" />
           </div>
-          <span className="ml-3">Sign Out</span>
+          {!isCollapsed && <span className="ml-3">Sign Out</span>}
         </button>
       </div>
     </nav>
