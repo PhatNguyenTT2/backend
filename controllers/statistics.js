@@ -3,6 +3,8 @@ const Order = require('../models/order')
 const OrderDetail = require('../models/orderDetail')
 const PurchaseOrder = require('../models/purchaseOrder')
 const DetailPurchaseOrder = require('../models/detailPurchaseOrder')
+const StockOutOrder = require('../models/stockOutOrder')
+const DetailStockOutOrder = require('../models/detailStockOutOrder')
 const Product = require('../models/product')
 const ProductBatch = require('../models/productBatch')
 const Customer = require('../models/customer')
@@ -856,6 +858,57 @@ statisticsRouter.get('/profit', async (request, response) => {
       )
     }
 
+    // ==================== FETCH STOCK OUT DATA ====================
+    const stockOutQuery = {
+      orderDate: { $gte: startDate, $lte: endDate },
+      status: 'completed' // Only count completed stock out orders
+    }
+
+    const stockOutOrders = await StockOutOrder.find(stockOutQuery)
+      .populate('createdBy', 'fullName employeeCode')
+      .sort({ orderDate: 1 })
+
+    logger.info('Stock out orders found', {
+      count: stockOutOrders.length,
+      year: selectedYear
+    })
+
+    const stockOutOrderIds = stockOutOrders.map(so => so._id)
+
+    let stockOutDetailsQuery = { stockOutOrder: { $in: stockOutOrderIds } }
+    if (productId) {
+      stockOutDetailsQuery.product = productId
+    }
+
+    const stockOutDetails = await DetailStockOutOrder.find(stockOutDetailsQuery)
+      .populate({
+        path: 'product',
+        populate: { path: 'category', select: 'name' }
+      })
+      .populate('batchId', 'batchCode costPrice')
+
+    logger.info('Stock out details found', {
+      count: stockOutDetails.length,
+      year: selectedYear
+    })
+
+    // Filter by category if specified
+    let filteredStockOutDetails = stockOutDetails
+    if (categoryId) {
+      filteredStockOutDetails = stockOutDetails.filter(
+        detail => detail.product?.category?._id.toString() === categoryId
+      )
+    }
+
+    // Categorize stock out orders by reason
+    const stockOutSalesOrders = stockOutOrders.filter(so => so.reason === 'sales')
+    const stockOutLossOrders = stockOutOrders.filter(so => so.reason !== 'sales')
+
+    logger.info('Stock out categorized', {
+      salesCount: stockOutSalesOrders.length,
+      lossCount: stockOutLossOrders.length
+    })
+
     // ==================== AGGREGATE BY PRODUCT ====================
     const productProfitMap = new Map()
 
@@ -882,7 +935,14 @@ statisticsRouter.get('/profit', async (request, response) => {
           // Purchase metrics
           quantityPurchased: 0,
           totalCost: 0,
-          purchaseOrders: new Set()
+          purchaseOrders: new Set(),
+          // Stock out metrics
+          stockOutSalesQuantity: 0,
+          stockOutSalesRevenue: 0,
+          stockOutSalesOrders: new Set(),
+          stockOutLossQuantity: 0,
+          stockOutLossValue: 0,
+          stockOutLossOrders: new Set()
         })
       }
 
@@ -915,7 +975,14 @@ statisticsRouter.get('/profit', async (request, response) => {
           // Purchase metrics
           quantityPurchased: 0,
           totalCost: 0,
-          purchaseOrders: new Set()
+          purchaseOrders: new Set(),
+          // Stock out metrics
+          stockOutSalesQuantity: 0,
+          stockOutSalesRevenue: 0,
+          stockOutSalesOrders: new Set(),
+          stockOutLossQuantity: 0,
+          stockOutLossValue: 0,
+          stockOutLossOrders: new Set()
         })
       }
 
@@ -925,14 +992,99 @@ statisticsRouter.get('/profit', async (request, response) => {
       productData.purchaseOrders.add(po._id.toString())
     })
 
+    // Process stock out data
+    filteredStockOutDetails.forEach(detail => {
+      const product = detail.product
+      if (!product) {
+        logger.warn('Stock out detail missing product', { detailId: detail._id })
+        return
+      }
+
+      const productId = product._id.toString()
+      const stockOut = stockOutOrders.find(so => so._id.toString() === detail.stockOutOrder.toString())
+      if (!stockOut) {
+        logger.warn('Stock out order not found for detail', { detailId: detail._id })
+        return
+      }
+
+      if (!productProfitMap.has(productId)) {
+        productProfitMap.set(productId, {
+          productId: product._id,
+          productCode: product.productCode,
+          productName: product.name,
+          categoryName: product.category?.name || 'N/A',
+          image: product.image,
+          // Sales metrics
+          quantitySold: 0,
+          totalRevenue: 0,
+          salesOrders: new Set(),
+          // Purchase metrics
+          quantityPurchased: 0,
+          totalCost: 0,
+          purchaseOrders: new Set(),
+          // Stock out metrics
+          stockOutSalesQuantity: 0,
+          stockOutSalesRevenue: 0,
+          stockOutSalesOrders: new Set(),
+          stockOutLossQuantity: 0,
+          stockOutLossValue: 0,
+          stockOutLossOrders: new Set()
+        })
+      }
+
+      const productData = productProfitMap.get(productId)
+
+      // Parse unitPrice from Decimal128
+      let unitPrice = 0
+      if (detail.unitPrice) {
+        if (typeof detail.unitPrice === 'object' && detail.unitPrice.$numberDecimal) {
+          unitPrice = parseFloat(detail.unitPrice.$numberDecimal)
+        } else if (typeof detail.unitPrice === 'string') {
+          unitPrice = parseFloat(detail.unitPrice)
+        } else {
+          unitPrice = parseFloat(detail.unitPrice)
+        }
+      }
+
+      const totalValue = detail.quantity * unitPrice
+
+      logger.info('Processing stock out detail', {
+        productCode: product.productCode,
+        quantity: detail.quantity,
+        unitPrice: unitPrice,
+        totalValue: totalValue,
+        reason: stockOut.reason
+      })
+
+      if (stockOut.reason === 'sales') {
+        // Stock out for sales increases revenue
+        productData.stockOutSalesQuantity += detail.quantity
+        productData.stockOutSalesRevenue += totalValue
+        productData.stockOutSalesOrders.add(stockOut._id.toString())
+      } else {
+        // Stock out for other reasons (damage, expired, etc.) is a loss
+        productData.stockOutLossQuantity += detail.quantity
+        productData.stockOutLossValue += totalValue
+        productData.stockOutLossOrders.add(stockOut._id.toString())
+      }
+    })
+
     // ==================== CALCULATE PROFIT METRICS ====================
     const products = Array.from(productProfitMap.values()).map(data => {
-      const revenue = data.totalRevenue
-      const cost = data.totalCost
+      // Calculate total revenue including stock out sales
+      const revenue = data.totalRevenue + data.stockOutSalesRevenue
+
+      // Calculate total cost including stock out losses
+      const cost = data.totalCost + data.stockOutLossValue
+
       const profit = revenue - cost
       const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0
-      const averageSellingPrice = data.quantitySold > 0 ? revenue / data.quantitySold : 0
-      const averageCostPrice = data.quantityPurchased > 0 ? cost / data.quantityPurchased : 0
+
+      // Calculate total quantity sold (including stock out sales)
+      const totalQuantitySold = data.quantitySold + data.stockOutSalesQuantity
+      const averageSellingPrice = totalQuantitySold > 0 ? revenue / totalQuantitySold : 0
+
+      const averageCostPrice = data.quantityPurchased > 0 ? data.totalCost / data.quantityPurchased : 0
       const profitPerUnit = averageSellingPrice - averageCostPrice
 
       return {
@@ -943,14 +1095,26 @@ statisticsRouter.get('/profit', async (request, response) => {
         image: data.image,
         // Sales
         quantitySold: data.quantitySold,
-        totalRevenue: revenue,
+        totalRevenue: data.totalRevenue,
         salesOrders: data.salesOrders.size,
         averageSellingPrice: averageSellingPrice,
         // Purchase
         quantityPurchased: data.quantityPurchased,
-        totalCost: cost,
+        totalCost: data.totalCost,
         purchaseOrders: data.purchaseOrders.size,
         averageCostPrice: averageCostPrice,
+        // Stock Out Sales
+        stockOutSalesQuantity: data.stockOutSalesQuantity,
+        stockOutSalesRevenue: data.stockOutSalesRevenue,
+        stockOutSalesOrders: data.stockOutSalesOrders.size,
+        // Stock Out Losses
+        stockOutLossQuantity: data.stockOutLossQuantity,
+        stockOutLossValue: data.stockOutLossValue,
+        stockOutLossOrders: data.stockOutLossOrders.size,
+        // Combined metrics
+        totalQuantitySold: totalQuantitySold,
+        combinedRevenue: revenue,
+        combinedCost: cost,
         // Profit
         profit: profit,
         profitMargin: profitMargin,
@@ -987,27 +1151,71 @@ statisticsRouter.get('/profit', async (request, response) => {
       monthlyData[month].purchaseOrders += 1
     })
 
+    // Aggregate stock out sales by month
+    stockOutSalesOrders.forEach(so => {
+      const month = so.orderDate.getMonth()
+      // Parse totalPrice from Decimal128
+      let totalPrice = 0
+      if (so.totalPrice) {
+        if (typeof so.totalPrice === 'object' && so.totalPrice.$numberDecimal) {
+          totalPrice = parseFloat(so.totalPrice.$numberDecimal)
+        } else {
+          totalPrice = parseFloat(so.totalPrice)
+        }
+      }
+      monthlyData[month].revenue += totalPrice
+      monthlyData[month].stockOutSalesOrders = (monthlyData[month].stockOutSalesOrders || 0) + 1
+    })
+
+    // Aggregate stock out losses by month
+    stockOutLossOrders.forEach(so => {
+      const month = so.orderDate.getMonth()
+      // Parse totalPrice from Decimal128
+      let totalPrice = 0
+      if (so.totalPrice) {
+        if (typeof so.totalPrice === 'object' && so.totalPrice.$numberDecimal) {
+          totalPrice = parseFloat(so.totalPrice.$numberDecimal)
+        } else {
+          totalPrice = parseFloat(so.totalPrice)
+        }
+      }
+      monthlyData[month].cost += totalPrice
+      monthlyData[month].stockOutLossOrders = (monthlyData[month].stockOutLossOrders || 0) + 1
+    })
+
     // Calculate monthly profit
     monthlyData.forEach(month => {
       month.profit = month.revenue - month.cost
       month.profitMargin = month.revenue > 0 ? (month.profit / month.revenue) * 100 : 0
+      // Add stock out order counters
+      month.stockOutSalesOrders = month.stockOutSalesOrders || 0
+      month.stockOutLossOrders = month.stockOutLossOrders || 0
     })
 
     // ==================== SUMMARY STATISTICS ====================
     const summary = {
       totalRevenue: products.reduce((sum, p) => sum + p.totalRevenue, 0),
       totalCost: products.reduce((sum, p) => sum + p.totalCost, 0),
+      stockOutSalesRevenue: products.reduce((sum, p) => sum + p.stockOutSalesRevenue, 0),
+      stockOutLossValue: products.reduce((sum, p) => sum + p.stockOutLossValue, 0),
+      combinedRevenue: 0,
+      combinedCost: 0,
       grossProfit: 0,
       profitMargin: 0,
       totalProductsSold: products.filter(p => p.quantitySold > 0).length,
       totalProductsPurchased: products.filter(p => p.quantityPurchased > 0).length,
       totalSalesOrders: salesOrders.length,
-      totalPurchaseOrders: purchaseOrders.length
+      totalPurchaseOrders: purchaseOrders.length,
+      totalStockOutSalesOrders: stockOutSalesOrders.length,
+      totalStockOutLossOrders: stockOutLossOrders.length
     }
 
-    summary.grossProfit = summary.totalRevenue - summary.totalCost
-    summary.profitMargin = summary.totalRevenue > 0
-      ? (summary.grossProfit / summary.totalRevenue) * 100
+    // Calculate combined metrics
+    summary.combinedRevenue = summary.totalRevenue + summary.stockOutSalesRevenue
+    summary.combinedCost = summary.totalCost + summary.stockOutLossValue
+    summary.grossProfit = summary.combinedRevenue - summary.combinedCost
+    summary.profitMargin = summary.combinedRevenue > 0
+      ? (summary.grossProfit / summary.combinedRevenue) * 100
       : 0
 
     logger.info('Profit statistics calculated', {

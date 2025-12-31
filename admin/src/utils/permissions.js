@@ -16,7 +16,8 @@ export const PERMISSIONS = {
   MANAGE_INVENTORY: 'manage_inventory',
   VIEW_REPORTS: 'view_reports',
   MANAGE_PAYMENTS: 'manage_payments',
-  MANAGE_SETTINGS: 'manage_settings'
+  MANAGE_SETTINGS: 'manage_settings',
+  VIEW_NOTIFICATIONS: 'view_notifications'
 }
 
 // Permission labels for UI display
@@ -33,7 +34,8 @@ export const PERMISSION_LABELS = {
   [PERMISSIONS.MANAGE_INVENTORY]: 'Manage Inventory',
   [PERMISSIONS.VIEW_REPORTS]: 'View Reports',
   [PERMISSIONS.MANAGE_PAYMENTS]: 'Manage Payments',
-  [PERMISSIONS.MANAGE_SETTINGS]: 'Manage Settings'
+  [PERMISSIONS.MANAGE_SETTINGS]: 'Manage Settings',
+  [PERMISSIONS.VIEW_NOTIFICATIONS]: 'View Notifications'
 }
 
 /**

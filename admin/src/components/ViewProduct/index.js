@@ -6,3 +6,4 @@ export { ProductCard } from './ProductCard';
 export { ProductGrid } from './ProductGrid';
 export { ProductListHeader } from './ProductListHeader';
 export { SortBy } from './SortBy';
+export { BatchListModal } from './BatchListModal';

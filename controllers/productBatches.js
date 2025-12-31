@@ -449,6 +449,57 @@ productBatchesRouter.put('/:id', userExtractor, async (request, response) => {
     // Populate product before returning
     await updatedBatch.populate('product', 'productCode name image category unitPrice');
 
+    // Check and emit real-time notifications if expiry-related changes
+    if (expiryDate !== undefined) {
+      const notificationEmitter = require('../services/notificationEmitter');
+      const detailInventory = await DetailInventory.findOne({ batchId: updatedBatch._id });
+
+      if (detailInventory && updatedBatch.expiryDate) {
+        const now = new Date();
+        const expiry = new Date(updatedBatch.expiryDate);
+        const daysUntilExpiry = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
+        const isExpired = expiry <= now;
+        const isExpiringSoon = expiry > now && daysUntilExpiry <= 30;
+
+        // Emit notification for expired batch on shelf
+        if (isExpired && detailInventory.quantityOnShelf > 0) {
+          notificationEmitter.emitInventoryExpired({
+            detailInventoryId: detailInventory._id,
+            batchCode: updatedBatch.batchCode,
+            productName: updatedBatch.product?.name || 'Unknown Product',
+            quantity: detailInventory.quantityOnShelf,
+            expiryDate: updatedBatch.expiryDate
+          });
+          console.log('🔔 Emitted expired notification for batch:', updatedBatch.batchCode);
+        }
+
+        // Emit notification for expired batch in warehouse
+        if (isExpired && detailInventory.quantityOnHand > 0) {
+          notificationEmitter.emitExpiredInWarehouse({
+            detailInventoryId: detailInventory._id,
+            batchCode: updatedBatch.batchCode,
+            productName: updatedBatch.product?.name || 'Unknown Product',
+            quantity: detailInventory.quantityOnHand,
+            expiryDate: updatedBatch.expiryDate
+          });
+          console.log('🔔 Emitted warehouse expired notification for batch:', updatedBatch.batchCode);
+        }
+
+        // Emit notification for expiring soon
+        if (isExpiringSoon && (detailInventory.quantityOnShelf > 0 || detailInventory.quantityOnHand > 0)) {
+          notificationEmitter.emitInventoryExpiring({
+            detailInventoryId: detailInventory._id,
+            batchCode: updatedBatch.batchCode,
+            productName: updatedBatch.product?.name || 'Unknown Product',
+            quantity: detailInventory.quantityOnShelf + detailInventory.quantityOnHand,
+            expiryDate: updatedBatch.expiryDate,
+            daysUntilExpiry
+          });
+          console.log('🔔 Emitted expiring soon notification for batch:', updatedBatch.batchCode);
+        }
+      }
+    }
+
     response.json({
       success: true,
       data: updatedBatch,

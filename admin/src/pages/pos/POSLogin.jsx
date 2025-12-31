@@ -147,7 +147,7 @@ export const POSLogin = () => {
   const numbers = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center p-4 animate-fade-in-smooth">
       {/* Back to Admin Login Button */}
       <button
         onClick={() => navigate('/')}

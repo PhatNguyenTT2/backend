@@ -6,8 +6,11 @@ import productService from '../../services/productService';
  * ProductGrid Component
  * Hiển thị danh sách sản phẩm dạng grid layout
  * Tự động fetch data từ API và handle pagination
+ * 
+ * Props:
+ * - onProductClick: Optional handler for product card clicks (for batch modal)
  */
-export const ProductGrid = ({ filters = {}, sortBy = 'newest', onPaginationChange }) => {
+export const ProductGrid = ({ filters = {}, sortBy = 'newest', onPaginationChange, onProductClick }) => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -154,7 +157,11 @@ export const ProductGrid = ({ filters = {}, sortBy = 'newest', onPaginationChang
       {/* Product Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {products.map(product => (
-          <ProductCard key={product.id || product._id} product={product} />
+          <ProductCard
+            key={product.id || product._id}
+            product={product}
+            onClick={onProductClick ? () => onProductClick(product) : undefined}
+          />
         ))}
       </div>
 

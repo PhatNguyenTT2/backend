@@ -1448,7 +1448,7 @@ export const POSMain = () => {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100">
+    <div className="h-screen flex flex-col bg-gray-100 animate-fade-in-smooth">
       <POSHeader
         currentEmployee={currentEmployee}
         currentTime={currentTime}

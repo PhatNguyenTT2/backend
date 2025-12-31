@@ -17,7 +17,8 @@ const PERMISSIONS = {
   MANAGE_INVENTORY: 'manage_inventory',
   VIEW_REPORTS: 'view_reports',
   MANAGE_PAYMENTS: 'manage_payments',
-  MANAGE_SETTINGS: 'manage_settings'
+  MANAGE_SETTINGS: 'manage_settings',
+  VIEW_NOTIFICATIONS: 'view_notifications'
 }
 
 // Get all permission values as array
@@ -37,7 +38,8 @@ const PERMISSION_LABELS = {
   [PERMISSIONS.MANAGE_INVENTORY]: 'Manage Inventory',
   [PERMISSIONS.VIEW_REPORTS]: 'View Reports',
   [PERMISSIONS.MANAGE_PAYMENTS]: 'Manage Payments',
-  [PERMISSIONS.MANAGE_SETTINGS]: 'Manage Settings'
+  [PERMISSIONS.MANAGE_SETTINGS]: 'Manage Settings',
+  [PERMISSIONS.VIEW_NOTIFICATIONS]: 'View Notifications'
 }
 
 // Special permission for Super Admin (bypass all checks)

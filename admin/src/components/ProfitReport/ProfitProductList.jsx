@@ -89,6 +89,9 @@ export const ProfitProductList = ({ products = [], loading = false }) => {
               >
                 Sold / Revenue <SortIcon field="revenue" />
               </th>
+              <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
+                Stock Out
+              </th>
               <th
                 className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                 onClick={() => handleSort('cost')}
@@ -154,6 +157,36 @@ export const ProfitProductList = ({ products = [], loading = false }) => {
                     <p className="text-[10px] text-gray-500">
                       Avg: {formatCurrency(product.averageSellingPrice)}
                     </p>
+                  </td>
+
+                  {/* Stock Out Data */}
+                  <td className="px-6 py-4 text-right">
+                    {/* Stock Out Sales */}
+                    {product.stockOutSalesQuantity > 0 && (
+                      <div className="mb-2">
+                        <p className="text-[12px] font-semibold text-emerald-600">
+                          +{formatCurrency(product.stockOutSalesRevenue)}
+                        </p>
+                        <p className="text-[10px] text-gray-600">
+                          {product.stockOutSalesQuantity} units • {product.stockOutSalesOrders} SO sales
+                        </p>
+                      </div>
+                    )}
+                    {/* Stock Out Losses */}
+                    {product.stockOutLossQuantity > 0 && (
+                      <div>
+                        <p className="text-[12px] font-semibold text-rose-600">
+                          -{formatCurrency(product.stockOutLossValue)}
+                        </p>
+                        <p className="text-[10px] text-gray-600">
+                          {product.stockOutLossQuantity} units • {product.stockOutLossOrders} SO losses
+                        </p>
+                      </div>
+                    )}
+                    {/* No stock out activity */}
+                    {product.stockOutSalesQuantity === 0 && product.stockOutLossQuantity === 0 && (
+                      <p className="text-[11px] text-gray-400">No stock out</p>
+                    )}
                   </td>
 
                   {/* Purchase Data */}

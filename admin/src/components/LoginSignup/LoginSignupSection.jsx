@@ -220,16 +220,16 @@ export default function LoginSignup() {
 
         {/* Login Form */}
         {isLogin ? (
-          <div>
+          <div key="login" className="animate-fade-in-smooth">
             <p className="font-['Lato',sans-serif] text-[#7e7e7e] text-[14px] leading-[22px] mb-6 text-center">
               Sign in to access the admin dashboard and manage your store.
             </p>
 
             <form className="space-y-5" onSubmit={handleLoginSubmit}>
-              {/* Username/Email Field */}
+              {/* Username Field */}
               <div>
                 <label className="font-['Lato',sans-serif] text-[#253d4e] text-[13px] leading-[20px] block mb-2">
-                  Username or email address <span className="text-[#3bb77e]">*</span>
+                  Username <span className="text-[#3bb77e]">*</span>
                 </label>
                 <input
                   type="text"
@@ -237,7 +237,7 @@ export default function LoginSignup() {
                   value={loginData.username}
                   onChange={handleLoginChange}
                   className="w-full h-[50px] px-4 border border-[#ececec] rounded-[8px] font-['Lato',sans-serif] text-[14px] text-[#253d4e] focus:border-[#3bb77e] focus:outline-none transition-colors"
-                  placeholder="Enter your username or email"
+                  placeholder="Enter your username"
                   required
                   disabled={loading}
                 />
@@ -302,7 +302,7 @@ export default function LoginSignup() {
           </div>
         ) : (
           /* Register Form */
-          <div>
+          <div key="register" className="animate-fade-in-smooth">
             <p className="font-['Lato',sans-serif] text-[#7e7e7e] text-[14px] leading-[22px] mb-6 text-center">
               Create an admin account to manage products, orders, and customers.
             </p>

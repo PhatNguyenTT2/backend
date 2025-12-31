@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Breadcrumb } from '../../components/Breadcrumb';
 import { FilterProduct } from '../../components/FilterProduct';
-import { ProductGrid, ProductListHeader, SortBy } from '../../components/ViewProduct';
+import { ProductGrid, ProductListHeader, SortBy, BatchListModal } from '../../components/ViewProduct';
 
 /**
  * ViewProduct Page
@@ -33,6 +33,10 @@ const ViewProduct = () => {
     isLoading: true
   });
 
+  // Batch modal state
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+
   // Handle pagination changes from ProductGrid
   const handlePaginationChange = (info) => {
     setPaginationInfo(prev => ({ ...prev, ...info }));
@@ -46,6 +50,18 @@ const ViewProduct = () => {
   // Handle sort change from SortBy dropdown
   const handleSortChange = (newSortBy) => {
     setSortBy(newSortBy);
+  };
+
+  // Handle product card click - open batch modal
+  const handleProductClick = (product) => {
+    setSelectedProduct(product);
+    setIsBatchModalOpen(true);
+  };
+
+  // Handle modal close
+  const handleModalClose = () => {
+    setIsBatchModalOpen(false);
+    setSelectedProduct(null);
   };
 
   return (
@@ -70,6 +86,7 @@ const ViewProduct = () => {
           filters={filters}
           sortBy={sortBy}
           onPaginationChange={handlePaginationChange}
+          onProductClick={handleProductClick}
         />
       </div>
 
@@ -80,6 +97,13 @@ const ViewProduct = () => {
           currentFilters={filters}
         />
       </div>
+
+      {/* Batch List Modal */}
+      <BatchListModal
+        isOpen={isBatchModalOpen}
+        onClose={handleModalClose}
+        product={selectedProduct}
+      />
     </div>
   );
 };

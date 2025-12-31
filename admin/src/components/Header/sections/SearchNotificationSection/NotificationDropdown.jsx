@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, AlertCircle, AlertTriangle, Info, Clock, DollarSign } from 'lucide-react';
-import notificationService from '../../../../services/notificationService';
+import { useNotifications } from '../../../../contexts/NotificationContext';
+import socketService from '../../../../services/socketService';
 
 export const NotificationDropdown = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [counts, setCounts] = useState({ total: 0, critical: 0, high: 0, warning: 0 });
-  const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
+
+  // Use context for real-time notifications
+  const { notifications, counts, isConnected } = useNotifications();
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -26,34 +27,8 @@ export const NotificationDropdown = () => {
     };
   }, [isOpen]);
 
-  // Fetch notifications on mount and when dropdown opens
-  useEffect(() => {
-    fetchNotifications();
-    // Refresh notifications every 5 minutes
-    const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchNotifications = async () => {
-    try {
-      setLoading(true);
-      const response = await notificationService.getAllNotifications();
-      if (response.success) {
-        setNotifications(response.data.notifications);
-        setCounts(response.data.counts);
-      }
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const toggleDropdown = () => {
     setIsOpen(!isOpen);
-    if (!isOpen) {
-      fetchNotifications();
-    }
   };
 
   const getSeverityIcon = (severity, type) => {
@@ -208,17 +183,21 @@ export const NotificationDropdown = () => {
         <div className="absolute right-0 mt-2 w-[420px] bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[600px] flex flex-col">
           {/* Header */}
           <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 rounded-t-lg">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
               <h3 className="text-[15px] font-semibold text-gray-900">
                 Notifications
               </h3>
-              <button
-                onClick={fetchNotifications}
-                disabled={loading}
-                className="text-[12px] text-emerald-600 hover:text-emerald-700 font-medium disabled:opacity-50"
-              >
-                {loading ? 'Refreshing...' : 'Refresh'}
-              </button>
+              {isConnected ? (
+                <span className="flex items-center gap-1 text-[10px] text-green-600">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  Real-time
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[10px] text-gray-400">
+                  <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+                  Offline
+                </span>
+              )}
             </div>
 
             {/* Count Summary */}
@@ -248,12 +227,7 @@ export const NotificationDropdown = () => {
 
           {/* Notifications List */}
           <div className="overflow-y-auto flex-1" style={{ maxHeight: '500px' }}>
-            {loading ? (
-              <div className="p-8 text-center">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
-                <p className="text-[13px] text-gray-500 mt-2">Loading notifications...</p>
-              </div>
-            ) : notifications.length === 0 ? (
+            {notifications.length === 0 ? (
               <div className="p-8 text-center">
                 <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-[14px] text-gray-500 font-medium">No notifications</p>
@@ -359,15 +333,6 @@ export const NotificationDropdown = () => {
               </div>
             )}
           </div>
-
-          {/* Footer */}
-          {notifications.length > 0 && (
-            <div className="px-4 py-3 border-t border-gray-200 bg-gray-50 rounded-b-lg">
-              <p className="text-[11px] text-gray-600 text-center">
-                Last updated: {new Date().toLocaleTimeString('en-GB')}
-              </p>
-            </div>
-          )}
         </div>
       )}
     </div>

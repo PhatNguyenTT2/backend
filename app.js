@@ -34,9 +34,15 @@ const permissionsRouter = require('./controllers/permissions')
 const statisticsRouter = require('./controllers/statistics')
 const vnpayRouter = require('./controllers/vnpay')
 const locationMastersRouter = require('./controllers/locationMasters')
+const configController = require('./controllers/config')
 const promotionScheduler = require('./services/promotionScheduler')
+const notificationScheduler = require('./services/notificationScheduler')
+const notificationEmitter = require('./services/notificationEmitter')
 
 const app = express()
+
+// Make notificationEmitter accessible via app
+app.set('notificationEmitter', notificationEmitter)
 
 logger.info('connecting to', config.MONGODB_URI)
 
@@ -47,6 +53,9 @@ mongoose
 
     // Initialize fresh product promotion scheduler
     await promotionScheduler.init()
+
+    // Initialize notification scheduler
+    await notificationScheduler.init()
   })
   .catch(error => {
     logger.error('error connection to MongoDB:', error.message)
@@ -66,6 +75,10 @@ app.use(middleware.requestLogger)
 // Authentication routes - PUBLIC (no auth middleware needed)
 app.use('/api/login', loginRouter)
 app.use('/api/pos-login', posLoginRouter)
+
+// Config routes - PUBLIC (no auth required)
+app.get('/api/config', configController.getClientConfig)
+app.get('/api/config/health', configController.healthCheck)
 
 // Protected routes
 app.use('/api/products', productsRouter)

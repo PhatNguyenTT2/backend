@@ -65,10 +65,27 @@ const authService = {
     return !!localStorage.getItem('adminToken')
   },
 
+  // Get stored token
+  getToken: () => {
+    return localStorage.getItem('adminToken')
+  },
+
   // Get stored user data
   getUser: () => {
     const user = localStorage.getItem('adminUser')
     return user ? JSON.parse(user) : null
+  },
+
+  // Check if user has specific permission
+  hasPermission: (permission) => {
+    const user = authService.getUser()
+    if (!user || !user.role) return false
+
+    const permissions = user.role.permissions || []
+    // Check for super admin permission (bypass all checks)
+    if (permissions.includes('all')) return true
+
+    return permissions.includes(permission)
   }
 }
 

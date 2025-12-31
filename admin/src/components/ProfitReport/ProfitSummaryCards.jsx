@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrendingUp, TrendingDown, DollarSign, Percent, ShoppingBag, Package2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Percent, ShoppingBag, Package2, PackageX, PackagePlus } from 'lucide-react';
 
 export const ProfitSummaryCards = ({ summary }) => {
   if (!summary) return null;
@@ -27,6 +27,17 @@ export const ProfitSummaryCards = ({ summary }) => {
       subtitle: `${summary.totalSalesOrders} orders`
     },
     {
+      title: 'Stock Out Sales',
+      value: summary.stockOutSalesRevenue,
+      icon: PackagePlus,
+      color: 'emerald',
+      iconBgColor: 'bg-emerald-100',
+      iconTextColor: 'text-emerald-600',
+      borderColor: 'border-emerald-500',
+      valueColor: 'text-gray-900',
+      subtitle: `${summary.totalStockOutSalesOrders} stock outs`
+    },
+    {
       title: 'Total Cost',
       value: summary.totalCost,
       icon: Package2,
@@ -38,6 +49,39 @@ export const ProfitSummaryCards = ({ summary }) => {
       subtitle: `${summary.totalPurchaseOrders} POs`
     },
     {
+      title: 'Stock Out Losses',
+      value: summary.stockOutLossValue,
+      icon: PackageX,
+      color: 'rose',
+      iconBgColor: 'bg-rose-100',
+      iconTextColor: 'text-rose-600',
+      borderColor: 'border-rose-500',
+      valueColor: 'text-gray-900',
+      subtitle: `${summary.totalStockOutLossOrders} loss events`
+    },
+    {
+      title: 'Combined Revenue',
+      value: summary.combinedRevenue,
+      icon: TrendingUp,
+      color: 'blue',
+      iconBgColor: 'bg-blue-100',
+      iconTextColor: 'text-blue-600',
+      borderColor: 'border-blue-500',
+      valueColor: 'text-gray-900',
+      subtitle: 'Orders + Stock Out Sales'
+    },
+    {
+      title: 'Combined Cost',
+      value: summary.combinedCost,
+      icon: TrendingDown,
+      color: 'amber',
+      iconBgColor: 'bg-amber-100',
+      iconTextColor: 'text-amber-600',
+      borderColor: 'border-amber-500',
+      valueColor: 'text-gray-900',
+      subtitle: 'Purchases + Losses'
+    },
+    {
       title: 'Gross Profit',
       value: summary.grossProfit,
       icon: summary.grossProfit >= 0 ? TrendingUp : TrendingDown,
@@ -46,7 +90,7 @@ export const ProfitSummaryCards = ({ summary }) => {
       iconTextColor: summary.grossProfit >= 0 ? 'text-blue-600' : 'text-red-600',
       borderColor: summary.grossProfit >= 0 ? 'border-blue-500' : 'border-red-500',
       valueColor: summary.grossProfit >= 0 ? 'text-gray-900' : 'text-gray-900',
-      subtitle: 'Revenue - Cost'
+      subtitle: 'Combined Revenue - Cost'
     },
     {
       title: 'Profit Margin',
@@ -57,7 +101,7 @@ export const ProfitSummaryCards = ({ summary }) => {
       iconTextColor: 'text-purple-600',
       borderColor: 'border-purple-500',
       valueColor: 'text-gray-900',
-      subtitle: 'Profit / Revenue',
+      subtitle: 'Profit / Combined Revenue',
       isPercentage: true
     }
   ];
