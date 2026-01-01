@@ -773,6 +773,13 @@ inventoryMovementBatchesRouter.post('/bulk-transfer', userExtractor, async (requ
       failed: results.failed.length
     };
 
+    // Refresh notifications after inventory transfers
+    if (results.succeeded.length > 0) {
+      const { refreshNotifications } = require('../utils/notificationHelper');
+      await refreshNotifications();
+      console.log('✅ Notifications refreshed after bulk transfer');
+    }
+
     response.status(200).json({
       success: true,
       data: {

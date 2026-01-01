@@ -40,6 +40,25 @@ class SocketService {
       })
 
       this.setupEventHandlers()
+
+      // Wait for actual connection before resolving
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Socket connection timeout'))
+        }, 10000) // 10 second timeout
+
+        this.socket.once('connect', () => {
+          clearTimeout(timeout)
+          console.log('[SocketService] Connection established')
+          resolve()
+        })
+
+        this.socket.once('connect_error', (error) => {
+          clearTimeout(timeout)
+          console.error('[SocketService] Connection error:', error.message)
+          reject(error)
+        })
+      })
     } catch (error) {
       console.error('[SocketService] Connection failed:', error)
       throw error
@@ -53,11 +72,13 @@ class SocketService {
     this.socket.on('connect', () => {
       console.log('Socket connected:', this.socket.id)
       this.connected = true
+      this.emit('connect') // Emit to local listeners
     })
 
     this.socket.on('disconnect', (reason) => {
       console.log('Socket disconnected:', reason)
       this.connected = false
+      this.emit('disconnect', reason) // Emit to local listeners
     })
 
     this.socket.on('connect_error', (error) => {
@@ -89,6 +110,12 @@ class SocketService {
     this.socket.on('notification:initial', (notifications) => {
       console.log('[SocketService] Received initial notifications:', notifications.length)
       this.emit('notification:initial', notifications)
+    })
+
+    // Handle notification refresh (when batch updated/resolved)
+    this.socket.on('notification:refresh', (notifications) => {
+      console.log('[SocketService] Received notification refresh:', notifications.length)
+      this.emit('notification:refresh', notifications)
     })
 
     this.socket.on('notification:error', (error) => {

@@ -506,6 +506,11 @@ stockOutOrdersRouter.put('/:id/status', userExtractor, async (request, response)
       // Save order with movement metadata
       await stockOutOrder.save();
 
+      // Refresh notifications after inventory change
+      const { refreshNotifications } = require('../utils/notificationHelper');
+      await refreshNotifications();
+      console.log('✅ Notifications refreshed after stock out completion');
+
       // Return success with movement details
       await stockOutOrder.populate([
         { path: 'createdBy' },

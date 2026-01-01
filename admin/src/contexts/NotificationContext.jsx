@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import socketService from '../services/socketService'
 import configService from '../services/configService'
 import authService from '../services/authService'
@@ -20,8 +20,45 @@ export const NotificationProvider = ({ children }) => {
   const [counts, setCounts] = useState({ total: 0, critical: 0, high: 0, warning: 0 })
   const [isConnected, setIsConnected] = useState(false)
 
+  // Track shown toast IDs to prevent duplicates
+  const shownToastIds = useState(() => new Set())[0]
+
+  // Remove toast
+  const removeToast = useCallback((toastId) => {
+    setToasts(prev => prev.filter(t => t.toastId !== toastId))
+  }, [])
+
+  // Add toast notification (with duplicate check)
+  const addToast = useCallback((notification) => {
+    // Prevent duplicate toasts for same notification
+    if (shownToastIds.has(notification.id)) {
+      console.log('[NotificationContext] Skipping duplicate toast for:', notification.id)
+      return
+    }
+
+    shownToastIds.add(notification.id)
+
+    const toast = {
+      ...notification,
+      toastId: `toast-${notification.id}-${Date.now()}`
+    }
+
+    setToasts(prev => [...prev, toast])
+
+    // Auto remove toast after 10 seconds
+    setTimeout(() => {
+      removeToast(toast.toastId)
+      // Clear from shown set after a delay to allow re-showing if needed
+      setTimeout(() => {
+        shownToastIds.delete(notification.id)
+      }, 5000)
+    }, 10000)
+  }, [removeToast, shownToastIds])
+
   // Add new notification
   const addNotification = useCallback((notification) => {
+    let isNew = false
+
     setNotifications(prev => {
       // Check if notification already exists
       const exists = prev.some(n => n.id === notification.id)
@@ -29,6 +66,7 @@ export const NotificationProvider = ({ children }) => {
         return prev
       }
 
+      isNew = true
       const newNotifications = [notification, ...prev]
 
       // Update counts
@@ -43,29 +81,10 @@ export const NotificationProvider = ({ children }) => {
       return newNotifications
     })
 
-    // Add toast for new notification
+    // Only add toast if notification is truly new
+    // Note: We use a separate check because setState callback runs async
     addToast(notification)
-  }, [])
-
-  // Add toast notification
-  const addToast = useCallback((notification) => {
-    const toast = {
-      ...notification,
-      toastId: `toast-${notification.id}-${Date.now()}`
-    }
-
-    setToasts(prev => [...prev, toast])
-
-    // Auto remove toast after 10 seconds
-    setTimeout(() => {
-      removeToast(toast.toastId)
-    }, 10000)
-  }, [])
-
-  // Remove toast
-  const removeToast = useCallback((toastId) => {
-    setToasts(prev => prev.filter(t => t.toastId !== toastId))
-  }, [])
+  }, [addToast])
 
   // Set initial notifications (from API, no toast)
   const setInitialNotifications = useCallback((notificationList) => {
@@ -87,7 +106,16 @@ export const NotificationProvider = ({ children }) => {
     setCounts({ total: 0, critical: 0, high: 0, warning: 0 })
   }, [])
 
-  // Initialize socket connection
+  // Use refs to avoid re-registering listeners when callbacks change
+  const addNotificationRef = useRef(addNotification)
+  const setInitialNotificationsRef = useRef(setInitialNotifications)
+
+  useEffect(() => {
+    addNotificationRef.current = addNotification
+    setInitialNotificationsRef.current = setInitialNotifications
+  }, [addNotification, setInitialNotifications])
+
+  // Initialize socket connection - empty deps to run only once
   useEffect(() => {
     const token = authService.getToken()
     if (!token) {
@@ -110,10 +138,11 @@ export const NotificationProvider = ({ children }) => {
     console.log('[NotificationContext] User has VIEW_NOTIFICATIONS permission, initializing socket')
 
     let isInitialized = false
+    let isMounted = true
 
     // Initialize configuration and socket connection
     const initializeConnection = async () => {
-      if (isInitialized) return
+      if (isInitialized || !isMounted) return
       isInitialized = true
 
       try {
@@ -121,9 +150,14 @@ export const NotificationProvider = ({ children }) => {
         console.log('[NotificationContext] Loading configuration...')
         await configService.getConfig()
 
+        if (!isMounted) return
+
         // Connect to socket
         console.log('[NotificationContext] Connecting to socket...')
         await socketService.connect(token)
+
+        if (!isMounted) return
+
         setIsConnected(socketService.isConnected())
 
         // Request initial notifications after successful connection
@@ -142,28 +176,52 @@ export const NotificationProvider = ({ children }) => {
 
     initializeConnection()
 
-    // Listen for real-time notifications
+    // Listen for connection status changes
+    const handleConnect = () => {
+      console.log('[NotificationContext] Socket connected')
+      setIsConnected(true)
+    }
+
+    const handleDisconnect = () => {
+      console.log('[NotificationContext] Socket disconnected')
+      setIsConnected(false)
+    }
+
+    // Listen for real-time notifications - use refs to get latest callback
     const handleNotification = (notification) => {
       console.log('[NotificationContext] Received real-time notification:', notification)
-      addNotification(notification)
+      addNotificationRef.current(notification)
       playNotificationSound()
     }
 
     // Listen for initial notifications load
     const handleInitialNotifications = (notificationList) => {
       console.log('[NotificationContext] Received initial notifications:', notificationList.length)
-      setInitialNotifications(notificationList)
+      setInitialNotificationsRef.current(notificationList)
+    }
+
+    // Listen for notification refresh (batch updates/resolves)
+    const handleRefreshNotifications = (notificationList) => {
+      console.log('[NotificationContext] Notification refresh - replacing all notifications:', notificationList.length)
+      setInitialNotificationsRef.current(notificationList) // Replace with fresh data, no toasts
     }
 
     socketService.on('notification', handleNotification)
     socketService.on('notification:initial', handleInitialNotifications)
+    socketService.on('notification:refresh', handleRefreshNotifications)
+    socketService.on('connect', handleConnect)
+    socketService.on('disconnect', handleDisconnect)
 
-    // Cleanup
+    // Cleanup - these are the exact same function references, so off() will work
     return () => {
+      isMounted = false
       socketService.off('notification', handleNotification)
       socketService.off('notification:initial', handleInitialNotifications)
+      socketService.off('notification:refresh', handleRefreshNotifications)
+      socketService.off('connect', handleConnect)
+      socketService.off('disconnect', handleDisconnect)
     }
-  }, [addNotification, setInitialNotifications])
+  }, []) // Empty deps - run only once on mount
 
   // Play notification sound
   const playNotificationSound = () => {

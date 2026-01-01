@@ -190,7 +190,8 @@ class NotificationEmitter {
 
         const productName = batch.product?.name || 'Unknown Product'
 
-        // Critical: Expired on shelf
+        // Priority-based: Only ONE notification per batch
+        // 1. Critical: Expired on shelf (highest priority)
         if (isExpired && detail.quantityOnShelf > 0) {
           notifications.push({
             id: `expired-shelf-${detail._id}`,
@@ -204,9 +205,8 @@ class NotificationEmitter {
             quantity: detail.quantityOnShelf
           })
         }
-
-        // High: Expired in warehouse
-        if (isExpired && detail.quantityOnHand > 0) {
+        // 2. High: Expired in warehouse (only if NOT on shelf)
+        else if (isExpired && detail.quantityOnHand > 0) {
           notifications.push({
             id: `expired-warehouse-${detail._id}`,
             type: 'expired_in_warehouse',
@@ -219,9 +219,8 @@ class NotificationEmitter {
             quantity: detail.quantityOnHand
           })
         }
-
-        // Warning: Expiring soon
-        if (isExpiringSoon && (detail.quantityOnShelf > 0 || detail.quantityOnHand > 0)) {
+        // 3. Warning: Expiring soon (only if NOT expired)
+        else if (isExpiringSoon && (detail.quantityOnShelf > 0 || detail.quantityOnHand > 0)) {
           notifications.push({
             id: `expiring-${detail._id}`,
             type: 'expiring_soon',

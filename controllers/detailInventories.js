@@ -402,6 +402,13 @@ detailInventoriesRouter.put('/:id', userExtractor, async (request, response) => 
 
     const updatedDetailInventory = await detailInventory.save();
 
+    // Refresh notifications after inventory quantity change
+    if (quantityOnHand !== undefined || quantityOnShelf !== undefined) {
+      const { refreshNotifications } = require('../utils/notificationHelper');
+      await refreshNotifications();
+      console.log('✅ Notifications refreshed after inventory adjustment');
+    }
+
     // Populate batch and product details
     await updatedDetailInventory.populate({
       path: 'batchId',

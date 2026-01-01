@@ -1003,6 +1003,11 @@ purchaseOrdersRouter.post('/:id/receive', userExtractor, async (request, respons
 
     await session.commitTransaction();
 
+    // Refresh notifications after receiving new inventory
+    const { refreshNotifications } = require('../utils/notificationHelper');
+    await refreshNotifications();
+    console.log('✅ Notifications refreshed after purchase order received');
+
     // Populate for response
     await purchaseOrder.populate('supplier', 'supplierCode companyName');
     await purchaseOrder.populate('createdBy', 'fullName phone');

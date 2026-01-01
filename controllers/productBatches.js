@@ -461,7 +461,9 @@ productBatchesRouter.put('/:id', userExtractor, async (request, response) => {
         const isExpired = expiry <= now;
         const isExpiringSoon = expiry > now && daysUntilExpiry <= 30;
 
-        // Emit notification for expired batch on shelf
+        // Emit individual notification for toast (will be replaced by refresh, but toast will show)
+        // Priority: Emit only ONE notification per batch
+        // 1. Critical: Expired on shelf (highest priority)
         if (isExpired && detailInventory.quantityOnShelf > 0) {
           notificationEmitter.emitInventoryExpired({
             detailInventoryId: detailInventory._id,
@@ -470,11 +472,10 @@ productBatchesRouter.put('/:id', userExtractor, async (request, response) => {
             quantity: detailInventory.quantityOnShelf,
             expiryDate: updatedBatch.expiryDate
           });
-          console.log('🔔 Emitted expired notification for batch:', updatedBatch.batchCode);
+          console.log('🔔 Emitted expired on shelf notification for batch:', updatedBatch.batchCode);
         }
-
-        // Emit notification for expired batch in warehouse
-        if (isExpired && detailInventory.quantityOnHand > 0) {
+        // 2. High: Expired in warehouse (only if NOT on shelf)
+        else if (isExpired && detailInventory.quantityOnHand > 0) {
           notificationEmitter.emitExpiredInWarehouse({
             detailInventoryId: detailInventory._id,
             batchCode: updatedBatch.batchCode,
@@ -484,9 +485,8 @@ productBatchesRouter.put('/:id', userExtractor, async (request, response) => {
           });
           console.log('🔔 Emitted warehouse expired notification for batch:', updatedBatch.batchCode);
         }
-
-        // Emit notification for expiring soon
-        if (isExpiringSoon && (detailInventory.quantityOnShelf > 0 || detailInventory.quantityOnHand > 0)) {
+        // 3. Warning: Expiring soon (only if NOT expired)
+        else if (isExpiringSoon && (detailInventory.quantityOnShelf > 0 || detailInventory.quantityOnHand > 0)) {
           notificationEmitter.emitInventoryExpiring({
             detailInventoryId: detailInventory._id,
             batchCode: updatedBatch.batchCode,
@@ -497,6 +497,17 @@ productBatchesRouter.put('/:id', userExtractor, async (request, response) => {
           });
           console.log('🔔 Emitted expiring soon notification for batch:', updatedBatch.batchCode);
         }
+      }
+
+      // After any expiry-related update, refresh ALL notifications for all clients
+      // This ensures removed/resolved notifications are cleared from UI
+      // Individual notification emitted above will show toast, refresh will sync the list
+      console.log('🔄 Refreshing all notifications after batch update...');
+      const allNotifications = await notificationEmitter.getAllNotifications();
+      const io = request.app.get('io');
+      if (io) {
+        io.emit('notification:refresh', allNotifications);
+        console.log('✅ Broadcast notification refresh to all clients:', allNotifications.length);
       }
     }
 
