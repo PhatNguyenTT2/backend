@@ -38,6 +38,21 @@ class NotificationEmitter {
   }
 
   /**
+   * Refresh all notifications (batch update without toasts)
+   * Used by scheduler to update notification list without spamming toasts
+   * @param {Array} notifications - Array of all current notifications
+   */
+  refreshNotifications(notifications) {
+    if (!this.io) {
+      logger.warn('NotificationEmitter not initialized, skipping refresh')
+      return
+    }
+
+    this.io.emit('notification:refresh', notifications)
+    logger.info('Notification refresh emitted', { count: notifications.length })
+  }
+
+  /**
    * Emit inventory expiry notification
    * @param {object} data - Batch and inventory details
    */
