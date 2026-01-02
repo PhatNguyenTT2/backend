@@ -66,6 +66,14 @@ detailInventoriesRouter.get('/', async (request, response) => {
       filter.location = new RegExp(location, 'i');
     }
 
+    // If productId is provided, find all batch IDs for that product FIRST
+    // This ensures proper pagination when filtering by product
+    if (productId) {
+      const productBatches = await ProductBatch.find({ product: productId }).select('_id');
+      const batchIds = productBatches.map(b => b._id);
+      filter.batchId = { $in: batchIds };
+    }
+
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
@@ -93,12 +101,8 @@ detailInventoriesRouter.get('/', async (request, response) => {
 
     let detailInventories = await query;
 
-    // Filter by productId (after population)
-    if (productId) {
-      detailInventories = detailInventories.filter(
-        inv => inv.batchId?.product?._id.toString() === productId
-      );
-    }
+    // Note: productId filter is now applied BEFORE pagination via batchId filter
+    // No need for post-query filtering
 
     // Apply filters that require virtuals (after query execution)
     if (outOfStock === 'true') {

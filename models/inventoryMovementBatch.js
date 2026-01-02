@@ -9,7 +9,8 @@ const mongoose = require('mongoose');
  * - in: Nhập kho batch mới
  * - out: Xuất kho batch
  * - adjustment: Điều chỉnh số lượng batch
- * - transfer: Chuyển batch giữa các vị trí
+ * - transfer: Chuyển batch giữa warehouse và shelf
+ * - location: Thay đổi vị trí (location) trong kho (quantity = 0)
  * - audit: Kiểm kê batch
  */
 const inventoryMovementBatchSchema = new mongoose.Schema({
@@ -37,7 +38,7 @@ const inventoryMovementBatchSchema = new mongoose.Schema({
   movementType: {
     type: String,
     enum: {
-      values: ['in', 'out', 'adjustment', 'transfer', 'audit'],
+      values: ['in', 'out', 'adjustment', 'transfer', 'location', 'audit'],
       message: '{VALUE} is not a valid movement type'
     },
     required: [true, 'Movement type is required']
@@ -48,9 +49,18 @@ const inventoryMovementBatchSchema = new mongoose.Schema({
     required: [true, 'Quantity is required'],
     validate: {
       validator: function (value) {
+        // Allow zero for location change movements
+        if (this.movementType === 'location') {
+          return value === 0;
+        }
         return value !== 0;
       },
-      message: 'Quantity cannot be zero'
+      message: function (props) {
+        if (this.movementType === 'location') {
+          return 'Quantity must be zero for location movements';
+        }
+        return 'Quantity cannot be zero';
+      }
     }
   },
 

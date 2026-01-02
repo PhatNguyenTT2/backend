@@ -191,7 +191,7 @@ export const BatchListModal = ({ isOpen, onClose, product }) => {
                     : 'bg-red-50 text-red-700 hover:bg-red-100'
                     }`}
                 >
-                  🚨 Expired ({counts.expired})
+                  Expired ({counts.expired})
                 </button>
                 <button
                   onClick={() => setFilterStatus('expiring')}
@@ -200,7 +200,7 @@ export const BatchListModal = ({ isOpen, onClose, product }) => {
                     : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
                     }`}
                 >
-                  ⚠️ Expiring Soon ({counts.expiring})
+                  Expiring Soon ({counts.expiring})
                 </button>
                 <button
                   onClick={() => setFilterStatus('normal')}
@@ -209,7 +209,7 @@ export const BatchListModal = ({ isOpen, onClose, product }) => {
                     : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                     }`}
                 >
-                  ✓ Normal ({counts.normal})
+                  Normal ({counts.normal})
                 </button>
               </div>
 
@@ -365,16 +365,6 @@ export const BatchListModal = ({ isOpen, onClose, product }) => {
                         </div>
                       </div>
                     </div>
-
-                    {/* Location Info */}
-                    {batch.detailInventory?.location && (
-                      <div className="mt-3 pt-3 border-t border-gray-100">
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                          <Package className="w-3 h-3" />
-                          <span>Location: {batch.detailInventory.location.locationCode || 'N/A'}</span>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 );
               })}

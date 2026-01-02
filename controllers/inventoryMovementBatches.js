@@ -612,6 +612,191 @@ inventoryMovementBatchesRouter.put('/:id', userExtractor, async (request, respon
 });
 
 /**
+ * POST /api/inventory-movement-batches/change-location
+ * Change location of a batch in warehouse
+ * Requires authentication
+ * 
+ * Request body:
+ * - detailInventoryId: ObjectId - Detail inventory to change location
+ * - toLocationId: ObjectId - New location ID
+ * - reason: String (optional) - Reason for location change
+ * - performedBy: ObjectId (optional) - Employee who performed the change
+ * - notes: String (optional) - Additional notes
+ */
+inventoryMovementBatchesRouter.post('/change-location', userExtractor, async (request, response) => {
+  try {
+    const {
+      detailInventoryId,
+      toLocationId,
+      reason,
+      performedBy,
+      notes
+    } = request.body;
+
+    // Validation
+    if (!detailInventoryId || !toLocationId) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'detailInventoryId and toLocationId are required',
+          code: 'MISSING_REQUIRED_FIELDS'
+        }
+      });
+    }
+
+    // Get DetailInventory with current location
+    const detailInventory = await DetailInventory.findById(detailInventoryId)
+      .populate('batchId')
+      .populate('location');
+
+    if (!detailInventory) {
+      return response.status(404).json({
+        success: false,
+        error: {
+          message: 'Detail inventory not found',
+          code: 'DETAIL_INVENTORY_NOT_FOUND'
+        }
+      });
+    }
+
+    // Get old location info for notes
+    const oldLocation = detailInventory.location;
+    const oldLocationName = oldLocation ? oldLocation.name : 'Unassigned';
+    const oldLocationCode = oldLocation ? oldLocation.locationCode : 'N/A';
+
+    // Get new location
+    const LocationMaster = require('../models/locationMaster');
+    const newLocation = await LocationMaster.findById(toLocationId);
+
+    if (!newLocation) {
+      return response.status(404).json({
+        success: false,
+        error: {
+          message: 'Target location not found',
+          code: 'LOCATION_NOT_FOUND'
+        }
+      });
+    }
+
+    // Check if location is active
+    if (!newLocation.isActive) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Cannot assign to inactive location',
+          code: 'INACTIVE_LOCATION'
+        }
+      });
+    }
+
+    // Check if already at this location
+    if (oldLocation && oldLocation._id.toString() === toLocationId.toString()) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Batch is already at this location',
+          code: 'ALREADY_AT_LOCATION'
+        }
+      });
+    }
+
+    // Check location capacity (will be validated in DetailInventory.save())
+    const capacityCheck = await LocationMaster.checkCapacity(
+      toLocationId,
+      detailInventory.quantityOnHand
+    );
+
+    if (!capacityCheck.hasCapacity) {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Target location does not have enough capacity',
+          code: 'INSUFFICIENT_CAPACITY',
+          details: capacityCheck
+        }
+      });
+    }
+
+    // Create movement record with descriptive notes
+    const movementNotes = notes || `Location changed from ${oldLocationName} (${oldLocationCode}) to ${newLocation.name} (${newLocation.locationCode})`;
+
+    const movement = new InventoryMovementBatch({
+      batchId: detailInventory.batchId._id,
+      inventoryDetail: detailInventoryId,
+      movementType: 'location',
+      quantity: 0, // No quantity change
+      reason: reason || 'Location change in warehouse',
+      date: new Date(),
+      performedBy: performedBy || request.user?.id || null,
+      notes: movementNotes
+    });
+
+    await movement.save();
+
+    // Update DetailInventory location
+    detailInventory.location = toLocationId;
+    await detailInventory.save();
+
+    // Populate movement details
+    await movement.populate([
+      {
+        path: 'batchId',
+        select: 'batchCode costPrice unitPrice quantity mfgDate expiryDate status product',
+        populate: {
+          path: 'product',
+          select: 'productCode name image category',
+          populate: {
+            path: 'category',
+            select: 'name categoryCode'
+          }
+        }
+      },
+      {
+        path: 'inventoryDetail',
+        select: 'quantityOnHand quantityOnShelf quantityReserved location',
+        populate: {
+          path: 'location',
+          select: 'locationCode name maxCapacity'
+        }
+      },
+      {
+        path: 'performedBy',
+        select: 'employeeCode fullName phone'
+      }
+    ]);
+
+    response.status(201).json({
+      success: true,
+      data: movement,
+      message: 'Batch location changed successfully'
+    });
+
+  } catch (error) {
+    console.error('Change location error:', error);
+
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Validation error',
+          code: 'VALIDATION_ERROR',
+          details: error.message
+        }
+      });
+    }
+
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to change batch location',
+        details: error.message
+      }
+    });
+  }
+});
+
+/**
  * POST /api/inventory-movement-batches/bulk-transfer
  * Bulk transfer stock between warehouse and shelf
  * Requires authentication
@@ -910,6 +1095,12 @@ inventoryMovementBatchesRouter.delete('/:id', userExtractor, async (request, res
             });
           }
         }
+        break;
+
+      case 'location':
+        // Location change doesn't affect quantities, only log entry
+        // No reversal needed for inventory quantities
+        console.log('Deleting location change movement - no quantity reversal needed');
         break;
 
       case 'audit':

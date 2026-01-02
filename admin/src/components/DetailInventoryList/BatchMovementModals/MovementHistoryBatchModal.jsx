@@ -43,6 +43,10 @@ export const MovementHistoryBatchModal = ({ isOpen, onClose, detailInventory }) 
 
   const filteredMovements = (() => {
     if (filter === 'all') return movements;
+    // Map 'location' type to 'adjustment' for filtering since location changes are displayed as adjustments
+    if (filter === 'adjustment') {
+      return movements.filter(m => m.movementType === 'adjustment' || m.movementType === 'location');
+    }
     return movements.filter(m => m.movementType === filter);
   })();
 
@@ -51,6 +55,7 @@ export const MovementHistoryBatchModal = ({ isOpen, onClose, detailInventory }) 
       'in': { bg: 'bg-green-100', text: 'text-green-700', label: 'Stock In' },
       'out': { bg: 'bg-red-100', text: 'text-red-700', label: 'Stock Out' },
       'adjustment': { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Adjustment' },
+      'location': { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Location Change' },
       'transfer': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Transfer' },
       'audit': { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Audit' }
     };

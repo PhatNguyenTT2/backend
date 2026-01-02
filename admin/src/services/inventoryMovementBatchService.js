@@ -595,6 +595,27 @@ const inventoryMovementBatchService = {
       console.error('Error performing bulk transfer:', error)
       throw error
     }
+  },
+
+  /**
+   * Change batch location in warehouse
+   * @param {Object} locationChangeData - Location change data
+   * @param {string} locationChangeData.detailInventoryId - Detail inventory ID (required)
+   * @param {string} locationChangeData.toLocationId - Target location ID (required)
+   * @param {string} locationChangeData.reason - Reason for location change (optional)
+   * @param {string} locationChangeData.performedBy - Employee ID (optional)
+   * @param {string} locationChangeData.notes - Additional notes (optional)
+   * @returns {Promise<Object>} Created location movement record
+   * @note This creates a movement with type 'location' and quantity 0
+   */
+  changeLocation: async (locationChangeData) => {
+    try {
+      const response = await api.post('/inventory-movement-batches/change-location', locationChangeData)
+      return response.data
+    } catch (error) {
+      console.error('Error changing batch location:', error)
+      throw error
+    }
   }
 }
 
