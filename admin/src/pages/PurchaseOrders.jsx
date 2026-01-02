@@ -35,8 +35,8 @@ export const PurchaseOrders = () => {
   // Filters and sorting
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState('poNumber');
-  const [sortOrder, setSortOrder] = useState('asc');
+  const [sortField, setSortField] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
   const [supplierFilter, setSupplierFilter] = useState('all');

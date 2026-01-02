@@ -365,6 +365,14 @@ paymentsRouter.post('/', async (request, response) => {
     if (payment.status === 'completed') {
       if (referenceType === 'PurchaseOrder') {
         await updatePurchaseOrderPaymentStatus(referenceId);
+
+        // Emit supplier credit notification after payment
+        const purchaseOrder = await PurchaseOrder.findById(referenceId).select('supplier');
+        if (purchaseOrder?.supplier) {
+          const { checkAndEmitSupplierCredit } = require('../utils/notificationHelper');
+          await checkAndEmitSupplierCredit(purchaseOrder.supplier);
+          console.log('✅ Checked supplier credit after payment created');
+        }
       } else if (referenceType === 'Order') {
         await updateOrderPaymentStatus(referenceId);
       }
@@ -428,6 +436,15 @@ paymentsRouter.put('/:id', async (request, response) => {
     if (statusChanged || amount !== undefined) {
       if (payment.referenceType === 'PurchaseOrder') {
         await updatePurchaseOrderPaymentStatus(payment.referenceId);
+
+        // Emit supplier credit notification after payment update
+        // This is especially important for refund cases (status: completed -> failed/pending)
+        const purchaseOrder = await PurchaseOrder.findById(payment.referenceId).select('supplier');
+        if (purchaseOrder?.supplier) {
+          const { checkAndEmitSupplierCredit } = require('../utils/notificationHelper');
+          await checkAndEmitSupplierCredit(purchaseOrder.supplier);
+          console.log('✅ Checked supplier credit after payment updated');
+        }
       } else if (payment.referenceType === 'Order') {
         await updateOrderPaymentStatus(payment.referenceId);
       }
@@ -444,6 +461,94 @@ paymentsRouter.put('/:id', async (request, response) => {
       success: false,
       error: {
         message: 'Failed to update payment',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      }
+    });
+  }
+});
+
+/**
+ * DELETE /api/payments/:id
+ * Delete payment (only if status is pending)
+ */
+/**
+ * POST /api/payments/:id/refund
+ * Refund a completed payment (only for PurchaseOrder)
+ * Changes status from 'completed' to 'refunded'
+ */
+paymentsRouter.post('/:id/refund', async (request, response) => {
+  try {
+    const payment = await Payment.findById(request.params.id);
+
+    if (!payment) {
+      return response.status(404).json({
+        success: false,
+        error: {
+          message: 'Payment not found',
+          code: 'PAYMENT_NOT_FOUND'
+        }
+      });
+    }
+
+    // Only allow refunding PurchaseOrder payments
+    if (payment.referenceType !== 'PurchaseOrder') {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Only PurchaseOrder payments can be refunded',
+          code: 'INVALID_REFERENCE_TYPE'
+        }
+      });
+    }
+
+    // Only allow refunding completed payments
+    if (payment.status !== 'completed') {
+      return response.status(400).json({
+        success: false,
+        error: {
+          message: 'Only completed payments can be refunded',
+          code: 'INVALID_STATUS'
+        }
+      });
+    }
+
+    // Update status to refunded
+    payment.status = 'refunded';
+    payment.notes = payment.notes
+      ? `${payment.notes}\n[Refunded on ${new Date().toISOString()}]`
+      : `[Refunded on ${new Date().toISOString()}]`;
+
+    // Store referenceId before populate (will become object after populate)
+    const referenceId = payment.referenceId;
+
+    await payment.save();
+
+    // Update PurchaseOrder payment status BEFORE populate (referenceId is still ObjectId)
+    await updatePurchaseOrderPaymentStatus(referenceId);
+
+    // Emit supplier credit notification
+    const purchaseOrder = await PurchaseOrder.findById(referenceId).select('supplier');
+    if (purchaseOrder?.supplier) {
+      const { checkAndEmitSupplierCredit } = require('../utils/notificationHelper');
+      await checkAndEmitSupplierCredit(purchaseOrder.supplier);
+      console.log('✅ Checked supplier credit after payment refunded');
+    }
+
+    // Populate before returning
+    await payment.populate('createdBy', 'employeeName userAccount');
+    await payment.populate('referenceId');
+
+    response.json({
+      success: true,
+      message: 'Payment refunded successfully',
+      data: payment
+    });
+  } catch (error) {
+    console.error('Error refunding payment:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to refund payment',
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       }
     });
@@ -488,6 +593,14 @@ paymentsRouter.delete('/:id', async (request, response) => {
     // Update payment status of reference document after deletion
     if (referenceType === 'PurchaseOrder') {
       await updatePurchaseOrderPaymentStatus(referenceId);
+
+      // Emit supplier credit notification after payment deleted
+      const purchaseOrder = await PurchaseOrder.findById(referenceId).select('supplier');
+      if (purchaseOrder?.supplier) {
+        const { checkAndEmitSupplierCredit } = require('../utils/notificationHelper');
+        await checkAndEmitSupplierCredit(purchaseOrder.supplier);
+        console.log('✅ Checked supplier credit after payment deleted');
+      }
     } else if (referenceType === 'Order') {
       await updateOrderPaymentStatus(referenceId);
     }

@@ -4,8 +4,9 @@ import productBatchService from '../../services/productBatchService';
 
 /**
  * BatchListModal Component
- * Displays list of batches for a product that are available on shelf
+ * Displays list of ALL batches for a product that are on shelf (including expired)
  * Sorted by FEFO (First Expire First Out)
+ * Shows expiry status for inventory management
  * 
  * Props:
  * - isOpen: boolean - Modal visibility
@@ -16,6 +17,7 @@ export const BatchListModal = ({ isOpen, onClose, product }) => {
   const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'expired', 'expiring', 'normal'
 
   useEffect(() => {
     if (isOpen && product) {
@@ -28,14 +30,17 @@ export const BatchListModal = ({ isOpen, onClose, product }) => {
       setLoading(true);
       setError(null);
 
+      // For admin inventory management: fetch ALL batches (no status filter)
+      // This includes expired batches so managers can see what needs to be removed
       const response = await productBatchService.getAllBatches({
         product: product.id || product._id,
-        status: 'active',
+        // Don't filter by status - we need to see ALL batches including expired
         withInventory: 'true', // Include detailInventory data
         limit: 100
       });
 
-      // Filter batches with quantityOnShelf > 0 and sort by expiry date (FEFO)
+      // Filter batches with quantityOnShelf > 0 (include ALL, even expired)
+      // Sort by expiry date (FEFO) - expired first, then by date
       const availableBatches = (response.data?.batches || [])
         .filter(batch => {
           const onShelf = batch.detailInventory?.quantityOnShelf || 0;
@@ -85,12 +90,35 @@ export const BatchListModal = ({ isOpen, onClose, product }) => {
 
   const getExpiryStatus = (expiryDate) => {
     const days = getDaysUntilExpiry(expiryDate);
-    if (days === null) return { color: 'gray', text: 'No expiry', icon: null };
-    if (days < 0) return { color: 'red', text: 'Expired', icon: <AlertCircle className="w-4 h-4" /> };
-    if (days <= 7) return { color: 'red', text: `${days}d left`, icon: <AlertCircle className="w-4 h-4" /> };
-    if (days <= 30) return { color: 'amber', text: `${days}d left`, icon: <Clock className="w-4 h-4" /> };
-    return { color: 'green', text: `${days}d left`, icon: <Clock className="w-4 h-4" /> };
+    if (days === null) return { color: 'gray', text: 'No expiry', icon: null, status: 'normal' };
+    if (days < 0) return { color: 'red', text: `Expired ${Math.abs(days)}d ago`, icon: <AlertCircle className="w-4 h-4" />, status: 'expired' };
+    if (days === 0) return { color: 'red', text: 'Expires today!', icon: <AlertCircle className="w-4 h-4" />, status: 'expired' };
+    if (days <= 7) return { color: 'red', text: `${days}d left`, icon: <AlertCircle className="w-4 h-4" />, status: 'expiring' };
+    if (days <= 30) return { color: 'amber', text: `${days}d left`, icon: <Clock className="w-4 h-4" />, status: 'expiring' };
+    return { color: 'green', text: `${days}d left`, icon: <Clock className="w-4 h-4" />, status: 'normal' };
   };
+
+  // Filter batches based on selected status
+  const getFilteredBatches = () => {
+    if (filterStatus === 'all') return batches;
+    return batches.filter(batch => {
+      const status = getExpiryStatus(batch.expiryDate).status;
+      return status === filterStatus;
+    });
+  };
+
+  // Count batches by status
+  const getCounts = () => {
+    const counts = { all: batches.length, expired: 0, expiring: 0, normal: 0 };
+    batches.forEach(batch => {
+      const status = getExpiryStatus(batch.expiryDate).status;
+      counts[status]++;
+    });
+    return counts;
+  };
+
+  const filteredBatches = getFilteredBatches();
+  const counts = getCounts();
 
   if (!isOpen) return null;
 
@@ -145,20 +173,77 @@ export const BatchListModal = ({ isOpen, onClose, product }) => {
             </div>
           ) : (
             <div className="space-y-3">
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setFilterStatus('all')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filterStatus === 'all'
+                    ? 'bg-gray-800 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                >
+                  All ({counts.all})
+                </button>
+                <button
+                  onClick={() => setFilterStatus('expired')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filterStatus === 'expired'
+                    ? 'bg-red-600 text-white'
+                    : 'bg-red-50 text-red-700 hover:bg-red-100'
+                    }`}
+                >
+                  🚨 Expired ({counts.expired})
+                </button>
+                <button
+                  onClick={() => setFilterStatus('expiring')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filterStatus === 'expiring'
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                    }`}
+                >
+                  ⚠️ Expiring Soon ({counts.expiring})
+                </button>
+                <button
+                  onClick={() => setFilterStatus('normal')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filterStatus === 'normal'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    }`}
+                >
+                  ✓ Normal ({counts.normal})
+                </button>
+              </div>
+
               {/* Summary */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <div className={`border rounded-lg p-4 mb-4 ${counts.expired > 0
+                ? 'bg-red-50 border-red-200'
+                : counts.expiring > 0
+                  ? 'bg-amber-50 border-amber-200'
+                  : 'bg-blue-50 border-blue-200'
+                }`}>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-blue-900 font-medium">
-                    Total batches on shelf: {batches.length}
+                  <span className={`font-medium ${counts.expired > 0 ? 'text-red-900' : counts.expiring > 0 ? 'text-amber-900' : 'text-blue-900'
+                    }`}>
+                    {counts.expired > 0 && `⚠️ ${counts.expired} expired batch(es) on shelf! `}
+                    {counts.expiring > 0 && `${counts.expiring} batch(es) expiring soon`}
+                    {counts.expired === 0 && counts.expiring === 0 && `Total batches on shelf: ${batches.length}`}
                   </span>
-                  <span className="text-blue-700">
-                    Total quantity: {batches.reduce((sum, b) => sum + (b.detailInventory?.quantityOnShelf || 0), 0)} units
+                  <span className={`${counts.expired > 0 ? 'text-red-700' : counts.expiring > 0 ? 'text-amber-700' : 'text-blue-700'
+                    }`}>
+                    Showing: {filteredBatches.length} | Total qty: {filteredBatches.reduce((sum, b) => sum + (b.detailInventory?.quantityOnShelf || 0), 0)} units
                   </span>
                 </div>
               </div>
 
+              {/* No results for filter */}
+              {filteredBatches.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm">No batches match this filter</p>
+                </div>
+              )}
+
               {/* Batch Cards */}
-              {batches.map((batch) => {
+              {filteredBatches.map((batch) => {
                 const onShelf = batch.detailInventory?.quantityOnShelf || 0;
                 const hasDiscount = batch.discountPercentage > 0;
                 const finalPrice = hasDiscount
@@ -169,8 +254,21 @@ export const BatchListModal = ({ isOpen, onClose, product }) => {
                 return (
                   <div
                     key={batch.id}
-                    className="border border-gray-200 rounded-lg p-4 hover:border-emerald-500 hover:shadow-md transition-all"
+                    className={`border rounded-lg p-4 transition-all ${expiryStatus.status === 'expired'
+                      ? 'border-red-300 bg-red-50 ring-1 ring-red-200'
+                      : expiryStatus.status === 'expiring'
+                        ? 'border-amber-300 bg-amber-50/30'
+                        : 'border-gray-200 hover:border-emerald-500 hover:shadow-md'
+                      }`}
                   >
+                    {/* Expired Warning Banner */}
+                    {expiryStatus.status === 'expired' && (
+                      <div className="flex items-center gap-2 bg-red-100 text-red-800 text-xs font-semibold px-3 py-1.5 rounded -mt-1 mb-3">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>ACTION REQUIRED: Remove from shelf immediately</span>
+                      </div>
+                    )}
+
                     <div className="flex items-start justify-between mb-3">
                       {/* Batch Code */}
                       <div>
@@ -221,17 +319,20 @@ export const BatchListModal = ({ isOpen, onClose, product }) => {
 
                       {/* Expiry Date */}
                       <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <Calendar className={`w-4 h-4 ${expiryStatus.status === 'expired' ? 'text-red-500' : 'text-gray-400'}`} />
                         <div className="flex flex-col">
                           <span className="text-xs text-gray-500">Expiry Date</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-gray-900">
+                            <span className={`text-sm font-semibold ${expiryStatus.status === 'expired' ? 'text-red-700' : 'text-gray-900'}`}>
                               {formatDate(batch.expiryDate)}
                             </span>
                             {expiryStatus.icon && (
-                              <div className={`flex items-center gap-1 text-${expiryStatus.color}-600`}>
+                              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${expiryStatus.status === 'expired'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-amber-100 text-amber-700'
+                                }`}>
                                 {expiryStatus.icon}
-                                <span className={`text-xs font-medium text-${expiryStatus.color}-700`}>
+                                <span className="text-xs font-medium">
                                   {expiryStatus.text}
                                 </span>
                               </div>

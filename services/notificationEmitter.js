@@ -43,11 +43,11 @@ class NotificationEmitter {
    */
   emitInventoryExpired(data) {
     const notification = {
-      id: `expired-${data.detailInventoryId}`,
+      id: `expired-shelf-${data.detailInventoryId}`,
       type: 'expired_on_shelf',
       severity: 'critical',
       title: 'Expired Batch on Shelf',
-      message: `${data.batchCode} - ${data.productName} has expired but still has ${data.quantity} units on shelf`,
+      message: `${data.batchCode} - ${data.productName} has expired`,
       batchCode: data.batchCode,
       productName: data.productName,
       quantity: data.quantity,
@@ -68,7 +68,7 @@ class NotificationEmitter {
       type: 'expiring_soon',
       severity: 'warning',
       title: 'Batch Expiring Soon',
-      message: `${data.batchCode} - ${data.productName} expires in ${data.daysUntilExpiry} days (${data.quantity} units on shelf)`,
+      message: `${data.batchCode} - ${data.productName} expires in ${data.daysUntilExpiry} days`,
       batchCode: data.batchCode,
       productName: data.productName,
       quantity: data.quantity,
@@ -106,25 +106,29 @@ class NotificationEmitter {
    */
   emitSupplierCreditWarning(data) {
     let severity = 'warning'
-    let type = 'credit_high_utilization'
-    let title = 'High Credit Utilization'
+    let type = 'credit_warning'
+    let title = 'Credit Limit Warning'
 
     if (data.currentDebt > data.creditLimit) {
       severity = 'critical'
       type = 'credit_exceeded'
       title = 'Credit Limit Exceeded'
     } else if (data.creditUtilization >= 90) {
-      severity = 'high'
+      severity = 'critical'
       type = 'credit_near_limit'
       title = 'Credit Limit Almost Reached'
+    } else if (data.creditUtilization >= 75) {
+      severity = 'high'
+      type = 'credit_high'
+      title = 'High Credit Utilization'
     }
 
     const notification = {
-      id: `supplier-${type}-${data.supplierId}`,
+      id: `credit-${data.supplierId}-${type}`,
       type,
       severity,
       title,
-      message: data.message,
+      message: `${data.supplierName} has used ${data.creditUtilization.toFixed(1)}% of credit limit`,
       supplierCode: data.supplierCode,
       supplierName: data.supplierName,
       currentDebt: data.currentDebt,
@@ -146,7 +150,7 @@ class NotificationEmitter {
       type: 'expired_in_warehouse',
       severity: 'high',
       title: 'Expired Batch in Warehouse',
-      message: `${data.batchCode} - ${data.productName} has expired with ${data.quantity} units in warehouse`,
+      message: `${data.batchCode} - ${data.productName} has expired`,
       batchCode: data.batchCode,
       productName: data.productName,
       quantity: data.quantity,
@@ -163,7 +167,6 @@ class NotificationEmitter {
    */
   async getAllNotifications() {
     const DetailInventory = require('../models/detailInventory')
-    const ProductBatch = require('../models/productBatch')
     const Supplier = require('../models/supplier')
 
     const notifications = []
@@ -236,29 +239,57 @@ class NotificationEmitter {
         }
       })
 
-      // Get low stock notifications
-      const lowStockBatches = await ProductBatch.find({ quantity: { $lt: 10 }, status: 'active' })
-        .populate('product', 'name productCode')
-
-      lowStockBatches.forEach(batch => {
-        notifications.push({
-          id: `low-stock-${batch._id}`,
-          type: 'low_stock',
-          severity: 'warning',
-          title: 'Low Stock Alert',
-          message: `${batch.batchCode} - ${batch.product?.name || 'Unknown'} has only ${batch.quantity} units`,
-          batchCode: batch.batchCode,
-          productName: batch.product?.name,
-          quantity: batch.quantity
+      // Get low stock notifications - Query from DetailInventory to match emitLowStock()
+      const lowStockThreshold = 10
+      const lowStockDetails = await DetailInventory.find({})
+        .populate({
+          path: 'batchId',
+          populate: { path: 'product', select: 'name productCode' }
         })
+
+      lowStockDetails.forEach(detail => {
+        const batch = detail.batchId
+        if (!batch || !batch.product) return
+
+        const totalStock = (detail.quantityOnHand || 0) + (detail.quantityOnShelf || 0)
+        if (totalStock > 0 && totalStock <= lowStockThreshold) {
+          notifications.push({
+            id: `low-stock-${detail._id}`,
+            type: 'low_stock',
+            severity: 'warning',
+            title: 'Low Stock Alert',
+            message: `${batch.batchCode} - ${batch.product.name} is running low (${totalStock} units remaining)`,
+            batchCode: batch.batchCode,
+            productName: batch.product.name,
+            quantity: totalStock
+          })
+        }
       })
 
       // Get supplier credit notifications
+      // Must calculate currentDebt from PurchaseOrders (not stored in Supplier model)
+      const PurchaseOrder = require('../models/purchaseOrder')
       const suppliers = await Supplier.find({ isActive: true })
 
-      suppliers.forEach(supplier => {
-        const { currentDebt = 0, creditLimit = 0 } = supplier
-        if (creditLimit === 0) return
+      for (const supplier of suppliers) {
+        const supplierObj = supplier.toObject({ getters: true })
+        const creditLimit = supplierObj.creditLimit || 0
+
+        if (creditLimit === 0) continue
+
+        // Calculate currentDebt from received POs that are unpaid/partial
+        const unpaidPOs = await PurchaseOrder.find({
+          supplier: supplier._id,
+          status: 'received',
+          paymentStatus: { $in: ['unpaid', 'partial'] }
+        }).select('totalPrice')
+
+        const currentDebt = unpaidPOs.reduce((sum, po) => {
+          const price = po.totalPrice || 0
+          return sum + (typeof price === 'object' ? parseFloat(price.toString()) : price)
+        }, 0)
+
+        if (currentDebt === 0) continue
 
         const creditUtilization = (currentDebt / creditLimit) * 100
         let severity = null
@@ -280,19 +311,19 @@ class NotificationEmitter {
 
         if (severity) {
           notifications.push({
-            id: `credit-${supplier._id}`,
+            id: `credit-${supplier._id}-${type}`,
             type,
             severity,
             title: severity === 'critical' ? 'Credit Limit Exceeded' : 'Credit Limit Warning',
-            message: `${supplier.name} has used ${creditUtilization.toFixed(1)}% of credit limit`,
-            supplierCode: supplier.supplierCode,
-            supplierName: supplier.name,
+            message: `${supplierObj.companyName} has used ${creditUtilization.toFixed(1)}% of credit limit`,
+            supplierCode: supplierObj.supplierCode,
+            supplierName: supplierObj.companyName,
             currentDebt,
             creditLimit,
             creditUtilization
           })
         }
-      })
+      }
 
       return notifications
     } catch (error) {

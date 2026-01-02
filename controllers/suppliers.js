@@ -179,7 +179,7 @@ suppliersRouter.get('/:id', async (request, response) => {
     const supplier = await Supplier.findById(request.params.id)
       .populate({
         path: 'purchaseOrders',
-        select: 'poNumber totalPrice status paymentStatus orderDate',
+        select: 'poNumber totalPrice status paymentStatus orderDate expectedDeliveryDate notes receivedDate discountPercentage shippingFee',
         options: { sort: { orderDate: -1 } }
       });
 

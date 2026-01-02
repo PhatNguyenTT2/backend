@@ -57,17 +57,23 @@ export const NotificationProvider = ({ children }) => {
 
   // Add new notification
   const addNotification = useCallback((notification) => {
-    let isNew = false
-
     setNotifications(prev => {
-      // Check if notification already exists
+      // Check if notification already exists with exact same ID
       const exists = prev.some(n => n.id === notification.id)
       if (exists) {
         return prev
       }
 
-      isNew = true
-      const newNotifications = [notification, ...prev]
+      // For supplier credit notifications, remove old notification for same supplier
+      // when severity changes (e.g., high → critical)
+      let filtered = prev
+      if (notification.id.startsWith('credit-') && notification.supplierId) {
+        filtered = prev.filter(n =>
+          !n.id.startsWith(`credit-${notification.supplierId}`)
+        )
+      }
+
+      const newNotifications = [notification, ...filtered]
 
       // Update counts
       const newCounts = {
@@ -81,8 +87,7 @@ export const NotificationProvider = ({ children }) => {
       return newNotifications
     })
 
-    // Only add toast if notification is truly new
-    // Note: We use a separate check because setState callback runs async
+    // Always try to add toast (addToast has its own duplicate check)
     addToast(notification)
   }, [addToast])
 

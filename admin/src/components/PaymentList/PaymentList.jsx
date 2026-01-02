@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export const PaymentList = ({ payments = [], onSort, sortField, sortOrder, onEdit, onDelete, onUpdateStatus }) => {
+export const PaymentList = ({ payments = [], onSort, sortField, sortOrder, onEdit, onDelete, onUpdateStatus, onRefund }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
@@ -58,6 +58,8 @@ export const PaymentList = ({ payments = [], onSort, sortField, sortOrder, onEdi
         return 'bg-[#f59e0b]';
       case 'cancelled':
         return 'bg-[#ef4444]';
+      case 'refunded':
+        return 'bg-[#8b5cf6]';
       default:
         return 'bg-[#6b7280]';
     }
@@ -71,6 +73,8 @@ export const PaymentList = ({ payments = [], onSort, sortField, sortOrder, onEdi
         return 'Pending';
       case 'cancelled':
         return 'Cancelled';
+      case 'refunded':
+        return 'Refunded';
       default:
         return status || '-';
     }
@@ -295,19 +299,27 @@ export const PaymentList = ({ payments = [], onSort, sortField, sortOrder, onEdi
                   </p>
                 </div>
 
-                {/* Status - Dropdown */}
+                {/* Status - Dropdown only for pending, static badge for final statuses */}
                 <div className="w-[110px] px-3 flex items-center flex-shrink-0">
-                  <button
-                    onClick={(e) => toggleDropdown(`status-${payment.id}`, e)}
-                    className={`${getStatusColor(payment.status)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
-                  >
-                    <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
-                      {getStatusLabel(payment.status)}
-                    </span>
-                    <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M1 1L4 4L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
+                  {payment.status === 'pending' ? (
+                    <button
+                      onClick={(e) => toggleDropdown(`status-${payment.id}`, e)}
+                      className={`${getStatusColor(payment.status)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
+                    >
+                      <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
+                        {getStatusLabel(payment.status)}
+                      </span>
+                      <svg width="8" height="5" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M1 1L4 4L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <div className={`${getStatusColor(payment.status)} px-2 py-1 rounded inline-flex items-center`}>
+                      <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
+                        {getStatusLabel(payment.status)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Actions */}
@@ -349,7 +361,7 @@ export const PaymentList = ({ payments = [], onSort, sortField, sortOrder, onEdi
         const isStatusDropdown = activeDropdown === `status-${payment.id}`;
         const isActionDropdown = activeDropdown === `action-${payment.id}`;
 
-        // Render Status Dropdown
+        // Render Status Dropdown (only shown for pending payments)
         if (isStatusDropdown) {
           const statusOptions = [
             { value: 'pending', label: 'Pending', color: 'bg-[#f59e0b]' },
@@ -360,7 +372,7 @@ export const PaymentList = ({ payments = [], onSort, sortField, sortOrder, onEdi
           return (
             <div
               ref={dropdownRef}
-              className="fixed min-w-[140px] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
+              className="fixed min-w-[160px] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
               style={{
                 top: `${dropdownPosition.top}px`,
                 left: `${dropdownPosition.left}px`
@@ -370,17 +382,16 @@ export const PaymentList = ({ payments = [], onSort, sortField, sortOrder, onEdi
                 <button
                   key={option.value}
                   onClick={() => {
-                    if (onUpdateStatus) {
+                    if (onUpdateStatus && payment.status !== option.value) {
                       onUpdateStatus(payment, option.value);
                     }
                     setActiveDropdown(null);
                   }}
-                  className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  className={`w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors flex items-center gap-2 ${payment.status === option.value ? 'cursor-default' : ''}`}
                   disabled={payment.status === option.value}
                 >
                   <span className={`${option.color} w-2 h-2 rounded-full`}></span>
-                  <span className={`text-[12px] font-['Poppins',sans-serif] ${payment.status === option.value ? 'text-emerald-600 font-medium' : 'text-[#212529]'
-                    }`}>
+                  <span className={`text-[12px] font-['Poppins',sans-serif] ${payment.status === option.value ? 'text-emerald-600 font-medium' : 'text-[#212529]'}`}>
                     {option.label}
                   </span>
                   {payment.status === option.value && (
@@ -396,10 +407,13 @@ export const PaymentList = ({ payments = [], onSort, sortField, sortOrder, onEdi
 
         // Render Actions Dropdown
         if (isActionDropdown) {
+          // Check if refund is available (PurchaseOrder + completed status)
+          const canRefund = payment.referenceType === 'PurchaseOrder' && payment.status === 'completed';
+
           return (
             <div
               ref={dropdownRef}
-              className="fixed w-40 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
+              className="fixed w-44 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]"
               style={{
                 top: `${dropdownPosition.top}px`,
                 left: `${dropdownPosition.left}px`
@@ -417,6 +431,26 @@ export const PaymentList = ({ payments = [], onSort, sortField, sortOrder, onEdi
                 </svg>
                 Edit
               </button>
+
+              {/* Refund button - only for PurchaseOrder completed payments */}
+              {canRefund && (
+                <>
+                  <div className="border-t border-gray-200 my-1"></div>
+                  <button
+                    onClick={() => {
+                      onRefund && onRefund(payment);
+                      setActiveDropdown(null);
+                    }}
+                    className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center gap-2"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M1.33301 6.66667H10.6663C12.1391 6.66667 13.333 7.86057 13.333 9.33333V10.6667C13.333 12.1394 12.1391 13.3333 10.6663 13.3333H5.33301" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M4.66699 3.33333L1.33366 6.66667L4.66699 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Refund Payment
+                  </button>
+                </>
+              )}
 
               <div className="border-t border-gray-200 my-1"></div>
 

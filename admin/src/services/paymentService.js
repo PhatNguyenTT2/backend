@@ -108,6 +108,22 @@ const paymentService = {
     }
   },
 
+  /**
+   * Refund a completed payment
+   * @param {string} paymentId - Payment ID
+   * @returns {Promise<Object>} Refunded payment data
+   * @note Only completed PurchaseOrder payments can be refunded
+   */
+  refundPayment: async (paymentId) => {
+    try {
+      const response = await api.post(`/payments/${paymentId}/refund`)
+      return response.data
+    } catch (error) {
+      console.error('Error refunding payment:', error)
+      throw error
+    }
+  },
+
   // ========== CONVENIENCE METHODS ==========
 
   /**

@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AddSupplierModal } from './AddSupplierModal';
 import { EditSupplierModal } from './EditSupplierModal';
+import { ViewPurchaseOrdersModal } from './ViewPurchaseOrdersModal';
 
 export const SupplierList = ({ suppliers = [], onSort, sortField, sortOrder, addModalOpen = false, onCloseAddModal, onAddSuccess, editModalOpen = false, editSupplier = null, onCloseEditModal, onEditSuccess, onEdit, onDelete, onToggleActive }) => {
   const [activeDropdown, setActiveDropdown] = useState(null); // Format: 'action-{supplierId}' or 'active-{supplierId}'
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const [selectedSupplierForPO, setSelectedSupplierForPO] = useState(null);
   const dropdownRef = useRef(null);
 
   // Handle sort click
@@ -380,6 +382,19 @@ export const SupplierList = ({ suppliers = [], onSort, sortField, sortOrder, add
                 Edit
               </button>
 
+              <button
+                onClick={() => {
+                  setSelectedSupplierForPO(supplier);
+                  setActiveDropdown(null);
+                }}
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center gap-2"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M2.66699 1.33337H4.00033L5.12033 7.99337C5.18105 8.32968 5.35349 8.63481 5.60772 8.85568C5.86195 9.07655 6.18293 9.19866 6.51366 9.20004H11.667C11.9977 9.19866 12.3187 9.07655 12.5729 8.85568C12.8272 8.63481 12.9996 8.32968 13.0603 7.99337L13.9337 3.33337H4.66699M6.00033 12.6667C6.00033 13.0349 5.70185 13.3334 5.33366 13.3334C4.96547 13.3334 4.66699 13.0349 4.66699 12.6667C4.66699 12.2985 4.96547 12 5.33366 12C5.70185 12 6.00033 12.2985 6.00033 12.6667ZM12.667 12.6667C12.667 13.0349 12.3685 13.3334 12.0003 13.3334C11.6321 13.3334 11.3337 13.0349 11.3337 12.6667C11.3337 12.2985 11.6321 12 12.0003 12C12.3685 12 12.667 12.2985 12.667 12.6667Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                View Purchase Orders
+              </button>
+
               <div className="border-t border-gray-200 my-1"></div>
 
               <button
@@ -418,6 +433,14 @@ export const SupplierList = ({ suppliers = [], onSort, sortField, sortOrder, add
         onSuccess={onEditSuccess}
         supplier={editSupplier}
       />
+
+      {/* View Purchase Orders Modal */}
+      {selectedSupplierForPO && (
+        <ViewPurchaseOrdersModal
+          supplier={selectedSupplierForPO}
+          onClose={() => setSelectedSupplierForPO(null)}
+        />
+      )}
     </div>
   );
 };

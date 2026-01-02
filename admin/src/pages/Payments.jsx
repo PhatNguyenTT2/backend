@@ -26,7 +26,7 @@ export const Payments = () => {
   // Filters and sorting
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortField, setSortField] = useState('paymentDate');
+  const [sortField, setSortField] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
 
   // Pagination state
@@ -105,7 +105,7 @@ export const Payments = () => {
 
       const response = await paymentService.getAllPayments({
         limit: 1000, // Get all payments for client-side filtering
-        sortBy: 'paymentDate',
+        sortBy: 'createdAt',
         sortOrder: 'desc'
       });
 
@@ -197,6 +197,32 @@ export const Payments = () => {
     }
   };
 
+  const handleRefund = async (payment) => {
+    // Validate: only PurchaseOrder + completed
+    if (payment.referenceType !== 'PurchaseOrder') {
+      alert('Only Purchase Order payments can be refunded.');
+      return;
+    }
+
+    if (payment.status !== 'completed') {
+      alert('Only completed payments can be refunded.');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to refund payment "${payment.paymentNumber}"?\n\nAmount: ${new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(payment.amount)}\n\nThis will update the supplier's debt.`)) {
+      return;
+    }
+
+    try {
+      await paymentService.refundPayment(payment.id);
+      alert('Payment refunded successfully!');
+      fetchPayments(); // Refresh the list
+    } catch (err) {
+      console.error('Error refunding payment:', err);
+      alert(err.response?.data?.error?.message || err.message || 'Failed to refund payment');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
@@ -244,6 +270,7 @@ export const Payments = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onUpdateStatus={handleUpdateStatus}
+            onRefund={handleRefund}
           />
 
           {/* Pagination */}

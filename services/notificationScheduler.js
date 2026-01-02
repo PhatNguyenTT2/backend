@@ -1,6 +1,7 @@
 const cron = require('node-cron')
 const DetailInventory = require('../models/detailInventory')
 const Supplier = require('../models/supplier')
+const PurchaseOrder = require('../models/purchaseOrder')
 const notificationEmitter = require('./notificationEmitter')
 const logger = require('../utils/logger')
 
@@ -180,41 +181,50 @@ class NotificationScheduler {
       let warningCount = 0
 
       for (const supplier of suppliers) {
-        const currentDebt = supplier.currentDebt || 0
-        const creditLimit = supplier.creditLimit || 0
+        const supplierObj = supplier.toObject({ getters: true })
+        const creditLimit = supplierObj.creditLimit || 0
+
+        // Calculate currentDebt from received POs that are unpaid/partial
+        const unpaidPOs = await PurchaseOrder.find({
+          supplier: supplier._id,
+          status: 'received',
+          paymentStatus: { $in: ['unpaid', 'partial'] }
+        }).select('totalPrice')
+
+        const currentDebt = unpaidPOs.reduce((sum, po) => {
+          const price = po.totalPrice || 0
+          return sum + (typeof price === 'object' ? parseFloat(price.toString()) : price)
+        }, 0)
+
         const creditUtilization = creditLimit > 0 ? (currentDebt / creditLimit) * 100 : 0
 
         let shouldNotify = false
-        let message = ''
 
-        // Critical: Credit limit exceeded
+        // Critical: Credit limit exceeded (100%+)
         if (currentDebt > creditLimit) {
-          const excessAmount = currentDebt - creditLimit
-          message = `${supplier.companyName} has exceeded credit limit by ₫${excessAmount.toLocaleString('vi-VN')}`
           shouldNotify = true
         }
-        // High: 90-100% utilization
+        // Critical: Near limit (90-99%)
         else if (creditUtilization >= 90) {
-          const remainingCredit = creditLimit - currentDebt
-          message = `${supplier.companyName} is at ${creditUtilization.toFixed(1)}% credit utilization (₫${remainingCredit.toLocaleString('vi-VN')} remaining)`
           shouldNotify = true
         }
-        // Warning: 80-89% utilization
-        else if (creditUtilization >= 80) {
-          const remainingCredit = creditLimit - currentDebt
-          message = `${supplier.companyName} is at ${creditUtilization.toFixed(1)}% credit utilization (₫${remainingCredit.toLocaleString('vi-VN')} remaining)`
+        // High: High utilization (75-89%)
+        else if (creditUtilization >= 75) {
+          shouldNotify = true
+        }
+        // Warning: Medium utilization (50-74%)
+        else if (creditUtilization >= 50) {
           shouldNotify = true
         }
 
         if (shouldNotify) {
           notificationEmitter.emitSupplierCreditWarning({
             supplierId: supplier._id.toString(),
-            supplierCode: supplier.supplierCode,
-            supplierName: supplier.companyName,
+            supplierCode: supplierObj.supplierCode,
+            supplierName: supplierObj.companyName,
             currentDebt,
             creditLimit,
-            creditUtilization,
-            message
+            creditUtilization
           })
           warningCount++
         }
