@@ -112,6 +112,24 @@ if (process.env.NODE_ENV === 'test') {
   app.use('/api/testing', testingRouter)
 }
 
+// SPA fallback: serve index.html for non-API routes
+// This allows direct navigation to /pos-login, /dashboard, etc.
+app.get('*', (req, res, next) => {
+  // Only apply to non-API routes
+  if (req.path.startsWith('/api/') || req.path.startsWith('/socket.io/')) {
+    return next()
+  }
+  
+  // Serve index.html for all other routes (SPA routing)
+  const path = require('path')
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'), (err) => {
+    if (err) {
+      // If index.html not found, let unknownEndpoint handle it
+      next()
+    }
+  })
+})
+
 app.use(middleware.unknownEndpoint)
 app.use(middleware.errorHandler)
 
