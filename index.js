@@ -9,7 +9,9 @@ const server = http.createServer(app)
 // Setup Socket.IO
 const io = require('socket.io')(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: process.env.NODE_ENV === 'production'
+      ? [process.env.FRONTEND_URL, process.env.APP_URL].filter(Boolean)
+      : ['http://localhost:5173', 'http://localhost:3001'],
     methods: ['GET', 'POST'],
     credentials: true
   },

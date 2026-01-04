@@ -14,10 +14,14 @@ const logger = require('../utils/logger')
  */
 const getClientConfig = (req, res) => {
   try {
-    // Determine base URL - use request origin for production, or APP_URL env var
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http'
-    const host = req.headers['x-forwarded-host'] || req.headers.host
-    const baseUrl = process.env.APP_URL || `${protocol}://${host}`
+    // PRIORITY: Use APP_URL env var first (production), then detect from request
+    let baseUrl = process.env.APP_URL
+
+    if (!baseUrl) {
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http'
+      const host = req.headers['x-forwarded-host'] || req.headers.host
+      baseUrl = `${protocol}://${host}`
+    }
 
     const config = {
       // API URLs
@@ -47,7 +51,8 @@ const getClientConfig = (req, res) => {
 
     logger.info('Client config requested', {
       ip: req.ip,
-      userAgent: req.get('user-agent')
+      userAgent: req.get('user-agent'),
+      baseUrl
     })
 
     res.json(config)
