@@ -23,6 +23,14 @@
       "dest": "index.js"
     },
     {
+      "src": "/sitemap.xml",
+      "dest": "/admin/sitemap.xml"
+    },
+    {
+      "src": "/robots.txt",
+      "dest": "/admin/robots.txt"
+    },
+    {
       "src": "/(.*\\.(js|css|ico|png|jpg|jpeg|svg|woff|woff2|ttf|eot))",
       "dest": "/admin/$1"
     },

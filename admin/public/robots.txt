@@ -1,0 +1,6 @@
+# Robots.txt for mini-mart.antiviet.click
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://mini-mart.antiviet.click/sitemap.xml
