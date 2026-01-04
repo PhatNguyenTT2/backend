@@ -1,35 +1,12 @@
-import axios from 'axios';
-
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const API_URL = `${baseURL}/api/stock-out-orders`;
-
-// Get authentication token from localStorage
-const getAuthToken = () => {
-  const token = localStorage.getItem('adminToken');
-  return token ? `Bearer ${token}` : '';
-};
-
-// Axios instance with auth header
-const api = axios.create({
-  baseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add token to requests
-api.interceptors.request.use((config) => {
-  const token = getAuthToken();
-  if (token) {
-    config.headers.Authorization = token;
-  }
-  return config;
-});
+import api from './api';
 
 /**
  * Stock Out Order Service
+ * Uses shared api instance (baseURL = '/api')
  * Handles all API calls for stock out order management
  */
+
+const API_PATH = '/stock-out-orders';
 
 /**
  * Get all stock out orders with optional filtering
@@ -47,7 +24,7 @@ export const getAllStockOutOrders = async (filters = {}) => {
     if (filters.endDate) params.append('endDate', filters.endDate);
 
     const queryString = params.toString();
-    const url = queryString ? `${API_URL}?${queryString}` : API_URL;
+    const url = queryString ? `${API_PATH}?${queryString}` : API_PATH;
 
     const response = await api.get(url);
     return response.data;
@@ -64,7 +41,7 @@ export const getAllStockOutOrders = async (filters = {}) => {
  */
 export const getStockOutOrderById = async (id) => {
   try {
-    const response = await api.get(`${API_URL}/${id}`);
+    const response = await api.get(`${API_PATH}/${id}`);
     return response.data;
   } catch (error) {
     console.error(`Error fetching stock out order ${id}:`, error);
@@ -79,7 +56,7 @@ export const getStockOutOrderById = async (id) => {
  */
 export const createStockOutOrder = async (orderData) => {
   try {
-    const response = await api.post(API_URL, orderData);
+    const response = await api.post(API_PATH, orderData);
     return response.data;
   } catch (error) {
     console.error('Error creating stock out order:', error);
@@ -95,7 +72,7 @@ export const createStockOutOrder = async (orderData) => {
  */
 export const updateStockOutOrder = async (id, updates) => {
   try {
-    const response = await api.put(`${API_URL}/${id}`, updates);
+    const response = await api.put(`${API_PATH}/${id}`, updates);
     return response.data;
   } catch (error) {
     console.error(`Error updating stock out order ${id}:`, error);
@@ -110,7 +87,7 @@ export const updateStockOutOrder = async (id, updates) => {
  */
 export const deleteStockOutOrder = async (id) => {
   try {
-    const response = await api.delete(`${API_URL}/${id}`);
+    const response = await api.delete(`${API_PATH}/${id}`);
     return response.data;
   } catch (error) {
     console.error(`Error deleting stock out order ${id}:`, error);
@@ -126,7 +103,7 @@ export const deleteStockOutOrder = async (id) => {
  */
 export const updateStockOutOrderStatus = async (id, status) => {
   try {
-    const response = await api.put(`${API_URL}/${id}/status`, { status });
+    const response = await api.put(`${API_PATH}/${id}/status`, { status });
     return response.data;
   } catch (error) {
     console.error(`Error updating stock out order status ${id}:`, error);

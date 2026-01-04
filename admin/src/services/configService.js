@@ -25,13 +25,11 @@ class ConfigService {
       return import.meta.env.VITE_API_BASE_URL
     }
 
-    // Production: same origin
-    if (import.meta.env.PROD) {
-      return window.location.origin
-    }
-
-    // Final fallback
-    return 'http://localhost:3001'
+    // Production or dev with proxy: use relative URL (empty string = same origin)
+    // This works because:
+    // - Dev: Vite proxy forwards /api to backend
+    // - Prod: Frontend and backend are on same origin
+    return ''
   }
 
   /**

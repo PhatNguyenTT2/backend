@@ -14,10 +14,15 @@ const logger = require('../utils/logger')
  */
 const getClientConfig = (req, res) => {
   try {
+    // Determine base URL - use request origin for production, or APP_URL env var
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http'
+    const host = req.headers['x-forwarded-host'] || req.headers.host
+    const baseUrl = process.env.APP_URL || `${protocol}://${host}`
+
     const config = {
       // API URLs
-      apiUrl: process.env.APP_URL || 'http://localhost:3001',
-      socketUrl: process.env.APP_URL || 'http://localhost:3001',
+      apiUrl: baseUrl,
+      socketUrl: baseUrl,
 
       // Environment info
       environment: process.env.NODE_ENV || 'development',

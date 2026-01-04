@@ -1,14 +1,17 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
-
 import api from './api';
 
+/**
+ * Location Service
+ * Uses shared api instance (baseURL = '/api')
+ * So we only need relative paths like '/location-masters'
+ */
 const locationService = {
   /**
    * Get all locations
    */
   getAllLocations: async () => {
     try {
-      const response = await api.get(`${API_BASE_URL}/api/location-masters`);
+      const response = await api.get('/location-masters');
       return response.data;
     } catch (error) {
       console.error('Error fetching locations:', error);
@@ -21,7 +24,7 @@ const locationService = {
    */
   getLocationById: async (id) => {
     try {
-      const response = await api.get(`${API_BASE_URL}/api/location-masters/${id}`);
+      const response = await api.get(`/location-masters/${id}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching location:', error);
@@ -34,7 +37,7 @@ const locationService = {
    */
   getAvailableLocations: async () => {
     try {
-      const response = await api.get(`${API_BASE_URL}/api/location-masters/available`);
+      const response = await api.get('/location-masters/available');
       return response.data;
     } catch (error) {
       console.error('Error fetching available locations:', error);
@@ -47,7 +50,7 @@ const locationService = {
    */
   getOccupiedLocations: async () => {
     try {
-      const response = await api.get(`${API_BASE_URL}/api/location-masters/occupied`);
+      const response = await api.get('/location-masters/occupied');
       return response.data;
     } catch (error) {
       console.error('Error fetching occupied locations:', error);
@@ -60,7 +63,7 @@ const locationService = {
    */
   createLocation: async (locationData) => {
     try {
-      const response = await api.post(`${API_BASE_URL}/api/location-masters`, locationData);
+      const response = await api.post('/location-masters', locationData);
       return response.data;
     } catch (error) {
       console.error('Error creating location:', error);
@@ -73,7 +76,7 @@ const locationService = {
    */
   updateLocation: async (id, locationData) => {
     try {
-      const response = await api.put(`${API_BASE_URL}/api/location-masters/${id}`, locationData);
+      const response = await api.put(`/location-masters/${id}`, locationData);
       return response.data;
     } catch (error) {
       console.error('Error updating location:', error);
@@ -86,7 +89,7 @@ const locationService = {
    */
   deleteLocation: async (id) => {
     try {
-      const response = await api.delete(`${API_BASE_URL}/api/location-masters/${id}`);
+      const response = await api.delete(`/location-masters/${id}`);
       return response.data;
     } catch (error) {
       console.error('Error deleting location:', error);
