@@ -9,6 +9,8 @@
     "test": "jest --verbose --runInBand",
     "test:watch": "jest --watch --verbose",
     "build:ui": "rm -rf dist && cd ./admin && npm run build && cp -r dist ../dist",
+    "build": "cd admin && npm install && npm run build && cd .. && mkdir -p dist && cp -r admin/dist/* dist/",
+    "vercel-build": "cd admin && npm install && npm run build && cd .. && mkdir -p dist && cp -r admin/dist/* dist/",
     "deploy:full": "npm run build:ui && git add . && git commit -m uibuild && git push",
     "lint": "eslint .",
     "start:test": "cross-env NODE_ENV=test node --watch index.js",
