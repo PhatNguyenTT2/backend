@@ -32,7 +32,15 @@ export const EmployeeSalesList = ({ employees = [], loading = false }) => {
 
   const SortIcon = ({ field }) => {
     if (sortBy !== field) return null;
-    return sortOrder === 'asc' ? '↑' : '↓';
+    return sortOrder === 'asc' ? (
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline ml-1">
+        <path d="M6 3V9M6 3L4 5M6 3L8 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ) : (
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline ml-1">
+        <path d="M6 9V3M6 9L4 7M6 9L8 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
   };
 
   const sortedEmployees = [...employees].sort((a, b) => {

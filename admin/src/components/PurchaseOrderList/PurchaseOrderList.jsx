@@ -109,6 +109,76 @@ const PurchaseOrderList = ({
     return `₫${amount.toLocaleString('vi-VN')}`;
   };
 
+  // Calculate total from PO details (fallback when totalPrice is not set correctly)
+  const calculatePOTotal = (po) => {
+    // First try to use the stored totalPrice if it's valid
+    const storedTotal = parseFloat(po.totalPrice) || 0;
+    if (storedTotal > 0) {
+      return storedTotal;
+    }
+
+    // If totalPrice is 0 or not set, calculate from details
+    if (po.details && Array.isArray(po.details) && po.details.length > 0) {
+      const subtotal = po.details.reduce((sum, detail) => {
+        // Use pre-calculated total field from backend (handles Decimal128)
+        // Fallback to manual calculation if total is not available
+        let itemTotal = 0;
+
+        // Try detail.total first (pre-calculated by backend middleware)
+        if (detail.total !== undefined && detail.total !== null) {
+          // Handle Decimal128 object or number
+          if (typeof detail.total === 'object' && detail.total.$numberDecimal) {
+            itemTotal = parseFloat(detail.total.$numberDecimal);
+          } else {
+            itemTotal = parseFloat(detail.total) || 0;
+          }
+        }
+
+        // If total is 0 or not set, calculate from quantity × costPrice
+        if (itemTotal === 0) {
+          const qty = parseFloat(detail.quantity) || 0;
+          let price = 0;
+
+          // Handle costPrice (could be Decimal128 object or number)
+          if (detail.costPrice !== undefined && detail.costPrice !== null) {
+            if (typeof detail.costPrice === 'object' && detail.costPrice.$numberDecimal) {
+              price = parseFloat(detail.costPrice.$numberDecimal);
+            } else {
+              price = parseFloat(detail.costPrice) || 0;
+            }
+          }
+
+          // Fallback to unitPrice if costPrice not available
+          if (price === 0 && detail.unitPrice) {
+            if (typeof detail.unitPrice === 'object' && detail.unitPrice.$numberDecimal) {
+              price = parseFloat(detail.unitPrice.$numberDecimal);
+            } else {
+              price = parseFloat(detail.unitPrice) || 0;
+            }
+          }
+
+          itemTotal = qty * price;
+        }
+
+        return sum + itemTotal;
+      }, 0);
+
+      const shippingFee = parseFloat(po.shippingFee) || 0;
+      const discountPercent = parseFloat(po.discountPercentage) || 0;
+      const discountAmount = subtotal * (discountPercent / 100);
+
+      return subtotal - discountAmount + shippingFee;
+    }
+
+    // If subtotal virtual is available, use it
+    if (po.subtotal && po.subtotal > 0) {
+      const shippingFee = parseFloat(po.shippingFee) || 0;
+      return po.subtotal + shippingFee;
+    }
+
+    return 0;
+  };
+
   // PO status badge styles
   const getStatusStyles = (status) => {
     const map = {
@@ -150,7 +220,8 @@ const PurchaseOrderList = ({
     try {
       // Import service dynamically to avoid circular dependencies
       const purchaseOrderService = (await import('../../services/purchaseOrderService')).default;
-      await purchaseOrderService.deletePurchaseOrder(po.id);
+      const poId = po.id || po._id;
+      await purchaseOrderService.deletePurchaseOrder(poId);
       alert('Purchase order deleted successfully');
       if (onRefresh) {
         onRefresh();
@@ -214,7 +285,9 @@ const PurchaseOrderList = ({
       // - Cancelled: Chỉ hủy status, không cần reverse vì chưa stock in
 
       // Update PO status using the correct endpoint
-      const result = await purchaseOrderService.updateStatus(po.id, newStatus);
+      // Use po.id if available, fallback to po._id for compatibility
+      const poId = po.id || po._id;
+      const result = await purchaseOrderService.updateStatus(poId, newStatus);
       console.log('Status update result:', result);
 
       // Refresh data first to update UI immediately
@@ -329,7 +402,7 @@ const PurchaseOrderList = ({
             {purchaseOrders.map((po, index) => {
               return (
                 <div
-                  key={po.id}
+                  key={po.id || po._id}
                   className={`flex items-center h-[60px] hover:bg-gray-50 transition-colors ${index !== purchaseOrders.length - 1 ? 'border-b border-gray-100' : ''
                     }`}
                 >
@@ -355,7 +428,7 @@ const PurchaseOrderList = ({
                   {/* Total */}
                   <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
-                      {formatCurrency(po.totalPrice || 0)}
+                      {formatCurrency(calculatePOTotal(po))}
                     </p>
                   </div>
 
@@ -377,7 +450,7 @@ const PurchaseOrderList = ({
                   <div className="w-[100px] px-3 flex items-center flex-shrink-0">
                     {(po.status === 'draft' || po.status === 'pending' || po.status === 'approved') ? (
                       <button
-                        onClick={(e) => toggleDropdown(`status-${po.id}`, e)}
+                        onClick={(e) => toggleDropdown(`status-${po.id || po._id}`, e)}
                         disabled={updatingStatus}
                         className={`${getStatusStyles(po.status)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
@@ -410,7 +483,7 @@ const PurchaseOrderList = ({
                   {/* Actions */}
                   <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
                     <button
-                      onClick={(e) => toggleDropdown(`action-${po.id}`, e)}
+                      onClick={(e) => toggleDropdown(`action-${po.id || po._id}`, e)}
                       className="p-2 hover:bg-gray-200 rounded-full transition-colors"
                       title="Actions"
                     >
@@ -445,8 +518,8 @@ const PurchaseOrderList = ({
 
         if (!po) return null;
 
-        const isAction = activeDropdown === `action-${po.id}`;
-        const isStatus = activeDropdown === `status-${po.id}`;
+        const isAction = activeDropdown === `action-${po.id || po._id}`;
+        const isStatus = activeDropdown === `status-${po.id || po._id}`;
 
         // Status Dropdown
         if (isStatus) {

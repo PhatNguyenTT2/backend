@@ -314,6 +314,24 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
     setError(null);
 
     try {
+      const poId = purchaseOrder.id || purchaseOrder._id;
+
+      // For non-draft POs, only update expectedDeliveryDate
+      if (fullPO.status !== 'draft') {
+        const updateData = {
+          expectedDeliveryDate: formData.expectedDeliveryDate || undefined
+        };
+
+        const updated = await purchaseOrderService.updatePurchaseOrder(poId, updateData);
+
+        if (onSuccess) {
+          onSuccess(updated);
+        }
+        onClose();
+        return;
+      }
+
+      // For draft POs, allow full update
       // Calculate totals
       let subtotal = 0;
       items.forEach(item => {
@@ -337,7 +355,7 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
         notes: formData.notes || undefined
       };
 
-      const updated = await purchaseOrderService.updatePurchaseOrder(purchaseOrder.id, updateData);
+      const updated = await purchaseOrderService.updatePurchaseOrder(poId, updateData);
 
       if (onSuccess) {
         onSuccess(updated);
@@ -400,6 +418,10 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
   }
 
   const totals = calculateTotal();
+
+  // Edit restriction: Only allow full editing when status is 'draft'
+  // For other statuses (pending, approved), only expectedDeliveryDate can be edited
+  const isFullEditAllowed = fullPO.status === 'draft';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
@@ -500,20 +522,41 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
           {/* Products */}
           <div className="border-b pb-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[16px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-                Products
-              </h3>
-              <button
-                type="button"
-                onClick={addItem}
-                className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-[12px] font-['Poppins',sans-serif] font-medium flex items-center gap-1"
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Add Product
-              </button>
+              <div className="flex items-center gap-2">
+                <h3 className="text-[16px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
+                  Products
+                </h3>
+                {!isFullEditAllowed && (
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-semibold">
+                    Read-only
+                  </span>
+                )}
+              </div>
+              {isFullEditAllowed && (
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-[12px] font-['Poppins',sans-serif] font-medium flex items-center gap-1"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Add Product
+                </button>
+              )}
             </div>
+
+            {/* Non-draft edit restriction notice */}
+            {!isFullEditAllowed && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                <p className="text-[12px] text-amber-700 font-['Poppins',sans-serif]">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="inline mr-1 align-text-bottom">
+                    <path d="M8 5.5V8.5M8 10.5H8.01M3.07 14H12.93C14.07 14 14.78 12.77 14.21 11.79L9.28 3.15C8.71 2.17 7.29 2.17 6.72 3.15L1.79 11.79C1.22 12.77 1.93 14 3.07 14Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  This purchase order is <strong>{fullPO.status}</strong>. Only the expected delivery date can be modified.
+                </p>
+              </div>
+            )}
 
             {items.length === 0 && (
               <p className="text-gray-500 text-[13px] font-['Poppins',sans-serif] text-center py-4">
@@ -532,10 +575,11 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
                       type="text"
                       value={productSearchTerms[index] || ''}
                       onChange={(e) => handleProductSearch(index, e.target.value)}
-                      onFocus={() => setShowProductDropdown({ ...showProductDropdown, [index]: true })}
+                      onFocus={() => isFullEditAllowed && setShowProductDropdown({ ...showProductDropdown, [index]: true })}
                       placeholder="Search product by name or code..."
                       required={!item.product}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      disabled={!isFullEditAllowed}
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 ${!isFullEditAllowed ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     />
 
                     {selectedProduct && !showProductDropdown[index] && (
@@ -586,8 +630,9 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
                       onChange={(e) => updateItem(index, 'quantity', e.target.value)}
                       min="1"
                       required
+                      disabled={!isFullEditAllowed}
                       placeholder="Qty"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 ${!isFullEditAllowed ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     />
                   </div>
 
@@ -599,8 +644,9 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
                       min="0"
                       step="1000"
                       required
+                      disabled={!isFullEditAllowed}
                       placeholder="Cost Price (₫)"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 ${!isFullEditAllowed ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     />
                   </div>
 
@@ -610,15 +656,17 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => removeItem(index)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <path d="M2 4H14M6 4V3C6 2.5 6.5 2 7 2H9C9.5 2 10 2.5 10 3V4M12 4V13C12 13.5 11.5 14 11 14H5C4.5 14 4 13.5 4 13V4H12Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
+                  {isFullEditAllowed && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M2 4H14M6 4V3C6 2.5 6.5 2 7 2H9C9.5 2 10 2.5 10 3V4M12 4V13C12 13.5 11.5 14 11 14H5C4.5 14 4 13.5 4 13V4H12Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               );
             })}

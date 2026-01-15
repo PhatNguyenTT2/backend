@@ -210,7 +210,7 @@ export const ReceiveBatchInfoForm = ({
         )}
         {formData.quantityReceived && parseInt(formData.quantityReceived) < orderedQty && (
           <p className="mt-1 text-[11px] text-orange-600 font-['Poppins',sans-serif]">
-            ⚠️ Receiving partial quantity. Remaining: {orderedQty - parseInt(formData.quantityReceived)} units
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline mr-1 align-text-bottom text-orange-500"><path d="M8 5.5V8.5M8 10.5H8.01M3.07 14H12.93C14.07 14 14.78 12.77 14.21 11.79L9.28 3.15C8.71 2.17 7.29 2.17 6.72 3.15L1.79 11.79C1.22 12.77 1.93 14 3.07 14Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>Receiving partial quantity. Remaining: {orderedQty - parseInt(formData.quantityReceived)} units
           </p>
         )}
       </div>
@@ -290,7 +290,7 @@ export const ReceiveBatchInfoForm = ({
         )}
         {!loadingLocations && locations.length === 0 && (
           <p className="mt-1 text-[11px] text-orange-600 font-['Poppins',sans-serif]">
-            ⚠️ No active locations available. You can assign location later.
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline mr-1 align-text-bottom text-orange-500"><path d="M8 5.5V8.5M8 10.5H8.01M3.07 14H12.93C14.07 14 14.78 12.77 14.21 11.79L9.28 3.15C8.71 2.17 7.29 2.17 6.72 3.15L1.79 11.79C1.22 12.77 1.93 14 3.07 14Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>No active locations available. You can assign location later.
           </p>
         )}
         {formData.location && (() => {

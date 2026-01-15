@@ -190,8 +190,9 @@ export const POSBatchSelectModal = ({
                         </span>
 
                         {isSelected && (
-                          <span className="px-2 py-1 bg-emerald-500 text-white rounded text-xs font-semibold">
-                            ✓ Selected
+                          <span className="px-2 py-1 bg-emerald-500 text-white rounded text-xs font-semibold flex items-center gap-1">
+                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13.5 4L6 11.5L2.5 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                            Selected
                           </span>
                         )}
 

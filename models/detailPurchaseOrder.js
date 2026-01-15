@@ -80,13 +80,17 @@ detailPurchaseOrderSchema.virtual('isReceived').get(function () {
 });
 
 // ============ MIDDLEWARE ============
-// Pre-save: Calculate total before saving
+// Pre-save: Calculate total before saving (only when quantity or costPrice changes)
 detailPurchaseOrderSchema.pre('save', function (next) {
-  // Auto-calculate total = quantity × costPrice
-  const qty = this.quantity || 0;
-  const price = this.costPrice ? parseFloat(this.costPrice.toString()) : 0;
-  this.total = qty * price;
-  next();
+  // Only recalculate total if quantity or costPrice is modified (or this is a new document)
+  // This prevents total from being set to 0 when only updating batch field
+  if (this.isNew || this.isModified('quantity') || this.isModified('costPrice')) {
+    // Auto-calculate total = quantity × costPrice
+    const qty = this.quantity || 0;
+    const price = this.costPrice ? parseFloat(this.costPrice.toString()) : 0;
+    this.total = qty * price;
+  }
+  next()
 });
 
 // Post-save: Update PurchaseOrder totalPrice
@@ -129,9 +133,14 @@ async function updatePurchaseOrderTotal(purchaseOrderId) {
   const PurchaseOrder = mongoose.model('PurchaseOrder');
 
   try {
+    // Ensure purchaseOrderId is a proper ObjectId for aggregation
+    const poId = typeof purchaseOrderId === 'string'
+      ? new mongoose.Types.ObjectId(purchaseOrderId)
+      : purchaseOrderId;
+
     // Use aggregation for better performance
     const result = await mongoose.model('DetailPurchaseOrder').aggregate([
-      { $match: { purchaseOrder: purchaseOrderId } },
+      { $match: { purchaseOrder: poId } },
       {
         $group: {
           _id: null,

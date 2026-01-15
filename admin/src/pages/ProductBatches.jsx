@@ -252,7 +252,10 @@ const ProductBatches = () => {
               onClick={() => navigate('/products')}
               className="ml-auto px-4 py-2 text-[13px] font-['Poppins',sans-serif] text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
             >
-              ← Back to Products
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline mr-1 align-text-bottom">
+                <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Back to Products
             </button>
           </div>
         </div>

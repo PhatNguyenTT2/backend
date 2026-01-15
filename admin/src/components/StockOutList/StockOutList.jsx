@@ -1,18 +1,22 @@
 import { useState, useRef, useEffect } from 'react';
 import { InvoiceStockOutModal } from './InvoiceStockOutModal';
+import { EditStockOutOrderModal } from './EditStockOutOrderModal';
 
 const StockOutList = ({
   stockOutOrders = [],
   onSort,
   sortField,
   sortOrder,
-  onRefresh
+  onRefresh,
+  inventoryList = []
 }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [invoiceModal, setInvoiceModal] = useState(null);
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
 
   // Handle sort click
   const handleSortClick = (field) => {
@@ -150,6 +154,19 @@ const StockOutList = ({
   // Handle View Details
   const handleViewDetails = (wo) => {
     setInvoiceModal(wo);
+    setActiveDropdown(null);
+  };
+
+  // Handle Edit
+  const handleEdit = (wo) => {
+    // Only allow edit when status is draft or pending
+    if (wo.status === 'cancelled' || wo.status === 'completed') {
+      alert('Cannot edit stock out order. Cancelled or completed orders cannot be edited.');
+      return;
+    }
+
+    setEditingOrder(wo);
+    setEditModalOpen(true);
     setActiveDropdown(null);
   };
 
@@ -514,6 +531,26 @@ const StockOutList = ({
                 View Invoice
               </button>
 
+              {/* Edit Button */}
+              <button
+                onClick={() => handleEdit(wo)}
+                disabled={wo.status === 'cancelled' || wo.status === 'completed'}
+                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${wo.status === 'cancelled' || wo.status === 'completed'
+                    ? 'text-gray-400 cursor-not-allowed opacity-50'
+                    : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
+                  }`}
+                title={
+                  wo.status === 'cancelled' || wo.status === 'completed'
+                    ? 'Cannot edit cancelled or completed orders'
+                    : 'Edit stock out order'
+                }
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M11.5 2.5L13.5 4.5M2 14L4 13.5L13 4.5L11 2.5L2 11.5L1.5 14H2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Edit
+              </button>
+
               <div className="border-t border-gray-200 my-1"></div>
 
               <button
@@ -550,6 +587,24 @@ const StockOutList = ({
         <InvoiceStockOutModal
           stockOutOrder={invoiceModal}
           onClose={() => setInvoiceModal(null)}
+        />
+      )}
+
+      {/* Edit Stock Out Order Modal */}
+      {editModalOpen && editingOrder && (
+        <EditStockOutOrderModal
+          isOpen={editModalOpen}
+          onClose={() => {
+            setEditModalOpen(false);
+            setEditingOrder(null);
+          }}
+          onSuccess={() => {
+            setEditModalOpen(false);
+            setEditingOrder(null);
+            if (onRefresh) onRefresh();
+          }}
+          stockOutOrder={editingOrder}
+          inventoryList={inventoryList}
         />
       )}
     </div>

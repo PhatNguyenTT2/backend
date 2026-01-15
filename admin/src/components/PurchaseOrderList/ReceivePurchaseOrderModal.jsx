@@ -40,7 +40,19 @@ export const ReceivePurchaseOrderModal = ({
         purchaseOrder._id || purchaseOrder.id
       );
 
-      setPODetails(response.data?.detailPurchaseOrders || []);
+      const details = response.data?.detailPurchaseOrders || [];
+      setPODetails(details);
+
+      // Pre-populate receivedItems from details that already have a batch assigned
+      // Items with batch field set have already been received (stock in completed)
+      const alreadyReceived = new Set();
+      details.forEach(detail => {
+        if (detail.batch) {
+          alreadyReceived.add(detail._id || detail.id);
+        }
+      });
+      setReceivedItems(alreadyReceived);
+
     } catch (error) {
       console.error('Error loading PO details:', error);
       setApiError('Failed to load purchase order details');
@@ -193,22 +205,150 @@ export const ReceivePurchaseOrderModal = ({
             </button>
           </div>
 
-          {/* Progress Bar */}
+          {/* Step Progress Bar - Similar to TransferStockBulkModal */}
+          <div className="mt-4 pb-2">
+            <div className="flex items-center justify-center">
+              {[
+                { num: 1, label: 'View Items' },
+                { num: 2, label: 'Enter Batch Info' },
+                { num: 3, label: 'Complete' }
+              ].map((stepInfo, index) => {
+                // Determine current step based on state
+                const currentStep = receivingItem ? 2 : (progressPercentage === 100 ? 3 : 1);
+                const stepNum = stepInfo.num;
+
+                return (
+                  <div key={stepNum} className="flex items-center">
+                    {/* Step Circle */}
+                    <div className="flex flex-col items-center">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[14px] font-bold transition-all duration-300 ${stepNum < currentStep
+                        ? 'bg-emerald-500 text-white'
+                        : stepNum === currentStep
+                          ? 'bg-blue-600 text-white ring-4 ring-blue-100'
+                          : 'bg-gray-100 text-gray-400 border-2 border-gray-200'
+                        }`}>
+                        {stepNum < currentStep ? (
+                          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M13.5 4L6 11.5L2.5 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        ) : (
+                          stepNum
+                        )}
+                      </div>
+                      <span className={`mt-2 text-[11px] font-medium whitespace-nowrap ${stepNum <= currentStep ? 'text-blue-600' : 'text-gray-400'
+                        }`}>
+                        {stepInfo.label}
+                      </span>
+                    </div>
+
+                    {/* Connector Line */}
+                    {index < 2 && (
+                      <div className="w-20 h-1 mx-3 rounded-full overflow-hidden bg-gray-200">
+                        <div
+                          className={`h-full transition-all duration-500 ease-out ${stepNum < currentStep ? 'bg-emerald-500' : 'bg-gray-200'
+                            }`}
+                          style={{ width: stepNum < currentStep ? '100%' : '0%' }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Item Progress Bar */}
           {totalItems > 0 && (
-            <div className="mt-4">
-              <div className="flex items-center justify-between text-[12px] font-['Poppins',sans-serif] mb-2">
-                <span className="text-gray-600">
-                  Progress: {receivedCount}/{totalItems} items received
-                </span>
-                <span className="text-emerald-600 font-semibold">
-                  {progressPercentage.toFixed(0)}%
-                </span>
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              {/* Progress Header */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  {/* Circular Progress Indicator */}
+                  <div className="relative w-12 h-12">
+                    <svg className="w-12 h-12 transform -rotate-90" viewBox="0 0 48 48">
+                      <circle
+                        cx="24"
+                        cy="24"
+                        r="20"
+                        stroke="#e5e7eb"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <circle
+                        cx="24"
+                        cy="24"
+                        r="20"
+                        stroke={progressPercentage === 100 ? '#10b981' : '#3b82f6'}
+                        strokeWidth="4"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeDasharray={`${2 * Math.PI * 20}`}
+                        strokeDashoffset={`${2 * Math.PI * 20 * (1 - progressPercentage / 100)}`}
+                        className="transition-all duration-500 ease-out"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className={`text-[11px] font-bold ${progressPercentage === 100 ? 'text-emerald-600' : 'text-blue-600'}`}>
+                        {progressPercentage.toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Progress Text */}
+                  <div>
+                    <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-gray-800">
+                      {receivedCount} of {totalItems} items received
+                    </p>
+                    <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif]">
+                      {totalItems - receivedCount === 0
+                        ? 'All items received!'
+                        : `${totalItems - receivedCount} remaining`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Status Badge */}
+                <div className={`px-3 py-1.5 rounded-full text-[11px] font-semibold ${progressPercentage === 100
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : progressPercentage > 0
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-gray-100 text-gray-600'
+                  }`}>
+                  {progressPercentage === 100 ? (
+                    <span className="flex items-center gap-1">
+                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                        <path d="M13.5 4L6 11.5L2.5 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      Complete
+                    </span>
+                  ) : progressPercentage > 0 ? 'In Progress' : 'Not Started'}
+                </div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-emerald-600 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${progressPercentage}%` }}
-                />
+
+              {/* Segmented Progress Bar */}
+              <div className="flex items-center gap-1">
+                {poDetails.map((detail, index) => (
+                  <div
+                    key={detail._id || index}
+                    className={`flex-1 h-2 rounded-full transition-all duration-300 ${receivedItems.has(detail._id || detail.id)
+                      ? 'bg-emerald-500'
+                      : 'bg-gray-200'
+                      }`}
+                    title={`${detail.product?.name || 'Item'} - ${receivedItems.has(detail._id || detail.id) ? 'Received' : 'Pending'}`}
+                  />
+                ))}
+              </div>
+
+              {/* Legend */}
+              <div className="flex items-center gap-4 mt-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>
+                  <span className="text-[10px] text-gray-500">Received</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-gray-200"></div>
+                  <span className="text-[10px] text-gray-500">Pending</span>
+                </div>
               </div>
             </div>
           )}
@@ -357,7 +497,8 @@ export const ReceivePurchaseOrderModal = ({
               <div className="text-[13px] font-['Poppins',sans-serif] text-gray-600">
                 {receivedCount === totalItems ? (
                   <span className="text-emerald-600 font-semibold">
-                    ✓ All items received! PO will be marked as received.
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline mr-1 align-text-bottom"><path d="M13.5 4L6 11.5L2.5 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    All items received! PO will be marked as received.
                   </span>
                 ) : (
                   <span>

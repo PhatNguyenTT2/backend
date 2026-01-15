@@ -249,6 +249,7 @@ export const StockOuts = () => {
             sortField={sortField}
             sortOrder={sortOrder}
             onRefresh={handleRefresh}
+            inventoryList={inventoryList}
           />
 
           {/* Pagination */}

@@ -305,17 +305,41 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
         </div>
 
         {/* Progress Bar */}
-        <div className="px-6 pt-4">
-          <div className="flex items-center justify-between mb-2">
-            {[1, 2, 3].map(stepNum => (
-              <div key={stepNum} className="flex items-center flex-1">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold ${stepNum <= step ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'
-                  }`}>
-                  {stepNum}
+        <div className="px-6 pt-4 pb-2">
+          <div className="flex items-center justify-center">
+            {[1, 2, 3].map((stepNum, index) => (
+              <div key={stepNum} className="flex items-center">
+                {/* Step Circle */}
+                <div className="flex flex-col items-center">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[14px] font-bold transition-all duration-300 ${stepNum < step
+                      ? 'bg-emerald-500 text-white'
+                      : stepNum === step
+                        ? 'bg-blue-600 text-white ring-4 ring-blue-100'
+                        : 'bg-gray-100 text-gray-400 border-2 border-gray-200'
+                    }`}>
+                    {stepNum < step ? (
+                      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M13.5 4L6 11.5L2.5 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : (
+                      stepNum
+                    )}
+                  </div>
+                  <span className={`mt-2 text-[11px] font-medium whitespace-nowrap ${stepNum <= step ? 'text-blue-600' : 'text-gray-400'
+                    }`}>
+                    {stepNum === 1 ? 'Select Products' : stepNum === 2 ? 'Select Batches' : 'Review & Confirm'}
+                  </span>
                 </div>
-                {stepNum < 3 && (
-                  <div className={`flex-1 h-1 mx-2 ${stepNum < step ? 'bg-blue-600' : 'bg-gray-200'
-                    }`}></div>
+
+                {/* Connector Line */}
+                {index < 2 && (
+                  <div className="w-24 h-1 mx-4 rounded-full overflow-hidden bg-gray-200">
+                    <div
+                      className={`h-full transition-all duration-500 ease-out ${stepNum < step ? 'bg-emerald-500 w-full' : 'bg-gray-200 w-0'
+                        }`}
+                      style={{ width: stepNum < step ? '100%' : '0%' }}
+                    />
+                  </div>
                 )}
               </div>
             ))}
@@ -346,7 +370,7 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                       : 'border-gray-300 hover:border-blue-400'
                       }`}
                   >
-                    <div className="text-[14px] font-semibold mb-1">Warehouse → Shelf</div>
+                    <div className="text-[14px] font-semibold mb-1">Warehouse <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline mx-1"><path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> Shelf</div>
                     <div className="text-[11px] text-gray-600">Move to sales floor</div>
                   </button>
                   <button
@@ -357,7 +381,7 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                       : 'border-gray-300 hover:border-blue-400'
                       }`}
                   >
-                    <div className="text-[14px] font-semibold mb-1">Shelf → Warehouse</div>
+                    <div className="text-[14px] font-semibold mb-1">Shelf <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline mx-1"><path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> Warehouse</div>
                     <div className="text-[11px] text-gray-600">Return to storage</div>
                   </button>
                 </div>
@@ -572,7 +596,7 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                   <div>
                     <p className="text-blue-700">Direction:</p>
                     <p className="font-semibold text-blue-900">
-                      {direction === 'toShelf' ? 'Warehouse → Shelf' : 'Shelf → Warehouse'}
+                      {direction === 'toShelf' ? (<>Warehouse <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline mx-1"><path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> Shelf</>) : (<>Shelf <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline mx-1"><path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> Warehouse</>)}
                     </p>
                   </div>
                   <div>
@@ -697,7 +721,7 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                 disabled={loading || loadingBatches}
                 className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-[13px] font-semibold disabled:opacity-50"
               >
-                ← Back
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline mr-1"><path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>Back
               </button>
             )}
           </div>
@@ -719,7 +743,7 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                 disabled={loading || loadingBatches || selectedProducts.length === 0}
                 className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-[13px] font-semibold disabled:opacity-50"
               >
-                {loadingBatches ? 'Loading...' : 'Next: Select Batches →'}
+                {loadingBatches ? 'Loading...' : (<>Next: Select Batches <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline ml-1"><path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></>)}
               </button>
             )}
 
@@ -730,7 +754,7 @@ export const TransferStockBulkModal = ({ isOpen, onClose, onSuccess }) => {
                 disabled={loading || selectedBatchCount === 0}
                 className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-[13px] font-semibold disabled:opacity-50"
               >
-                Next: Review →
+                Next: Review <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline ml-1"><path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </button>
             )}
 

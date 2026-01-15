@@ -422,7 +422,9 @@ export const POSInvoiceModal = ({ isOpen, order, orderDetails: propsOrderDetails
             <div className="flex justify-between items-center text-[13px] font-['Poppins',sans-serif] mt-2">
               <span className="font-semibold text-emerald-800">Payment Status:</span>
               <span className="font-bold uppercase text-emerald-600">
-                {order.paymentStatus === 'paid' ? '✓ PAID' : order.paymentStatus || 'N/A'}
+                {order.paymentStatus === 'paid' ? (
+                  <><svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline mr-1 align-text-bottom"><path d="M13.5 4L6 11.5L2.5 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>PAID</>
+                ) : order.paymentStatus || 'N/A'}
               </span>
             </div>
           </div>
