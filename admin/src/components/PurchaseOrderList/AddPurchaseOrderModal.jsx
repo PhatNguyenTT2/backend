@@ -648,8 +648,7 @@ export const AddPurchaseOrderModal = ({ isOpen, onClose, onSuccess }) => {
         <div className="border-t-2 border-gray-200 p-6 bg-gray-50">
           <div className="flex items-center justify-between">
             <div className="text-[12px] text-gray-600 font-['Poppins',sans-serif]">
-              <p>✓ PO will be created with status: <span className="font-semibold text-orange-600">Pending</span></p>
-              <p className="mt-1">Next: Approve → Receive Goods → Stock In</p>
+              <p>PO will be created with status: <span className="font-semibold text-orange-600">Pending</span></p>
             </div>
             <div className="flex items-center gap-3">
               <button

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-// import productService from '../../services/productService';
-// import purchaseOrderService from '../../services/purchaseOrderService';
+import productService from '../../services/productService';
+import purchaseOrderService from '../../services/purchaseOrderService';
+import detailPurchaseOrderService from '../../services/detailPurchaseOrderService';
 
 export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrder = null }) => {
   const dropdownRefs = useRef({});
@@ -15,17 +16,24 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
   const [items, setItems] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [fetchingData, setFetchingData] = useState(false);
   const [error, setError] = useState(null);
   const [productSearchTerms, setProductSearchTerms] = useState({});
   const [showProductDropdown, setShowProductDropdown] = useState({});
 
-  // Fetch products
+  // State for full PO data (fetched from API)
+  const [fullPO, setFullPO] = useState(null);
+
+  // Fetch products (same pattern as AddPurchaseOrderModal)
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await productService.getProducts({ per_page: 100 });
-        if (response.success && response.data) {
-          setProducts(response.data.products || []);
+        const response = await productService.getAllProducts({
+          isActive: true,
+          limit: 1000
+        });
+        if (response.success && response.data?.products) {
+          setProducts(response.data.products);
         }
       } catch (err) {
         console.error('Error fetching products:', err);
@@ -37,31 +45,93 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
     }
   }, [isOpen]);
 
-  // Populate form when purchaseOrder changes
+  // Fetch full PO data when modal opens (similar to InvoicePurchaseModal)
   useEffect(() => {
-    if (isOpen && purchaseOrder) {
+    const fetchFullPO = async () => {
+      if (!isOpen || !purchaseOrder) {
+        setFullPO(null);
+        return;
+      }
+
+      try {
+        setFetchingData(true);
+
+        // Fetch full purchase order data
+        const response = await purchaseOrderService.getPurchaseOrderById(purchaseOrder.id || purchaseOrder._id);
+
+        let poData = null;
+        if (response.success && response.data && response.data.purchaseOrder) {
+          poData = response.data.purchaseOrder;
+        } else if (response.data && !response.success) {
+          poData = response.data;
+        } else if (response.purchaseOrder) {
+          poData = response.purchaseOrder;
+        } else {
+          poData = purchaseOrder;
+        }
+
+        // If details is still not available, fetch it separately
+        if (!poData.details || !Array.isArray(poData.details) || poData.details.length === 0) {
+          try {
+            const detailsResponse = await detailPurchaseOrderService.getDetailsByPurchaseOrder(purchaseOrder.id || purchaseOrder._id);
+            if (detailsResponse.success && detailsResponse.data && detailsResponse.data.detailPurchaseOrders) {
+              poData.details = detailsResponse.data.detailPurchaseOrders;
+            } else if (Array.isArray(detailsResponse.data)) {
+              poData.details = detailsResponse.data;
+            } else if (Array.isArray(detailsResponse)) {
+              poData.details = detailsResponse;
+            }
+          } catch (detailError) {
+            console.error('Error fetching details:', detailError);
+            poData.details = [];
+          }
+        }
+
+        setFullPO(poData);
+      } catch (error) {
+        console.error('Error fetching full PO:', error);
+        setFullPO(purchaseOrder);
+      } finally {
+        setFetchingData(false);
+      }
+    };
+
+    fetchFullPO();
+  }, [isOpen, purchaseOrder]);
+
+  // Populate form when fullPO data is loaded
+  useEffect(() => {
+    if (isOpen && fullPO) {
       setFormData({
-        orderDate: purchaseOrder.orderDate ? new Date(purchaseOrder.orderDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        expectedDeliveryDate: purchaseOrder.expectedDeliveryDate ? new Date(purchaseOrder.expectedDeliveryDate).toISOString().split('T')[0] : '',
-        shippingFee: purchaseOrder.shippingFee || 0,
-        notes: purchaseOrder.notes || ''
+        orderDate: fullPO.orderDate ? new Date(fullPO.orderDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        expectedDeliveryDate: fullPO.expectedDeliveryDate ? new Date(fullPO.expectedDeliveryDate).toISOString().split('T')[0] : '',
+        shippingFee: fullPO.shippingFee || 0,
+        notes: fullPO.notes || ''
       });
 
-      // Populate items
-      if (purchaseOrder.items && purchaseOrder.items.length > 0) {
-        const formattedItems = purchaseOrder.items.map(item => ({
-          product: item.product?.id || item.product?._id || item.product,
-          quantity: item.quantity || 1,
-          costPrice: item.costPrice || item.unitPrice || 0
+      // Populate items from details (backend uses 'details' not 'items')
+      const details = fullPO.details || [];
+      if (details.length > 0) {
+        const formattedItems = details.map(detail => ({
+          product: detail.product?.id || detail.product?._id || detail.product,
+          quantity: detail.quantity || 1,
+          costPrice: detail.costPrice || 0
         }));
         setItems(formattedItems);
 
         // Set search terms for existing items
         const terms = {};
-        formattedItems.forEach((item, index) => {
-          const product = products.find(p => (p.id || p._id) === getProductId(item.product));
-          if (product) {
-            terms[index] = product.sku ? `${product.sku} - ${product.name}` : product.name;
+        details.forEach((detail, index) => {
+          const productData = detail.product;
+          if (productData && typeof productData === 'object') {
+            terms[index] = productData.productCode
+              ? `${productData.productCode} - ${productData.name}`
+              : productData.name || '';
+          } else if (products.length > 0) {
+            const product = products.find(p => (p.id || p._id) === getProductId(detail.product));
+            if (product) {
+              terms[index] = product.sku ? `${product.sku} - ${product.name}` : product.name;
+            }
           }
         });
         setProductSearchTerms(terms);
@@ -73,7 +143,7 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
       setError(null);
       setShowProductDropdown({});
     }
-  }, [isOpen, purchaseOrder]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, fullPO, products]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -104,10 +174,10 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
     return null;
   };
 
-  // Add new item
+  // Add new item (same pattern as AddPurchaseOrderModal)
   const addItem = () => {
     const newIndex = items.length;
-    setItems([...items, { product: null, quantity: 1, unitPrice: 0 }]);
+    setItems([...items, { product: '', quantity: 1, costPrice: 0 }]);
     setProductSearchTerms({ ...productSearchTerms, [newIndex]: '' });
     setShowProductDropdown({ ...showProductDropdown, [newIndex]: false });
   };
@@ -145,39 +215,42 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
     setShowProductDropdown({ ...showProductDropdown, [index]: true });
   };
 
-  // Select product
+  // Select product (same pattern as AddPurchaseOrderModal)
   const selectProduct = (index, productId) => {
     const product = products.find(p => (p.id || p._id) === productId);
 
     if (product) {
-      const extractedId = getProductId(product);
       const newItems = [...items];
       newItems[index] = {
         ...newItems[index],
-        product: extractedId,
-        unitPrice: product.costPrice || 0
+        product: productId,
+        costPrice: product.costPrice || product.unitPrice || 0
       };
       setItems(newItems);
 
-      const displayText = product.sku ? `${product.sku} - ${product.name}` : product.name;
+      const displayText = product.productCode
+        ? `${product.productCode} - ${product.name}`
+        : product.name;
       setProductSearchTerms({ ...productSearchTerms, [index]: displayText });
       setShowProductDropdown({ ...showProductDropdown, [index]: false });
     }
   };
 
-  // Get filtered products
+  // Get filtered products (same pattern as AddPurchaseOrderModal)
   const getFilteredProducts = (index) => {
     const searchTerm = productSearchTerms[index] || '';
     const selectedProductIds = items
-      .map((item, idx) => idx !== index ? getProductId(item.product) : null)
-      .filter(id => id !== null);
+      .map((item, idx) => idx !== index ? item.product : null)
+      .filter(id => id);
 
     let filtered = products.filter(product => {
-      const productId = getProductId(product);
+      const productId = product.id || product._id;
       if (selectedProductIds.includes(productId)) return false;
       if (!searchTerm) return true;
-      return product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      const term = searchTerm.toLowerCase();
+      return product.name?.toLowerCase().includes(term) ||
+        product.productCode?.toLowerCase().includes(term);
     });
 
     return searchTerm ? filtered : filtered.slice(0, 20);
@@ -284,7 +357,47 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
     }
   };
 
+  // Status badge styles helper
+  const getStatusStyles = (status) => {
+    const map = {
+      draft: 'bg-gray-500',
+      pending: 'bg-amber-500',
+      approved: 'bg-blue-500',
+      received: 'bg-emerald-500',
+      cancelled: 'bg-red-500'
+    };
+    return map[(status || '').toLowerCase()] || 'bg-gray-500';
+  };
+
+  const getStatusLabel = (status) => {
+    const map = {
+      draft: 'Draft',
+      pending: 'Pending',
+      approved: 'Approved',
+      received: 'Received',
+      cancelled: 'Cancelled'
+    };
+    return map[(status || '').toLowerCase()] || status || 'Unknown';
+  };
+
   if (!isOpen || !purchaseOrder) return null;
+
+  // Show loading state while fetching full PO data
+  if (fetchingData || !fullPO) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
+        <div className="bg-white rounded-lg shadow-xl p-8">
+          <div className="flex items-center gap-3">
+            <svg className="animate-spin h-5 w-5 text-emerald-600" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-[14px] font-['Poppins',sans-serif] text-gray-600">Loading purchase order data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const totals = calculateTotal();
 
@@ -292,9 +405,14 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
-          <h2 className="text-[20px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-            Edit Purchase Order - {purchaseOrder.poNumber || purchaseOrder.purchaseOrderNumber}
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-[20px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
+              Edit Purchase Order - {fullPO.poNumber || purchaseOrder.poNumber || purchaseOrder.purchaseOrderNumber}
+            </h2>
+            <span className={`${getStatusStyles(fullPO.status)} px-2.5 py-1 rounded text-[11px] font-bold font-['Poppins',sans-serif] text-white uppercase`}>
+              {getStatusLabel(fullPO.status)}
+            </span>
+          </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
               <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -318,17 +436,31 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
               <div className="grid grid-cols-2 gap-2 text-[13px] font-['Poppins',sans-serif]">
                 <div>
                   <span className="font-semibold text-gray-600">Supplier:</span>{' '}
-                  <span className="text-gray-900">{purchaseOrder.supplierName || 'N/A'}</span>
+                  <span className="text-gray-900">
+                    {fullPO.supplier?.companyName || fullPO.supplierName || 'N/A'}
+                  </span>
                 </div>
-                {purchaseOrder.supplierCode && (
+                {(fullPO.supplier?.supplierCode || fullPO.supplierCode) && (
                   <div>
                     <span className="font-semibold text-gray-600">Code:</span>{' '}
-                    <span className="text-gray-900">{purchaseOrder.supplierCode}</span>
+                    <span className="text-gray-900">{fullPO.supplier?.supplierCode || fullPO.supplierCode}</span>
+                  </div>
+                )}
+                {fullPO.supplier?.phone && (
+                  <div>
+                    <span className="font-semibold text-gray-600">Phone:</span>{' '}
+                    <span className="text-gray-900">{fullPO.supplier.phone}</span>
+                  </div>
+                )}
+                {fullPO.supplier?.address && (
+                  <div className="col-span-2">
+                    <span className="font-semibold text-gray-600">Address:</span>{' '}
+                    <span className="text-gray-900">{fullPO.supplier.address}</span>
                   </div>
                 )}
               </div>
               <p className="text-[11px] text-amber-600 font-['Poppins',sans-serif] mt-2">
-                ⚠️ Supplier cannot be changed after purchase order creation
+                Supplier cannot be changed after purchase order creation
               </p>
             </div>
           </div>
@@ -390,19 +522,18 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
             )}
 
             {items.map((item, index) => {
-              const productId = getProductId(item.product);
-              const selectedProduct = products.find(p => getProductId(p) === productId);
+              const selectedProduct = products.find(p => (p.id || p._id) === item.product);
               const filteredProducts = getFilteredProducts(index);
 
               return (
-                <div key={index} className="flex items-center gap-3 mb-3 p-3 bg-gray-50 rounded-lg">
+                <div key={index} className="flex items-center gap-3 mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <div ref={el => dropdownRefs.current[index] = el} className="flex-1 relative">
                     <input
                       type="text"
                       value={productSearchTerms[index] || ''}
                       onChange={(e) => handleProductSearch(index, e.target.value)}
                       onFocus={() => setShowProductDropdown({ ...showProductDropdown, [index]: true })}
-                      placeholder="Search product by name or SKU..."
+                      placeholder="Search product by name or code..."
                       required={!item.product}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
@@ -413,13 +544,13 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
                           {selectedProduct.name}
                         </span>
                         <span className="text-blue-600 font-semibold text-[11px]">
-                          Cost: ${selectedProduct.costPrice || 0}
+                          ₫{(selectedProduct.costPrice || selectedProduct.unitPrice || 0).toLocaleString('vi-VN')}
                         </span>
                       </div>
                     )}
 
                     {showProductDropdown[index] && (
-                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-xl max-h-60 overflow-y-auto">
                         {filteredProducts.length === 0 ? (
                           <div className="px-3 py-2 text-[13px] text-gray-500 font-['Poppins',sans-serif]">
                             No products found
@@ -434,17 +565,12 @@ export const EditPurchaseOrderModal = ({ isOpen, onClose, onSuccess, purchaseOrd
                             >
                               <div className="flex items-center justify-between">
                                 <span className="font-medium text-gray-900">{product.name}</span>
-                                <div className="flex flex-col items-end">
-                                  <span className="text-blue-600 font-semibold">Cost: ${product.costPrice || 0}</span>
-                                  <span className="text-gray-500 text-[10px]">Sell: ${product.price}</span>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 mt-0.5 text-gray-500 text-[11px]">
-                                {product.sku && <span>SKU: {product.sku}</span>}
-                                <span>•</span>
-                                <span className={product.stock > 0 ? 'text-green-600' : 'text-red-600'}>
-                                  Stock: {product.stock}
+                                <span className="text-blue-600 font-semibold text-[11px]">
+                                  ₫{(product.costPrice || product.unitPrice || 0).toLocaleString('vi-VN')}
                                 </span>
+                              </div>
+                              <div className="text-gray-500 text-[11px] mt-0.5">
+                                {product.productCode && <span>Code: {product.productCode}</span>}
                               </div>
                             </button>
                           ))
