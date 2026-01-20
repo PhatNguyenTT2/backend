@@ -3,6 +3,7 @@ import { AddPurchaseOrderModal } from './AddPurchaseOrderModal';
 import { EditPurchaseOrderModal } from './EditPurchaseOrderModal';
 import { InvoicePurchaseModal } from './InvoicePurchaseModal';
 import { ReceivePurchaseOrderModal } from './ReceivePurchaseOrderModal';
+import { ViewPaymentsModal } from './ViewPaymentsModal';
 
 const PurchaseOrderList = ({
   purchaseOrders = [],
@@ -22,6 +23,8 @@ const PurchaseOrderList = ({
   const [receiveModalOpen, setReceiveModalOpen] = useState(false);
   const [receivingPO, setReceivingPO] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [viewPaymentsModalOpen, setViewPaymentsModalOpen] = useState(false);
+  const [viewingPaymentsPO, setViewingPaymentsPO] = useState(null);
 
   // Handle sort click - Toggle sort order
   const handleSortClick = (field) => {
@@ -638,6 +641,23 @@ const PurchaseOrderList = ({
                 <span className="text-[12px] font-['Poppins',sans-serif]">View Invoice</span>
               </button>
 
+              {/* View Payments */}
+              <button
+                onClick={() => {
+                  setViewingPaymentsPO(po);
+                  setViewPaymentsModalOpen(true);
+                  setActiveDropdown(null);
+                }}
+                className="w-full px-3 py-2 text-left hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2 text-gray-700"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14 10V12.667C14 13.02 13.86 13.36 13.61 13.61C13.36 13.86 13.02 14 12.667 14H3.333C2.98 14 2.64 13.86 2.39 13.61C2.14 13.36 2 13.02 2 12.667V10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M4.667 6.667L8 10L11.333 6.667" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M8 10V2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span className="text-[12px] font-['Poppins',sans-serif]">View Payments</span>
+              </button>
+
               {/* Receive Goods - Only for approved POs */}
               {po.status === 'approved' && (
                 <button
@@ -758,6 +778,16 @@ const PurchaseOrderList = ({
           }
         }}
         purchaseOrder={receivingPO}
+      />
+
+      {/* View Payments Modal */}
+      <ViewPaymentsModal
+        isOpen={viewPaymentsModalOpen}
+        onClose={() => {
+          setViewPaymentsModalOpen(false);
+          setViewingPaymentsPO(null);
+        }}
+        purchaseOrder={viewingPaymentsPO}
       />
     </div>
   );

@@ -237,8 +237,8 @@ paymentSchema.post('save', async function (doc) {
       // Fully paid
       newPaymentStatus = 'paid';
     } else if (totalPaid > 0) {
-      // Partially paid (we'll use 'pending' for now, or you can add 'partial' to enum)
-      newPaymentStatus = 'pending';
+      // Partially paid - use 'partial' for both Order and PurchaseOrder
+      newPaymentStatus = 'partial';
     } else if (totalPending > 0) {
       // Has pending payments but nothing completed yet
       newPaymentStatus = 'pending';

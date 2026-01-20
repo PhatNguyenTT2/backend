@@ -459,14 +459,14 @@ export const PaymentList = ({ payments = [], onSort, sortField, sortOrder, onEdi
                   onDelete && onDelete(payment);
                   setActiveDropdown(null);
                 }}
-                disabled={payment.status !== 'pending'}
-                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${payment.status !== 'pending'
+                disabled={!['pending', 'cancelled'].includes(payment.status)}
+                className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${!['pending', 'cancelled'].includes(payment.status)
                   ? 'text-gray-400 cursor-not-allowed opacity-50'
                   : 'text-gray-700 hover:bg-red-50 hover:text-red-600'
                   }`}
                 title={
-                  payment.status !== 'pending'
-                    ? 'Only pending payments can be deleted'
+                  !['pending', 'cancelled'].includes(payment.status)
+                    ? 'Only pending or cancelled payments can be deleted'
                     : 'Delete payment'
                 }
               >

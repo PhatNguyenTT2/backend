@@ -5,3 +5,4 @@ export { EditPurchaseOrderModal } from './EditPurchaseOrderModal';
 export { InvoicePurchaseModal } from './InvoicePurchaseModal';
 export { ReceivePurchaseOrderModal } from './ReceivePurchaseOrderModal';
 export { ReceiveBatchInfoForm } from './ReceiveBatchInfoForm';
+export { ViewPaymentsModal } from './ViewPaymentsModal';

@@ -3,6 +3,7 @@ import { Breadcrumb } from '../components/Breadcrumb';
 import { PaymentListHeader } from '../components/PaymentList/PaymentListHeader';
 import { PaymentList } from '../components/PaymentList/PaymentList';
 import { AddPaymentModal } from '../components/PaymentList/AddPaymentModal';
+import { EditPaymentModal } from '../components/PaymentList/EditPaymentModal';
 import paymentService from '../services/paymentService';
 
 export const Payments = () => {
@@ -191,11 +192,6 @@ export const Payments = () => {
     // Optional: Show success toast notification
   };
 
-  const handleEdit = (payment) => {
-    setSelectedPayment(payment);
-    setShowEditModal(true);
-  };
-
   const handleUpdateStatus = async (payment, newStatus) => {
     try {
       await paymentService.updatePaymentStatus(payment.id, newStatus);
@@ -206,10 +202,27 @@ export const Payments = () => {
     }
   };
 
-  const handleDelete = async (payment) => {
-    // Only allow deleting pending payments
+  const handleEdit = (payment) => {
+    // Only allow editing pending payments
     if (payment.status !== 'pending') {
-      alert('Only pending payments can be deleted.');
+      alert('Only pending payments can be edited.');
+      return;
+    }
+    setSelectedPayment(payment);
+    setShowEditModal(true);
+  };
+
+  const handleEditSuccess = () => {
+    console.log('Payment updated successfully');
+    fetchPayments(); // Refresh the list
+    setShowEditModal(false);
+    setSelectedPayment(null);
+  };
+
+  const handleDelete = async (payment) => {
+    // Only allow deleting pending or cancelled payments
+    if (!['pending', 'cancelled'].includes(payment.status)) {
+      alert('Only pending or cancelled payments can be deleted.');
       return;
     }
 
@@ -453,7 +466,16 @@ export const Payments = () => {
         onSuccess={handleAddSuccess}
       />
 
-      {/* TODO: Edit Payment Modal - to be implemented */}
+      {/* Edit Payment Modal */}
+      <EditPaymentModal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedPayment(null);
+        }}
+        onSuccess={handleEditSuccess}
+        payment={selectedPayment}
+      />
     </div>
   );
 };

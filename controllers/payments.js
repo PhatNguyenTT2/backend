@@ -76,8 +76,8 @@ const updateOrderPaymentStatus = async (orderId) => {
     } else if (totalPaid >= totalPrice) {
       newPaymentStatus = 'paid';
     } else {
-      // Order model doesn't have 'partial' status, use 'pending'
-      newPaymentStatus = 'pending';
+      // Partial payment: 0 < totalPaid < totalPrice
+      newPaymentStatus = 'partial';
     }
 
     // Update if changed
@@ -573,12 +573,12 @@ paymentsRouter.delete('/:id', async (request, response) => {
       });
     }
 
-    // Only allow deleting pending payments
-    if (payment.status !== 'pending') {
+    // Only allow deleting pending or cancelled payments
+    if (!['pending', 'cancelled'].includes(payment.status)) {
       return response.status(400).json({
         success: false,
         error: {
-          message: 'Only pending payments can be deleted',
+          message: 'Only pending or cancelled payments can be deleted',
           code: 'CANNOT_DELETE_PAYMENT'
         }
       });

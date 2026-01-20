@@ -382,6 +382,7 @@ export const Orders = () => {
             onUpdatePayment={handleUpdatePayment}
             onViewInvoice={handleViewInvoice}
             onRefund={handleRefund}
+            onRefresh={fetchOrders}
           />
 
           {/* Pagination */}

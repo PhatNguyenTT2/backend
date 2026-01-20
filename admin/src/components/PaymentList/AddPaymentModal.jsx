@@ -5,12 +5,12 @@ import purchaseOrderService from '../../services/purchaseOrderService';
 
 export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
-    referenceType: 'Order',
+    referenceType: 'PurchaseOrder',
     referenceId: '',
     amount: '',
-    paymentMethod: 'cash',
+    paymentMethod: 'bank_transfer',
     paymentDate: new Date().toISOString().split('T')[0],
-    status: 'pending', // Default and read-only
+    status: 'pending',
     notes: ''
   });
 
@@ -20,21 +20,30 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
   const [references, setReferences] = useState([]);
   const [selectedReference, setSelectedReference] = useState(null);
 
+  // Payment summary for partial payment support
+  const [paymentSummary, setPaymentSummary] = useState({
+    totalPrice: 0,
+    totalPaid: 0,
+    remainingBalance: 0,
+    paymentsCount: 0
+  });
+
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
       setFormData({
-        referenceType: 'Order',
+        referenceType: 'PurchaseOrder',
         referenceId: '',
         amount: '',
-        paymentMethod: 'cash',
+        paymentMethod: 'bank_transfer',
         paymentDate: new Date().toISOString().split('T')[0],
         status: 'pending',
         notes: ''
       });
       setError(null);
       setSelectedReference(null);
-      fetchReferences('Order');
+      setPaymentSummary({ totalPrice: 0, totalPaid: 0, remainingBalance: 0, paymentsCount: 0 });
+      fetchReferences('PurchaseOrder');
     }
   }, [isOpen]);
 
@@ -51,6 +60,7 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
       fetchReferenceDetails(formData.referenceType, formData.referenceId);
     } else {
       setSelectedReference(null);
+      setPaymentSummary({ totalPrice: 0, totalPaid: 0, remainingBalance: 0, paymentsCount: 0 });
     }
   }, [formData.referenceId, formData.referenceType]);
 
@@ -59,42 +69,31 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       let response;
       if (type === 'Order') {
-        // Fetch orders that can create payment (exclude draft and cancelled)
-        // Include: pending, shipping, delivered
         response = await orderService.getAllOrders({
           status: 'pending,shipping,delivered',
           limit: 100,
           sortBy: 'orderDate',
           sortOrder: 'desc'
         });
-        console.log('📥 Fetched orders:', response);
       } else if (type === 'PurchaseOrder') {
-        // Fetch purchase orders that can create payment (exclude draft and cancelled)
-        // Include: pending, approved, received
         response = await purchaseOrderService.getAllPurchaseOrders({
           status: 'pending,approved,received',
           limit: 100,
           sortBy: 'orderDate',
           sortOrder: 'desc'
         });
-        console.log('📥 Fetched purchase orders:', response);
       }
 
       if (response && response.success && response.data) {
         const items = type === 'Order' ? response.data.orders : response.data.purchaseOrders;
-        console.log('✅ Parsed items:', items?.length || 0);
         setReferences(items || []);
       } else if (response && Array.isArray(response)) {
-        // Handle direct array response
-        console.log('✅ Direct array response:', response.length);
         setReferences(response);
       } else {
-        console.warn('⚠️ Unexpected response structure:', response);
         setReferences([]);
       }
     } catch (err) {
-      console.error('❌ Error fetching references:', err);
-      console.error('Error details:', err.response?.data || err.message);
+      console.error('Error fetching references:', err);
       setReferences([]);
     } finally {
       setLoadingReferences(false);
@@ -114,23 +113,52 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
         const item = type === 'Order' ? response.data.order : response.data.purchaseOrder;
         setSelectedReference(item);
 
-        // Auto-fill amount from order/purchase order total (read-only)
-        const totalAmount = item.total || item.totalPrice || 0;
+        // Calculate payment summary including existing payments
+        const totalPrice = parseFloat(item.total || item.totalPrice || 0);
+
+        // Fetch existing payments for this reference
+        const paymentsResponse = await paymentService.getAllPayments({
+          referenceType: type,
+          referenceId: id,
+          limit: 100
+        });
+
+        let totalPaid = 0;
+        let paymentsCount = 0;
+
+        if (paymentsResponse.success && paymentsResponse.data?.payments) {
+          const completedPayments = paymentsResponse.data.payments.filter(
+            p => p.status === 'completed'
+          );
+          totalPaid = completedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+          paymentsCount = completedPayments.length;
+        }
+
+        const remainingBalance = Math.max(0, totalPrice - totalPaid);
+
+        setPaymentSummary({
+          totalPrice,
+          totalPaid,
+          remainingBalance,
+          paymentsCount
+        });
+
+        // Auto-fill amount with remaining balance (for partial payment)
         setFormData(prev => ({
           ...prev,
-          amount: totalAmount.toString()
+          amount: remainingBalance > 0 ? remainingBalance.toString() : totalPrice.toString()
         }));
       }
     } catch (err) {
       console.error('Error fetching reference details:', err);
       setSelectedReference(null);
+      setPaymentSummary({ totalPrice: 0, totalPaid: 0, remainingBalance: 0, paymentsCount: 0 });
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validation
     if (!formData.referenceType) {
       setError('Please select a reference type');
       return;
@@ -141,9 +169,18 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
       return;
     }
 
-    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+    const amountValue = parseFloat(formData.amount);
+    if (!formData.amount || amountValue <= 0) {
       setError('Please enter a valid amount greater than 0');
       return;
+    }
+
+    // Validate amount doesn't exceed remaining balance
+    if (amountValue > paymentSummary.remainingBalance && paymentSummary.remainingBalance > 0) {
+      const confirmOverpay = window.confirm(
+        `Amount (${formatCurrency(amountValue)}) exceeds remaining balance (${formatCurrency(paymentSummary.remainingBalance)}).\n\nDo you want to continue?`
+      );
+      if (!confirmOverpay) return;
     }
 
     if (!formData.paymentMethod) {
@@ -163,7 +200,7 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
       const paymentData = {
         referenceType: formData.referenceType,
         referenceId: formData.referenceId,
-        amount: parseFloat(formData.amount),
+        amount: amountValue,
         paymentMethod: formData.paymentMethod,
         paymentDate: formData.paymentDate,
         status: formData.status
@@ -193,7 +230,6 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
       [field]: value
     }));
 
-    // Reset referenceId when referenceType changes
     if (field === 'referenceType') {
       setFormData(prev => ({
         ...prev,
@@ -201,11 +237,26 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
         amount: ''
       }));
       setSelectedReference(null);
+      setPaymentSummary({ totalPrice: 0, totalPaid: 0, remainingBalance: 0, paymentsCount: 0 });
+    }
+  };
+
+  const handleQuickFill = (type) => {
+    if (type === 'remaining') {
+      setFormData(prev => ({
+        ...prev,
+        amount: paymentSummary.remainingBalance.toString()
+      }));
+    } else if (type === 'full') {
+      setFormData(prev => ({
+        ...prev,
+        amount: paymentSummary.totalPrice.toString()
+      }));
     }
   };
 
   const formatCurrency = (amount) => {
-    if (!amount) return '-';
+    if (amount === null || amount === undefined) return '-';
     return new Intl.NumberFormat('vi-VN', {
       style: 'currency',
       currency: 'VND',
@@ -222,6 +273,26 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
       draft: 'Draft'
     };
     return labels[status] || status;
+  };
+
+  const getPaymentStatusBadge = (paymentStatus) => {
+    const styles = {
+      unpaid: 'bg-red-100 text-red-700',
+      pending: 'bg-yellow-100 text-yellow-700',
+      partial: 'bg-orange-100 text-orange-700',
+      paid: 'bg-green-100 text-green-700'
+    };
+    const labels = {
+      unpaid: 'Unpaid',
+      pending: 'Pending',
+      partial: 'Partial Paid',
+      paid: 'Fully Paid'
+    };
+    return (
+      <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${styles[paymentStatus] || 'bg-gray-100 text-gray-700'}`}>
+        {labels[paymentStatus] || paymentStatus}
+      </span>
+    );
   };
 
   if (!isOpen) return null;
@@ -312,13 +383,18 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
             )}
           </div>
 
-          {/* Selected Reference Details */}
+          {/* Selected Reference Details with Payment Summary */}
           {selectedReference && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-[12px] font-semibold font-['Poppins',sans-serif] text-[#212529] mb-2">
-                {formData.referenceType === 'Order' ? 'Order' : 'Purchase Order'} Details
-              </p>
-              <div className="grid grid-cols-2 gap-3 text-[12px] font-['Poppins',sans-serif]">
+            <div className="bg-gradient-to-r from-blue-50 to-emerald-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[12px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
+                  {formData.referenceType === 'Order' ? 'Order' : 'Purchase Order'} Details
+                </p>
+                {getPaymentStatusBadge(selectedReference.paymentStatus || 'unpaid')}
+              </div>
+
+              {/* Details Grid */}
+              <div className="grid grid-cols-2 gap-3 text-[12px] font-['Poppins',sans-serif] mb-4">
                 <div>
                   <span className="text-gray-600">Number:</span>
                   <span className="ml-2 font-medium text-[#212529]">
@@ -329,41 +405,82 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
                   <span className="text-gray-600">Status:</span>
                   <span className="ml-2 font-medium text-[#212529]">{getStatusLabel(selectedReference.status)}</span>
                 </div>
-                <div>
-                  <span className="text-gray-600">Total:</span>
-                  <span className="ml-2 font-semibold text-emerald-600">
-                    {formatCurrency(selectedReference.total || selectedReference.totalPrice)}
-                  </span>
+              </div>
+
+              {/* Payment Summary Section */}
+              <div className="bg-white/70 rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between text-[12px]">
+                  <span className="text-gray-600">Total Amount:</span>
+                  <span className="font-semibold text-[#212529]">{formatCurrency(paymentSummary.totalPrice)}</span>
                 </div>
-                <div>
-                  <span className="text-gray-600">Payment Status:</span>
-                  <span className="ml-2 font-medium text-[#212529]">
-                    {selectedReference.paymentStatus || 'unpaid'}
+                <div className="flex items-center justify-between text-[12px]">
+                  <span className="text-gray-600">Already Paid ({paymentSummary.paymentsCount} payment{paymentSummary.paymentsCount !== 1 ? 's' : ''}):</span>
+                  <span className="font-semibold text-emerald-600">{formatCurrency(paymentSummary.totalPaid)}</span>
+                </div>
+                <div className="border-t border-gray-200 pt-2 flex items-center justify-between text-[13px]">
+                  <span className="font-medium text-gray-700">Remaining Balance:</span>
+                  <span className={`font-bold ${paymentSummary.remainingBalance > 0 ? 'text-orange-600' : 'text-emerald-600'}`}>
+                    {formatCurrency(paymentSummary.remainingBalance)}
                   </span>
                 </div>
               </div>
+
+              {/* Fully Paid Warning */}
+              {paymentSummary.remainingBalance === 0 && paymentSummary.totalPaid > 0 && (
+                <div className="mt-3 bg-emerald-100 border border-emerald-300 rounded-lg px-3 py-2">
+                  <p className="text-[11px] text-emerald-700 font-medium">
+                    ✓ This {formData.referenceType === 'Order' ? 'order' : 'purchase order'} is fully paid
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
           {/* Payment Details */}
           <div className="grid grid-cols-2 gap-4">
-            {/* Amount - Read Only */}
+            {/* Amount - Now Editable with Quick Fill Buttons */}
             <div>
               <label className="block text-[13px] font-medium font-['Poppins',sans-serif] text-[#212529] mb-2">
-                Amount (VND) <span className="text-red-500">*</span>
+                Payment Amount (VND) <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
                 value={formData.amount}
-                readOnly
-                placeholder="Auto-filled from order total"
+                onChange={(e) => handleChange('amount', e.target.value)}
+                placeholder="Enter payment amount"
                 required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] bg-gray-50 cursor-not-allowed"
+                min="1"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
               {formData.amount && (
-                <p className="mt-1 text-[11px] text-gray-500 font-['Poppins',sans-serif]">
+                <p className="mt-1 text-[11px] text-emerald-600 font-medium font-['Poppins',sans-serif]">
                   {formatCurrency(parseFloat(formData.amount))}
                 </p>
+              )}
+
+              {/* Quick Fill Button - Show only one based on context */}
+              {selectedReference && paymentSummary.totalPrice > 0 && (
+                <div className="mt-2">
+                  {paymentSummary.totalPaid > 0 && paymentSummary.remainingBalance > 0 ? (
+                    // Has partial payment - show "Fill Remaining"
+                    <button
+                      type="button"
+                      onClick={() => handleQuickFill('remaining')}
+                      className="px-2 py-1 text-[10px] font-medium bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors"
+                    >
+                      Fill Remaining ({formatCurrency(paymentSummary.remainingBalance)})
+                    </button>
+                  ) : paymentSummary.remainingBalance > 0 ? (
+                    // No prior payments - show "Full Amount"
+                    <button
+                      type="button"
+                      onClick={() => handleQuickFill('full')}
+                      className="px-2 py-1 text-[10px] font-medium bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                    >
+                      Full Amount ({formatCurrency(paymentSummary.totalPrice)})
+                    </button>
+                  ) : null}
+                </div>
               )}
             </div>
 
@@ -378,9 +495,9 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
+                <option value="bank_transfer">Bank Transfer</option>
                 <option value="cash">Cash</option>
                 <option value="card">Card</option>
-                <option value="bank_transfer">Bank Transfer</option>
               </select>
             </div>
           </div>
@@ -413,7 +530,7 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] bg-gray-50 cursor-not-allowed"
               />
               <p className="mt-1 text-[11px] text-gray-500 font-['Poppins',sans-serif]">
-                Payment status will be set to pending by default
+                Change to "Completed" after approval
               </p>
             </div>
           </div>
@@ -426,7 +543,7 @@ export const AddPaymentModal = ({ isOpen, onClose, onSuccess }) => {
             <textarea
               value={formData.notes}
               onChange={(e) => handleChange('notes', e.target.value)}
-              placeholder="Enter payment notes"
+              placeholder="Enter payment notes (e.g., Partial payment 1 of 3)"
               rows={3}
               maxLength={500}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"

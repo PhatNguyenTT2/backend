@@ -1,9 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { ViewOrderPaymentsModal } from './ViewOrderPaymentsModal';
 
-export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, onEdit, onDelete, onUpdateStatus, onUpdatePayment, onViewInvoice, onRefund }) => {
+export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, onEdit, onDelete, onUpdateStatus, onUpdatePayment, onViewInvoice, onRefund, onRefresh }) => {
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const dropdownRef = useRef(null);
+  const [viewPaymentsModalOpen, setViewPaymentsModalOpen] = useState(false);
+  const [viewingPaymentsOrder, setViewingPaymentsOrder] = useState(null);
 
   const getSortIcon = (field) => {
     if (sortField !== field) {
@@ -401,6 +404,23 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
                 View Invoice
               </button>
 
+              {/* View Payments */}
+              <button
+                onClick={() => {
+                  setViewingPaymentsOrder(order);
+                  setViewPaymentsModalOpen(true);
+                  setActiveDropdown(null);
+                }}
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center gap-2"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14 4H2C1.44772 4 1 4.44772 1 5V13C1 13.5523 1.44772 14 2 14H14C14.5523 14 15 13.5523 15 13V5C15 4.44772 14.5523 4 14 4Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M1 7H15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M8 2L6 4H10L8 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                View Payments
+              </button>
+
               <button
                 onClick={() => {
                   onEdit && onEdit(order);
@@ -474,6 +494,18 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
 
         return null;
       })()}
+
+      {/* View Payments Modal */}
+      <ViewOrderPaymentsModal
+        order={viewingPaymentsOrder}
+        onClose={() => {
+          setViewPaymentsModalOpen(false);
+          setViewingPaymentsOrder(null);
+        }}
+        onPaymentCreated={() => {
+          if (onRefresh) onRefresh();
+        }}
+      />
     </div>
   );
 };

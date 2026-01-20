@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
 import { Breadcrumb } from '../../components/Breadcrumb';
-import { SalesList } from '../../components/SalesList';
+import { SalesList, SalesChart } from '../../components/SalesList';
 import { Calendar, TrendingUp } from 'lucide-react';
 import api from '../../services/api';
 
@@ -258,6 +258,11 @@ const SalesReports = () => {
             </p>
           </div>
         </div>
+      )}
+
+      {/* Sales Chart */}
+      {salesData.length > 0 && (
+        <SalesChart salesData={salesData} />
       )}
 
       {/* Sales List Component */}

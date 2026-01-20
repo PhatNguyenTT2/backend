@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 
 import { Breadcrumb } from '../../components/Breadcrumb';
-import { PurchaseList } from '../../components/PurchaseList';
+import { PurchaseList, PurchaseChart } from '../../components/PurchaseList';
 import { Calendar, ShoppingCart } from 'lucide-react';
 import api from '../../services/api';
 
@@ -258,6 +258,11 @@ const PurchaseReports = () => {
             </p>
           </div>
         </div>
+      )}
+
+      {/* Purchase Chart */}
+      {purchaseData.length > 0 && (
+        <PurchaseChart purchaseData={purchaseData} />
       )}
 
       {/* Purchase List Component */}
