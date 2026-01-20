@@ -4,6 +4,7 @@ const Category = require('../models/category');
 const ProductBatch = require('../models/productBatch');
 const Inventory = require('../models/inventory');
 const { userExtractor } = require('../utils/auth');
+const ProductPriceHistory = require('../models/productPriceHistory');
 
 /**
  * Products Controller - Minimal CRUD Approach
@@ -427,7 +428,8 @@ productsRouter.put('/:id', userExtractor, async (request, response) => {
     if (name !== undefined) product.name = name;
     if (image !== undefined) product.image = image;
     if (category !== undefined) product.category = category;
-    if (unitPrice !== undefined) product.unitPrice = unitPrice;
+    // Price update is restricted to specific endpoint
+    // if (unitPrice !== undefined) product.unitPrice = unitPrice; 
     if (isActive !== undefined) product.isActive = isActive;
     if (vendor !== undefined) product.vendor = vendor;
 
@@ -740,6 +742,93 @@ productsRouter.get('/code/:productCode', async (request, response) => {
         message: 'Server error',
         details: error.message
       }
+    });
+  }
+});
+
+/**
+ * PUT /api/products/:id/price
+ * Update product price and log history
+ */
+productsRouter.put('/:id/price', userExtractor, async (request, response) => {
+  try {
+    const { newPrice, reason } = request.body;
+    const product = await Product.findById(request.params.id);
+
+    if (!product) {
+      return response.status(404).json({
+        success: false,
+        error: { message: 'Product not found' }
+      });
+    }
+
+    if (newPrice === undefined || newPrice < 0) {
+      return response.status(400).json({
+        success: false,
+        error: { message: 'Invalid price' }
+      });
+    }
+
+    const oldPrice = product.unitPrice;
+
+    // Update product price
+    product.unitPrice = newPrice;
+    await product.save();
+
+    // Create history record
+    const history = new ProductPriceHistory({
+      product: product._id,
+      oldPrice: oldPrice,
+      newPrice: newPrice,
+      reason: reason || 'Price update',
+      createdBy: request.user ? request.user.id : null
+    });
+    await history.save();
+
+    response.json({
+      success: true,
+      data: {
+        product,
+        history
+      },
+      message: 'Price updated successfully'
+    });
+  } catch (error) {
+    console.error('Update price error:', error);
+    response.status(500).json({
+      success: false,
+      error: { message: 'Failed to update price' }
+    });
+  }
+});
+
+/**
+ * GET /api/products/:id/price-history
+ * Get price history for a product
+ */
+productsRouter.get('/:id/price-history', userExtractor, async (request, response) => {
+  try {
+    const history = await ProductPriceHistory.find({ product: request.params.id })
+      .sort({ createdAt: -1 })
+      .populate({
+        path: 'createdBy',
+        select: 'username',
+        populate: {
+          path: 'employee',
+          select: 'fullName'
+        }
+      })
+      .limit(50);
+
+    response.json({
+      success: true,
+      data: history
+    });
+  } catch (error) {
+    console.error('Get price history error:', error);
+    response.status(500).json({
+      success: false,
+      error: { message: 'Failed to get price history' }
     });
   }
 });

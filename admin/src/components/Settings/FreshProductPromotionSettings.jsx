@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import settingsService from '../../services/settingsService';
 import { PromotionResultModal } from './PromotionResultModal';
+import { Clock, Timer, Zap, Percent, Save, AlertCircle, Rocket, Calendar } from 'lucide-react';
 
 /**
  * FreshProductPromotionSettings Component
@@ -157,236 +158,239 @@ export const FreshProductPromotionSettings = () => {
     }
   };
 
+  const SettingCard = ({ title, icon: Icon, color, children }) => (
+    <div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 relative overflow-hidden h-full`}>
+      <div className={`absolute top-0 right-0 w-24 h-24 bg-${color}-50 rounded-bl-full -mr-4 -mt-4`}></div>
+      <div className="relative z-10">
+        <div className={`w-12 h-12 rounded-lg bg-${color}-100 flex items-center justify-center mb-6 text-${color}-600`}>
+          <Icon className="w-6 h-6" />
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-6">{title}</h3>
+        {children}
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <svg className="animate-spin h-8 w-8 text-orange-600" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-        </svg>
+      <div className="flex justify-center py-20">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6">
-      {/* Success Message */}
-      {successMessage && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-          <div className="flex items-center space-x-2">
-            <svg className="w-5 h-5 text-green-700" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <p className="text-[13px] text-green-700 font-['Poppins',sans-serif]">
-              {successMessage}
-            </p>
-          </div>
+    <div className="max-w-6xl mx-auto space-y-8">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900 font-['Poppins',sans-serif]">
+          Fresh Product Promotion
+        </h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Automated discount rules for fresh products nearing expiration
+        </p>
+      </div>
+
+      {(successMessage || errors.submit) && (
+        <div className={`p-4 rounded-lg flex items-center gap-3 ${errors.submit ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-green-50 text-green-700 border border-green-100'
+          }`}>
+          {errors.submit ? <AlertCircle className="w-5 h-5" /> : <Save className="w-5 h-5" />}
+          <span className="font-medium">{errors.submit || successMessage}</span>
         </div>
       )}
 
-      {/* Error Message */}
-      {errors.submit && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-center space-x-2">
-            <svg className="w-5 h-5 text-red-700" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-            <p className="text-[13px] text-red-700 font-['Poppins',sans-serif]">
-              {errors.submit}
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-6">
-        {/* Enable Auto Promotion */}
-        <div className="flex items-start gap-3 p-4 bg-orange-50 border-2 border-orange-200 rounded-lg">
-          <input
-            type="checkbox"
-            id="autoPromotionEnabled"
-            checked={settings.autoPromotionEnabled}
-            onChange={(e) => handleChange('autoPromotionEnabled', e.target.checked)}
-            className="mt-1 w-5 h-5 text-orange-600 rounded focus:ring-orange-500"
-          />
-          <div className="flex-1">
-            <label htmlFor="autoPromotionEnabled" className="block text-[14px] font-semibold text-gray-900 cursor-pointer">
-              Enable Auto-Promotion for Fresh Products
-            </label>
-            <p className="text-[12px] text-gray-600 mt-1">
-              When enabled, system will automatically apply discounts to fresh products based on expiry date and configured schedule
-            </p>
-          </div>
-        </div>
-
-        {/* Promotion Start Time */}
-        <div>
-          <label className="block text-[13px] font-medium text-gray-700 mb-2">
-            Daily Promotion Start Time <span className="text-red-500">*</span>
-          </label>
-          <div className="flex items-center gap-3">
-            <input
-              type="time"
-              value={settings.promotionStartTime}
-              onChange={(e) => handleChange('promotionStartTime', e.target.value)}
-              disabled={!settings.autoPromotionEnabled}
-              className={`px-4 py-2 border ${errors.promotionStartTime ? 'border-red-500' : 'border-gray-300'} rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:bg-gray-100 disabled:cursor-not-allowed`}
-            />
-            <span className="text-[13px] text-gray-600">
-              (Promotion will be applied automatically at this time each day)
-            </span>
-          </div>
-          {errors.promotionStartTime && (
-            <p className="mt-1 text-[11px] text-red-500">{errors.promotionStartTime}</p>
-          )}
-        </div>
-
-        {/* Discount Percentage */}
-        <div>
-          <label className="block text-[13px] font-medium text-gray-700 mb-2">
-            Discount Percentage <span className="text-red-500">*</span>
-          </label>
-          <div className="flex items-center gap-3">
-            <input
-              type="number"
-              value={settings.discountPercentage}
-              onChange={(e) => handleChange('discountPercentage', parseFloat(e.target.value))}
-              min="0"
-              max="100"
-              step="5"
-              disabled={!settings.autoPromotionEnabled}
-              className={`w-32 px-4 py-2 border ${errors.discountPercentage ? 'border-red-500' : 'border-gray-300'} rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:bg-gray-100 disabled:cursor-not-allowed`}
-            />
-            <span className="text-[13px] font-semibold text-gray-700">%</span>
-            <div className="flex-1">
-              <input
-                type="range"
-                value={settings.discountPercentage}
-                onChange={(e) => handleChange('discountPercentage', parseFloat(e.target.value))}
-                min="0"
-                max="100"
-                step="5"
-                disabled={!settings.autoPromotionEnabled}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-600 disabled:cursor-not-allowed"
-              />
-            </div>
-          </div>
-          {errors.discountPercentage && (
-            <p className="mt-1 text-[11px] text-red-500">{errors.discountPercentage}</p>
-          )}
-        </div>
-
-        {/* Apply To Options */}
-        <div>
-          <label className="block text-[13px] font-medium text-gray-700 mb-3">
-            Apply Promotion To <span className="text-red-500">*</span>
-          </label>
-          <div className="space-y-3">
-            <div className="flex items-start gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <input
-                type="checkbox"
-                id="applyToExpiringToday"
-                checked={settings.applyToExpiringToday}
-                onChange={(e) => handleChange('applyToExpiringToday', e.target.checked)}
-                disabled={!settings.autoPromotionEnabled}
-                className="mt-0.5 w-4 h-4 text-orange-600 rounded focus:ring-orange-500 disabled:cursor-not-allowed"
-              />
-              <div className="flex-1">
-                <label htmlFor="applyToExpiringToday" className="block text-[13px] font-medium text-gray-900 cursor-pointer">
-                  Batches Expiring Today (within 24 hours)
-                </label>
-                <p className="text-[11px] text-gray-600 mt-1">
-                  ⚠️ Highest priority - Products that expire within 24 hours
-                </p>
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Core Settings */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-start gap-4">
+              <div className={`p-3 rounded-lg ${settings.autoPromotionEnabled ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>
+                <Zap className="w-6 h-6" />
               </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <input
-                type="checkbox"
-                id="applyToExpiringTomorrow"
-                checked={settings.applyToExpiringTomorrow}
-                onChange={(e) => handleChange('applyToExpiringTomorrow', e.target.checked)}
-                disabled={!settings.autoPromotionEnabled}
-                className="mt-0.5 w-4 h-4 text-orange-600 rounded focus:ring-orange-500 disabled:cursor-not-allowed"
-              />
               <div className="flex-1">
-                <label htmlFor="applyToExpiringTomorrow" className="block text-[13px] font-medium text-gray-900 cursor-pointer">
-                  Batches Expiring Tomorrow (within 48 hours)
-                </label>
-                <p className="text-[11px] text-gray-600 mt-1">
-                  Products that expire within 48 hours (early promotion)
+                <div className="flex items-center justify-between mb-2">
+                  <label htmlFor="autoPromotionEnabled" className="text-lg font-semibold text-gray-900 cursor-pointer">
+                    Enable Auto-Promotion
+                  </label>
+                  <label className="relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer">
+                    <input
+                      type="checkbox"
+                      id="autoPromotionEnabled"
+                      className="peer sr-only"
+                      checked={settings.autoPromotionEnabled}
+                      onChange={(e) => handleChange('autoPromotionEnabled', e.target.checked)}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                  </label>
+                </div>
+                <p className="text-sm text-gray-500">
+                  Automatically apply discounts to fresh products based on expiry criteria.
                 </p>
               </div>
             </div>
           </div>
-          {errors.applyTo && (
-            <p className="mt-2 text-[11px] text-red-500">{errors.applyTo}</p>
-          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <SettingCard title="Schedule & Rules" icon={Clock} color="blue">
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Start Time
+                  </label>
+                  <input
+                    type="time"
+                    value={settings.promotionStartTime}
+                    onChange={(e) => handleChange('promotionStartTime', e.target.value)}
+                    disabled={!settings.autoPromotionEnabled}
+                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 transition-all font-semibold text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Target Products
+                  </label>
+                  <div className="space-y-3">
+                    <label className={`flex items-center p-3 rounded-lg border ${settings.applyToExpiringToday && settings.autoPromotionEnabled
+                      ? 'border-blue-200 bg-blue-50'
+                      : 'border-gray-200 hover:bg-gray-50'
+                      } transition-colors cursor-pointer`}>
+                      <input
+                        type="checkbox"
+                        checked={settings.applyToExpiringToday}
+                        onChange={(e) => handleChange('applyToExpiringToday', e.target.checked)}
+                        disabled={!settings.autoPromotionEnabled}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-3 text-sm font-medium text-gray-700">Expires Today (24h)</span>
+                    </label>
+
+                    <label className={`flex items-center p-3 rounded-lg border ${settings.applyToExpiringTomorrow && settings.autoPromotionEnabled
+                      ? 'border-blue-200 bg-blue-50'
+                      : 'border-gray-200 hover:bg-gray-50'
+                      } transition-colors cursor-pointer`}>
+                      <input
+                        type="checkbox"
+                        checked={settings.applyToExpiringTomorrow}
+                        onChange={(e) => handleChange('applyToExpiringTomorrow', e.target.checked)}
+                        disabled={!settings.autoPromotionEnabled}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-3 text-sm font-medium text-gray-700">Expires Tomorrow (48h)</span>
+                    </label>
+                  </div>
+                  {errors.applyTo && <p className="mt-1 text-xs text-red-500">{errors.applyTo}</p>}
+                </div>
+              </div>
+            </SettingCard>
+
+            <SettingCard title="Discount Rate" icon={Percent} color="orange">
+              <div className="flex flex-col h-full justify-between">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Discount Percentage
+                  </label>
+                  <div className="relative mb-6">
+                    <input
+                      type="number"
+                      value={settings.discountPercentage}
+                      onChange={(e) => handleChange('discountPercentage', parseFloat(e.target.value))}
+                      min="0"
+                      max="100"
+                      disabled={!settings.autoPromotionEnabled}
+                      className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-lg text-3xl font-bold text-gray-900 focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                    />
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold pointer-events-none text-xl">
+                      %
+                    </div>
+                  </div>
+
+                  <input
+                    type="range"
+                    value={settings.discountPercentage}
+                    onChange={(e) => handleChange('discountPercentage', parseFloat(e.target.value))}
+                    min="0"
+                    max="100"
+                    step="5"
+                    disabled={!settings.autoPromotionEnabled}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
+                  />
+                  <div className="flex justify-between text-xs text-gray-400 mt-2 font-medium">
+                    <span>0%</span>
+                    <span>50%</span>
+                    <span>100%</span>
+                  </div>
+                </div>
+
+                {errors.discountPercentage && <p className="mt-1 text-xs text-red-500">{errors.discountPercentage}</p>}
+              </div>
+            </SettingCard>
+          </div>
         </div>
-        {/* Preview Box */}
-        {settings.autoPromotionEnabled && (
-          <div className="p-4 bg-orange-50 border-2 border-orange-300 rounded-lg">
-            <h4 className="text-[13px] font-semibold text-orange-900 mb-2">Preview Configuration</h4>
-            <div className="space-y-2 text-[12px] text-orange-800">
-              <p>
-                <strong>Start Time:</strong> {settings.promotionStartTime} (daily)
-              </p>
-              <p>
-                <strong>Discount:</strong> {settings.discountPercentage}% OFF
-              </p>
-              <p>
-                <strong>Applies To:</strong>
-              </p>
-              <ul className="list-disc list-inside ml-4">
-                {settings.applyToExpiringToday && <li>Fresh products expiring within 24 hours</li>}
-                {settings.applyToExpiringTomorrow && <li>Fresh products expiring within 48 hours</li>}
-              </ul>
+
+        {/* Preview & Actions */}
+        <div className="space-y-6">
+          <div className="bg-gray-900 text-white rounded-xl shadow-lg p-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full -mr-8 -mt-8"></div>
+
+            <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-emerald-400" />
+              Summary
+            </h3>
+
+            <div className="space-y-4 text-gray-300 text-sm">
+              <div className="flex justify-between pb-3 border-b border-gray-800">
+                <span>Status</span>
+                <span className={`font-medium ${settings.autoPromotionEnabled ? 'text-emerald-400' : 'text-gray-500'}`}>
+                  {settings.autoPromotionEnabled ? 'Active' : 'Disabled'}
+                </span>
+              </div>
+              <div className="flex justify-between pb-3 border-b border-gray-800">
+                <span>Execution Time</span>
+                <span className="font-medium text-white">{settings.promotionStartTime}</span>
+              </div>
+              <div className="flex justify-between pb-3 border-b border-gray-800">
+                <span>Discount</span>
+                <span className="font-medium text-orange-400">{settings.discountPercentage}% OFF</span>
+              </div>
+              <div className="pt-2">
+                <span className="block mb-2">Target Scope:</span>
+                <div className="flex flex-wrap gap-2">
+                  {settings.applyToExpiringToday && (
+                    <span className="bg-gray-800 text-xs px-2 py-1 rounded border border-gray-700">Expires Today</span>
+                  )}
+                  {settings.applyToExpiringTomorrow && (
+                    <span className="bg-gray-800 text-xs px-2 py-1 rounded border border-gray-700">Expires Tomorrow</span>
+                  )}
+                  {!settings.applyToExpiringToday && !settings.applyToExpiringTomorrow && (
+                    <span className="text-gray-500 italic">No scope selected</span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-between pt-4 border-t">
           <button
-            type="button"
             onClick={handleRunNow}
             disabled={saving || !settings.autoPromotionEnabled}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-[13px] font-['Poppins',sans-serif] font-medium disabled:opacity-50 flex items-center gap-2"
-            title="Run promotion immediately (for testing)"
+            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-blue-50 text-blue-700 font-semibold rounded-xl hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all border border-blue-100 shadow-sm"
           >
-            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-            </svg>
-            Run Now
+            {saving ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-700"></div> : null}
+            Run Promotion Now
           </button>
 
           <button
-            type="button"
             onClick={handleSave}
             disabled={saving}
-            className="px-6 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-[13px] font-['Poppins',sans-serif] font-medium disabled:opacity-50 flex items-center gap-2"
+            className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {saving ? (
-              <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Saving...
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z" />
-                </svg>
-                Save Settings
-              </>
-            )}
+            {saving ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : null}
+            Save Configuration
           </button>
         </div>
       </div>
 
-      {/* Promotion Result Modal */}
       {showResultModal && (
         <PromotionResultModal
           result={promotionResult}

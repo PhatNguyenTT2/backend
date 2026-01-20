@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { Settings as SettingsIcon, Percent, Shield, Leaf } from 'lucide-react';
+import { Settings as SettingsIcon, Percent, Shield, Leaf, DollarSign } from 'lucide-react';
 import {
   CustomerDiscountSettings,
   POSSecuritySettings,
-  FreshProductPromotionSettings
+  FreshProductPromotionSettings,
+  ProductPriceSettings
 } from '../components/Settings';
 
 export const Settings = () => {
@@ -36,6 +37,13 @@ export const Settings = () => {
       icon: Leaf,
       description: 'Auto-promotion for expiring fresh products',
       component: FreshProductPromotionSettings
+    },
+    {
+      id: 'product-price',
+      label: 'Product Price',
+      icon: DollarSign,
+      description: 'Manage product prices and view price history',
+      component: ProductPriceSettings
     }
   ];
 

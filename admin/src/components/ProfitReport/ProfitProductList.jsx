@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TrendingUp, TrendingDown, PackageOpen, ArrowUpDown } from 'lucide-react';
+import { PackageOpen } from 'lucide-react';
 
 export const ProfitProductList = ({ products = [], loading = false }) => {
   const [sortBy, setSortBy] = useState('profit'); // profit, revenue, cost, margin
@@ -213,12 +213,7 @@ export const ProfitProductList = ({ products = [], loading = false }) => {
                   {/* Profit */}
                   <td className="px-6 py-4 text-right">
                     <div className={`inline-flex flex-col items-end px-3 py-2 rounded-lg ${profitBgColor}`}>
-                      <p className={`text-[14px] font-bold ${profitColor} flex items-center gap-1`}>
-                        {isProfitable ? (
-                          <TrendingUp className="w-4 h-4" />
-                        ) : (
-                          <TrendingDown className="w-4 h-4" />
-                        )}
+                      <p className={`text-[14px] font-bold ${profitColor}`}>
                         {formatCurrency(product.profit)}
                       </p>
                       <p className="text-[10px] text-gray-600">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import settingsService from '../../services/settingsService';
+import { ShieldAlert, Timer, RotateCcw, Save, AlertCircle } from 'lucide-react';
 
 export const POSSecuritySettings = () => {
   const [security, setSecurity] = useState({
@@ -92,143 +93,114 @@ export const POSSecuritySettings = () => {
     }
   };
 
+  const SecurityCard = ({ title, field, icon: Icon, color, description, min, max, unit }) => (
+    <div className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 relative overflow-hidden group hover:shadow-md transition-shadow h-full flex flex-col`}>
+      <div className={`absolute top-0 right-0 w-24 h-24 bg-${color}-50 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110`}></div>
+      <div className="relative z-10 flex flex-col flex-1">
+        <div className={`w-12 h-12 rounded-lg bg-${color}-100 flex items-center justify-center mb-4 text-${color}-600`}>
+          <Icon className="w-6 h-6" />
+        </div>
+
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">{title}</h3>
+        <p className="text-sm text-gray-500 mb-6 flex-1">{description}</p>
+
+        <div className="flex items-end gap-3 mt-auto">
+          <div className="flex-1">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+              Value
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                min={min}
+                max={max}
+                value={security[field]}
+                onChange={(e) => handleChange(field, e.target.value)}
+                className="w-full pl-4 pr-16 py-3 bg-gray-50 border border-gray-200 rounded-lg text-xl font-bold text-gray-900 focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+              />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold pointer-events-none text-sm uppercase">
+                {unit}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="flex flex-col items-center space-y-3">
-          <svg className="animate-spin h-8 w-8 text-blue-600" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-          </svg>
-          <p className="text-gray-500 text-sm font-['Poppins',sans-serif]">Loading settings...</p>
-        </div>
+      <div className="flex justify-center py-20">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="bg-white rounded-lg shadow">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-800 font-['Poppins',sans-serif]">
-            POS Security Configuration
-          </h2>
-          <p className="text-sm text-gray-600 mt-1 font-['Poppins',sans-serif]">
-            Configure security settings for POS PIN authentication
-          </p>
+    <div className="max-w-6xl mx-auto space-y-8">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900 font-['Poppins',sans-serif]">
+          POS Security Configuration
+        </h2>
+        <p className="text-sm text-gray-500 mt-1">
+          Configure security settings for POS PIN authentication and access control
+        </p>
+      </div>
+
+      {(error || success) && (
+        <div className={`p-4 rounded-lg flex items-center gap-3 ${error ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-green-50 text-green-700 border border-green-100'
+          }`}>
+          {error ? <AlertCircle className="w-5 h-5" /> : <Save className="w-5 h-5" />}
+          <span className="font-medium">{error || success}</span>
         </div>
+      )}
 
-        {/* Alert Messages */}
-        {error && (
-          <div className="mx-6 mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            <div className="flex items-center space-x-2">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              <span className="font-['Poppins',sans-serif]">{error}</span>
-            </div>
-          </div>
-        )}
-        {success && (
-          <div className="mx-6 mt-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
-            <div className="flex items-center space-x-2">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span className="font-['Poppins',sans-serif]">{success}</span>
-            </div>
-          </div>
-        )}
+      {/* Settings Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <SecurityCard
+          title="Max Failed Attempts"
+          field="maxFailedAttempts"
+          icon={ShieldAlert}
+          color="red"
+          description="The maximum number of incorrect PIN attempts allowed before the account is temporarily locked to prevent brute force attacks."
+          min={1}
+          max={10}
+          unit="Attempts"
+        />
+        <SecurityCard
+          title="Lockout Duration"
+          field="lockDurationMinutes"
+          icon={Timer}
+          color="amber"
+          description="How long the account remains locked after exceeding the maximum failed attempts. Set 0 to disable auto-unlock."
+          min={1}
+          max={1440}
+          unit="Minutes"
+        />
+      </div>
 
-        {/* Settings Form */}
-        <div className="p-6 space-y-6">
-          {/* Max Failed Attempts */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div className="flex-1">
-              <label className="block text-sm font-semibold text-gray-800 mb-1 font-['Poppins',sans-serif]">
-                🔒 Maximum Failed Attempts
-              </label>
-              <p className="text-xs text-gray-600 font-['Poppins',sans-serif]">
-                Number of failed PIN attempts before account is locked (1-10)
-              </p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="number"
-                min="1"
-                max="10"
-                step="1"
-                value={security.maxFailedAttempts}
-                onChange={(e) => handleChange('maxFailedAttempts', e.target.value)}
-                className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-center font-semibold font-['Poppins',sans-serif]"
-              />
-              <span className="text-gray-700 font-semibold text-sm">attempts</span>
-            </div>
-          </div>
-
-          {/* Lock Duration */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div className="flex-1">
-              <label className="block text-sm font-semibold text-gray-800 mb-1 font-['Poppins',sans-serif]">
-                ⏱️ Lock Duration
-              </label>
-              <p className="text-xs text-gray-600 font-['Poppins',sans-serif]">
-                How long to lock account after max failed attempts (1-1440 minutes)
-              </p>
-              <p className="text-xs text-emerald-600 mt-1 font-['Poppins',sans-serif]">
-                Current: {settingsService.formatLockDuration(security.lockDurationMinutes)}
-              </p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="number"
-                min="1"
-                max="1440"
-                step="1"
-                value={security.lockDurationMinutes}
-                onChange={(e) => handleChange('lockDurationMinutes', e.target.value)}
-                className="w-24 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-center font-semibold font-['Poppins',sans-serif]"
-              />
-              <span className="text-gray-700 font-semibold text-sm">minutes</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
-          <button
-            type="button"
-            onClick={handleReset}
-            disabled={saving}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors font-['Poppins',sans-serif] text-sm font-medium"
-          >
-            Reset
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center space-x-2 font-['Poppins',sans-serif] text-sm font-medium"
-          >
-            {saving ? (
-              <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                <span>Saving...</span>
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-                <span>Save Changes</span>
-              </>
-            )}
-          </button>
-        </div>
+      {/* Action Footer */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-center justify-end gap-3">
+        <button
+          onClick={handleReset}
+          className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <RotateCcw className="w-4 h-4" />
+          Reset Defaults
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+          Save Changes
+        </button>
       </div>
     </div>
   );

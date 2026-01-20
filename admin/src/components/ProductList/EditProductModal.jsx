@@ -244,8 +244,8 @@ export const EditProductModal = ({ isOpen, onClose, onSuccess, product }) => {
               min="0"
               placeholder="Enter unit price"
               required
-              className={`w-full px-3 py-2 border rounded-lg text-[13px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 ${errors.unitPrice ? 'border-red-500' : 'border-gray-300'}`}
-              disabled={isLoading}
+              className={`w-full px-3 py-2 border rounded-lg text-[13px] font-['Poppins',sans-serif] bg-gray-100 text-gray-500 cursor-not-allowed`}
+              disabled={true}
             />
             {errors.unitPrice && (
               <p className="mt-1 text-[11px] text-red-600 font-['Poppins',sans-serif]">{errors.unitPrice}</p>

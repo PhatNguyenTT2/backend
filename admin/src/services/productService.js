@@ -233,6 +233,36 @@ const productService = {
       console.error('Get product by code error:', error)
       throw error
     }
+  },
+  /**
+   * Get product price history
+   * @param {string} productId - Product ID
+   * @returns {Promise<Object>} Price history array
+   */
+  getProductPriceHistory: async (productId) => {
+    try {
+      const response = await api.get(`/products/${productId}/price-history`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching price history:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Update product price (with history)
+   * @param {string} productId - Product ID
+   * @param {Object} data - { newPrice, reason }
+   * @returns {Promise<Object>} Updated product and history entry
+   */
+  updateProductPrice: async (productId, data) => {
+    try {
+      const response = await api.put(`/products/${productId}/price`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating product price:', error);
+      throw error;
+    }
   }
 }
 
