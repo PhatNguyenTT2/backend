@@ -8,12 +8,17 @@ export const OrderListHeader = ({
   onAddOrder,
   statusFilter,
   onStatusFilterChange,
+  paymentStatusFilter,
+  onPaymentStatusFilterChange,
+  deliveryStatusFilter,
+  onDeliveryStatusFilterChange,
   onDeleteAllDrafts
 }) => {
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
-  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showFiltersDropdown, setShowFiltersDropdown] = useState(false);
+
   const dropdownRef = useRef(null);
-  const statusRef = useRef(null);
+  const filtersDropdownRef = useRef(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -21,19 +26,19 @@ export const OrderListHeader = ({
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowActionsDropdown(false);
       }
-      if (statusRef.current && !statusRef.current.contains(event.target)) {
-        setShowStatusDropdown(false);
+      if (filtersDropdownRef.current && !filtersDropdownRef.current.contains(event.target)) {
+        setShowFiltersDropdown(false);
       }
     };
 
-    if (showActionsDropdown || showStatusDropdown) {
+    if (showActionsDropdown || showFiltersDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showActionsDropdown, showStatusDropdown]);
+  }, [showActionsDropdown, showFiltersDropdown]);
 
   const statusOptions = [
     { value: '', label: 'All Status' },
@@ -42,6 +47,20 @@ export const OrderListHeader = ({
     { value: 'shipping', label: 'Shipping' },
     { value: 'delivered', label: 'Delivered' },
     { value: 'cancelled', label: 'Cancelled' }
+  ];
+
+  const paymentOptions = [
+    { value: '', label: 'All Payment' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'paid', label: 'Paid' },
+    { value: 'failed', label: 'Failed' },
+    { value: 'refunded', label: 'Refunded' }
+  ];
+
+  const deliveryOptions = [
+    { value: '', label: 'All Delivery' },
+    { value: 'delivery', label: 'Delivery' },
+    { value: 'pickup', label: 'Pickup' }
   ];
 
   return (
@@ -75,43 +94,109 @@ export const OrderListHeader = ({
             </div>
           </div>
 
-          {/* Status Filter Dropdown */}
-          <div className="relative w-[120px]" ref={statusRef}>
+          {/* Filters Button */}
+          <div className="relative" ref={filtersDropdownRef}>
             <button
-              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] flex items-center justify-between hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              onClick={() => setShowFiltersDropdown(!showFiltersDropdown)}
+              className={`h-[36px] px-4 border rounded-lg text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap ${statusFilter || paymentStatusFilter || deliveryStatusFilter
+                ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                : 'bg-white border-[#ced4da] text-[#212529] hover:bg-gray-50'
+                }`}
             >
-              <span className="truncate">{statusFilter ? statusOptions.find(opt => opt.value === statusFilter)?.label : 'All Status'}</span>
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 12 12"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className={`transition-transform flex-shrink-0 ${showStatusDropdown ? 'rotate-180' : ''}`}
-              >
-                <path d="M3 4.5L6 7.5L9 4.5" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13 2H1L5.8 7.46V11.5L8.2 12.5V7.46L13 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
+              <span>Filters</span>
+              {(statusFilter || paymentStatusFilter || deliveryStatusFilter) && (
+                <span className="w-2 h-2 bg-emerald-600 rounded-full"></span>
+              )}
             </button>
 
-            {/* Status Dropdown Menu */}
-            {showStatusDropdown && (
-              <div className="absolute left-0 mt-2 w-full min-w-[140px] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
-                {statusOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => {
-                      onStatusFilterChange && onStatusFilterChange(option.value);
-                      setShowStatusDropdown(false);
+            {/* Filters Dropdown */}
+            {showFiltersDropdown && (
+              <div className="absolute left-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50">
+                <div className="px-4 py-2 border-b border-gray-200">
+                  <h3 className="text-[12px] font-semibold font-['Poppins',sans-serif] text-gray-900">
+                    Filter Orders
+                  </h3>
+                </div>
+
+                {/* Status Filter */}
+                <div className="px-4 py-3">
+                  <label className="text-[11px] font-['Poppins',sans-serif] text-gray-600 mb-1.5 block">
+                    Order Status
+                  </label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      onStatusFilterChange && onStatusFilterChange(e.target.value);
                     }}
-                    className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors ${statusFilter === option.value
-                      ? 'bg-blue-50 text-blue-600'
-                      : 'text-gray-700 hover:bg-gray-50'
-                      }`}
+                    className="w-full h-[32px] bg-white border border-[#ced4da] rounded-lg px-2 py-1 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   >
-                    {option.label}
-                  </button>
-                ))}
+                    {statusOptions.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Payment Filter */}
+                <div className="px-4 py-3">
+                  <label className="text-[11px] font-['Poppins',sans-serif] text-gray-600 mb-1.5 block">
+                    Payment Status
+                  </label>
+                  <select
+                    value={paymentStatusFilter}
+                    onChange={(e) => {
+                      onPaymentStatusFilterChange && onPaymentStatusFilterChange(e.target.value);
+                    }}
+                    className="w-full h-[32px] bg-white border border-[#ced4da] rounded-lg px-2 py-1 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  >
+                    {paymentOptions.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Delivery Filter */}
+                <div className="px-4 py-3">
+                  <label className="text-[11px] font-['Poppins',sans-serif] text-gray-600 mb-1.5 block">
+                    Delivery Type
+                  </label>
+                  <select
+                    value={deliveryStatusFilter}
+                    onChange={(e) => {
+                      onDeliveryStatusFilterChange && onDeliveryStatusFilterChange(e.target.value);
+                    }}
+                    className="w-full h-[32px] bg-white border border-[#ced4da] rounded-lg px-2 py-1 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  >
+                    {deliveryOptions.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Clear Filters */}
+                {(statusFilter || paymentStatusFilter || deliveryStatusFilter) && (
+                  <div className="px-4 py-2 border-t border-gray-200">
+                    <button
+                      onClick={() => {
+                        onStatusFilterChange && onStatusFilterChange('');
+                        onPaymentStatusFilterChange && onPaymentStatusFilterChange('');
+                        onDeliveryStatusFilterChange && onDeliveryStatusFilterChange('');
+                        setShowFiltersDropdown(false);
+                      }}
+                      className="w-full h-[32px] text-[12px] font-['Poppins',sans-serif] text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                    >
+                      Clear All Filters
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

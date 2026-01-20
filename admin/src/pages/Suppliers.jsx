@@ -27,6 +27,9 @@ const Suppliers = () => {
     limit: 20
   });
 
+  const [termFilter, setTermFilter] = useState('');
+  const [activeFilter, setActiveFilter] = useState('');
+
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -59,12 +62,23 @@ const Suppliers = () => {
         params.search = searchQuery.trim();
       }
 
+      // Add filters
+      if (termFilter) {
+        params.paymentTerms = termFilter;
+      }
+      if (activeFilter) {
+        // Convert to boolean or generic filter if backend supports it
+        // Assuming backend takes boolean string or we handle it here
+        if (activeFilter === 'active') params.isActive = true;
+        if (activeFilter === 'inactive') params.isActive = false;
+      }
+
       const response = await supplierService.getAllSuppliers(params);
 
+      // ... response handling ...
       if (response.success) {
         setSuppliers(response.data.suppliers || []);
 
-        // Map pagination
         if (response.data.pagination) {
           setPagination({
             page: response.data.pagination.currentPage || 1,
@@ -86,7 +100,7 @@ const Suppliers = () => {
   useEffect(() => {
     fetchSuppliers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.page, filters.limit, searchQuery, sortField, sortOrder]);
+  }, [filters.page, filters.limit, searchQuery, sortField, sortOrder, termFilter, activeFilter]);
 
   // Handle filter changes
   const handleItemsPerPageChange = (newLimit) => {
@@ -181,6 +195,10 @@ const Suppliers = () => {
         onSearchChange={setSearchQuery}
         onSearch={handleSearch}
         onAddSupplier={handleAddSupplier}
+        termFilter={termFilter}
+        onTermFilterChange={setTermFilter}
+        activeFilter={activeFilter}
+        onActiveFilterChange={setActiveFilter}
       />
 
       {/* Loading State */}

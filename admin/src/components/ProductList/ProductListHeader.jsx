@@ -76,8 +76,8 @@ export const ProductListHeader = ({
             <button
               onClick={() => setShowFiltersDropdown(!showFiltersDropdown)}
               className={`h-[36px] px-4 border rounded-lg text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap ${hasActiveFilters
-                  ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
-                  : 'bg-white border-[#ced4da] text-[#212529] hover:bg-gray-50'
+                ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                : 'bg-white border-[#ced4da] text-[#212529] hover:bg-gray-50'
                 }`}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">

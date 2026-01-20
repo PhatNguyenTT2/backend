@@ -26,6 +26,8 @@ export const Orders = () => {
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState('');
+  const [deliveryStatusFilter, setDeliveryStatusFilter] = useState('');
   const [sortField, setSortField] = useState('orderDate');
   const [sortOrder, setSortOrder] = useState('desc');
 
@@ -58,6 +60,30 @@ export const Orders = () => {
     // Apply status filter
     if (statusFilter) {
       result = result.filter(order => order.status === statusFilter);
+    }
+
+    // Apply payment status filter
+    if (paymentStatusFilter) {
+      result = result.filter(order => order.paymentStatus === paymentStatusFilter);
+    }
+
+    // Apply delivery status filter
+    if (deliveryStatusFilter) {
+      // Logic: Delivery status is derived from order status for now, or if there is a specific field
+      // Assuming mapped from order status or specific delivery tracking. 
+      // Checking if there is a specific delivery field on order object.
+      // Based on OrderList, deliveryType exists. If user meant 'Delivery Status' as in 'Shipping Status', it's usually part of order status.
+      // However, let's assume filtering by deliveryType or check if there's a specific need. 
+      // User request said "update filter according to payment, delivery". 
+      // The OrderList has a "Delivery Type" column (Delivery/Pickup). Let's filter by that if the value matches 'delivery' or 'pickup'.
+      // If the filter expects 'shipping' status, it overlaps with order status.
+      // Let's assume user wants to filter by Delivery Type (Delivery vs Pickup) OR status.
+      // Given the context "filter according to payment, delivery", it often means Payment Status and Delivery Status (Order Status).
+      // But Order Status is already there. So maybe "Delivery" means Delivery Type?
+      // Let's look at available data. Order has `deliveryType`.
+      if (['delivery', 'pickup'].includes(deliveryStatusFilter)) {
+        result = result.filter(order => order.deliveryType === deliveryStatusFilter);
+      }
     }
 
     // Apply sorting
@@ -102,7 +128,7 @@ export const Orders = () => {
       totalPages,
       itemsPerPage,
     }));
-  }, [orders, searchQuery, statusFilter, sortField, sortOrder, itemsPerPage]);
+  }, [orders, searchQuery, statusFilter, paymentStatusFilter, deliveryStatusFilter, sortField, sortOrder, itemsPerPage]);
 
   // Paginate filtered orders
   useEffect(() => {
@@ -304,6 +330,7 @@ export const Orders = () => {
       <Breadcrumb items={breadcrumbItems} />
 
       {/* Order List Header */}
+      {/* OrderListHeader - Updated with new filters */}
       <OrderListHeader
         itemsPerPage={itemsPerPage}
         onItemsPerPageChange={handleItemsPerPageChange}
@@ -312,6 +339,10 @@ export const Orders = () => {
         onAddOrder={handleAddOrder}
         statusFilter={statusFilter}
         onStatusFilterChange={handleStatusFilterChange}
+        paymentStatusFilter={paymentStatusFilter}
+        onPaymentStatusFilterChange={setPaymentStatusFilter}
+        deliveryStatusFilter={deliveryStatusFilter}
+        onDeliveryStatusFilterChange={setDeliveryStatusFilter}
         onDeleteAllDrafts={handleDeleteAllDrafts}
       />
 
@@ -363,7 +394,7 @@ export const Orders = () => {
                   disabled={pagination.currentPage === 1}
                   className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === 1
                     ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-blue-600 hover:bg-blue-50'
+                    : 'text-[#3bb77e] hover:bg-[#def9ec]'
                     }`}
                 >
                   ‹ Previous
@@ -391,7 +422,7 @@ export const Orders = () => {
                       <button
                         key={1}
                         onClick={() => handlePageChange(1)}
-                        className="px-3 py-2 rounded text-blue-600 hover:bg-blue-50 transition-colors text-[12px] font-['Poppins',sans-serif]"
+                        className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
                       >
                         1
                       </button>
@@ -412,8 +443,8 @@ export const Orders = () => {
                         key={page}
                         onClick={() => handlePageChange(page)}
                         className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${currentPage === page
-                          ? 'bg-blue-600 text-white'
-                          : 'text-blue-600 hover:bg-blue-50'
+                          ? 'bg-[#3bb77e] text-white'
+                          : 'text-[#3bb77e] hover:bg-[#def9ec]'
                           }`}
                       >
                         {page}
@@ -434,7 +465,7 @@ export const Orders = () => {
                       <button
                         key={totalPages}
                         onClick={() => handlePageChange(totalPages)}
-                        className="px-3 py-2 rounded text-blue-600 hover:bg-blue-50 transition-colors text-[12px] font-['Poppins',sans-serif]"
+                        className="px-3 py-2 rounded text-[#3bb77e] hover:bg-[#def9ec] transition-colors text-[12px] font-['Poppins',sans-serif]"
                       >
                         {totalPages}
                       </button>
@@ -450,7 +481,7 @@ export const Orders = () => {
                   disabled={pagination.currentPage === pagination.totalPages}
                   className={`px-3 py-2 rounded transition-colors text-[12px] font-['Poppins',sans-serif] ${pagination.currentPage === pagination.totalPages
                     ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-blue-600 hover:bg-blue-50'
+                    : 'text-[#3bb77e] hover:bg-[#def9ec]'
                     }`}
                 >
                   Next ›
@@ -474,13 +505,15 @@ export const Orders = () => {
       {!isLoading && !error && filteredOrders.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
           <p className="text-gray-500 text-sm">No orders found</p>
-          {(searchQuery || statusFilter) && (
+          {(searchQuery || statusFilter || paymentStatusFilter || deliveryStatusFilter) && (
             <button
               onClick={() => {
                 setSearchQuery('');
                 setStatusFilter('');
+                setPaymentStatusFilter('');
+                setDeliveryStatusFilter('');
               }}
-              className="mt-2 text-sm text-blue-600 hover:underline"
+              className="mt-2 text-sm text-emerald-600 hover:underline"
             >
               Clear filters
             </button>

@@ -30,9 +30,13 @@ const Customers = () => {
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Additional Filters
+  const [genderFilter, setGenderFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+
   // Sort state
-  const [sortField, setSortField] = useState('customerCode');
-  const [sortOrder, setSortOrder] = useState('asc');
+  const [sortField, setSortField] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
 
   // Modal states
   const [addCustomerModal, setAddCustomerModal] = useState(false);
@@ -56,6 +60,14 @@ const Customers = () => {
       // Add search if exists
       if (searchQuery.trim()) {
         params.search = searchQuery.trim();
+      }
+
+      // Add filters
+      if (genderFilter) {
+        params.gender = genderFilter;
+      }
+      if (typeFilter) {
+        params.customerType = typeFilter;
       }
 
       const response = await customerService.getAllCustomers(params);
@@ -98,7 +110,7 @@ const Customers = () => {
   useEffect(() => {
     fetchCustomers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.page, filters.per_page, sortField, sortOrder, searchQuery]);
+  }, [filters.page, filters.per_page, sortField, sortOrder, searchQuery, genderFilter, typeFilter]);
 
   // Handle filter changes
   const handleItemsPerPageChange = (newPerPage) => {
@@ -184,10 +196,14 @@ const Customers = () => {
       {/* Customer List Header */}
       <CustomerListHeader
         itemsPerPage={filters.per_page}
-        setItemsPerPage={handleItemsPerPageChange}
+        onItemsPerPageChange={handleItemsPerPageChange}
         searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
+        onSearchChange={setSearchQuery}
         onAddCustomer={handleAddCustomer}
+        genderFilter={genderFilter}
+        onGenderFilterChange={setGenderFilter}
+        typeFilter={typeFilter}
+        onTypeFilterChange={setTypeFilter}
       />
 
       {/* Loading State */}

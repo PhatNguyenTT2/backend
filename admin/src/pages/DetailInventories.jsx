@@ -26,7 +26,7 @@ export const DetailInventories = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState('batchCode');
   const [sortOrder, setSortOrder] = useState('asc');
-  const [filterView, setFilterView] = useState('all'); // all, out-of-stock, has-warehouse, has-shelf, expiring-soon
+  const [filterView, setFilterView] = useState('in-stock'); // in-stock, out-of-stock, has-warehouse, has-shelf, expiring-soon, expired
 
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -73,7 +73,9 @@ export const DetailInventories = () => {
     }
 
     // Apply view filter
-    if (filterView === 'out-of-stock') {
+    if (filterView === 'in-stock') {
+      result = result.filter(item => item.quantityAvailable > 0);
+    } else if (filterView === 'out-of-stock') {
       result = result.filter(item => item.quantityAvailable === 0);
     } else if (filterView === 'has-warehouse') {
       result = result.filter(item => item.quantityOnHand > 0);
@@ -86,6 +88,11 @@ export const DetailInventories = () => {
         item.batchId?.expiryDate &&
         new Date(item.batchId.expiryDate) <= thirtyDaysFromNow &&
         new Date(item.batchId.expiryDate) > new Date()
+      );
+    } else if (filterView === 'expired') {
+      result = result.filter(item =>
+        item.batchId?.expiryDate &&
+        new Date(item.batchId.expiryDate) < new Date()
       );
     }
 

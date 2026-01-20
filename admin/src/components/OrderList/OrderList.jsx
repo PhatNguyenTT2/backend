@@ -41,8 +41,9 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
     const colors = {
       draft: 'bg-gray-100 text-gray-800',
       pending: 'bg-yellow-100 text-yellow-800',
+      processing: 'bg-blue-100 text-blue-800',
       shipping: 'bg-purple-100 text-purple-800',
-      delivered: 'bg-green-100 text-green-800',
+      delivered: 'bg-emerald-100 text-emerald-800',
       cancelled: 'bg-red-100 text-red-800',
       refunded: 'bg-orange-100 text-orange-800'
     };
@@ -53,7 +54,7 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
   const getPaymentColor = (paymentStatus) => {
     const colors = {
       pending: 'bg-yellow-100 text-yellow-800',
-      paid: 'bg-green-100 text-green-800',
+      paid: 'bg-emerald-100 text-emerald-800',
       failed: 'bg-red-100 text-red-800',
       refunded: 'bg-gray-100 text-gray-800'
     };
@@ -128,7 +129,7 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
               onClick={() => handleSortClick('orderNumber')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
-                Order #
+                Order
                 {getSortIcon('orderNumber')}
               </p>
             </div>
@@ -142,7 +143,7 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
 
             {/* Order Date Column - Sortable */}
             <div
-              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('orderDate')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
@@ -153,7 +154,7 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
 
             {/* Total Column - Sortable */}
             <div
-              className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+              className="w-[120px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
               onClick={() => handleSortClick('total')}
             >
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
@@ -209,7 +210,7 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
               >
                 {/* Order Number */}
                 <div className="w-[120px] px-3 flex items-center flex-shrink-0">
-                  <p className="text-[12px] font-medium font-['Poppins',sans-serif] text-blue-600 leading-[20px] truncate">
+                  <p className="text-[12px] font-medium font-['Poppins',sans-serif] text-[#3bb77e] leading-[20px] truncate">
                     {order.orderNumber || '-'}
                   </p>
                 </div>
@@ -225,14 +226,14 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
                 </div>
 
                 {/* Order Date */}
-                <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                <div className="w-[140px] px-3 flex items-center flex-shrink-0">
                   <p className="text-[12px] font-normal font-['Poppins',sans-serif] text-gray-600 leading-[20px]">
                     {formatDate(order.orderDate)}
                   </p>
                 </div>
 
                 {/* Total */}
-                <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                   <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
                     {formatCurrency(order.total)}
                   </p>
@@ -279,7 +280,7 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
                 {/* Delivery Type */}
                 <div className="w-[90px] px-3 flex items-center flex-shrink-0">
                   <span className={`text-[10px] font-medium font-['Poppins',sans-serif] px-2 py-0.5 rounded ${order.deliveryType === 'delivery'
-                    ? 'bg-indigo-100 text-indigo-800'
+                    ? 'bg-blue-100 text-blue-800'
                     : 'bg-orange-100 text-orange-800'
                     }`}>
                     {order.deliveryType === 'delivery' ? '🚚 Delivery' : '📦 Pickup'}
@@ -331,7 +332,7 @@ export const OrderList = ({ orders = [], onSort, sortField, sortOrder, onView, o
             { value: 'draft', label: 'Draft', color: 'bg-gray-100 text-gray-800' },
             { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
             { value: 'shipping', label: 'Shipping', color: 'bg-purple-100 text-purple-800' },
-            { value: 'delivered', label: 'Delivered', color: 'bg-green-100 text-green-800' },
+            { value: 'delivered', label: 'Delivered', color: 'bg-emerald-100 text-emerald-800' },
             { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' },
             { value: 'refunded', label: 'Refunded', color: 'bg-orange-100 text-orange-800' }
           ];

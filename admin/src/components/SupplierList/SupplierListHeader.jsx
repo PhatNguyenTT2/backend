@@ -7,254 +7,261 @@ export const SupplierListHeader = ({
   onSearchChange,
   onSearch,
   onAddSupplier,
+  termFilter,
+  onTermFilterChange,
+  activeFilter,
+  onActiveFilterChange
 }) => {
-  const [showItemsDropdown, setShowItemsDropdown] = useState(false);
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
-  const itemsDropdownRef = useRef(null);
+  const [showFiltersDropdown, setShowFiltersDropdown] = useState(false);
   const actionsDropdownRef = useRef(null);
+  const filtersDropdownRef = useRef(null);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (itemsDropdownRef.current && !itemsDropdownRef.current.contains(event.target)) {
-        setShowItemsDropdown(false);
-      }
       if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(event.target)) {
         setShowActionsDropdown(false);
       }
+      if (filtersDropdownRef.current && !filtersDropdownRef.current.contains(event.target)) {
+        setShowFiltersDropdown(false);
+      }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
+    if (showActionsDropdown || showFiltersDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, []);
+  }, [showActionsDropdown, showFiltersDropdown]);
 
-  // Handle search input change
-  const handleSearchInputChange = (e) => {
-    const value = e.target.value;
-    onSearchChange(value);
+  const termOptions = [
+    { value: '', label: 'All Terms' },
+    { value: 'Net 15', label: 'Net 15' },
+    { value: 'Net 30', label: 'Net 30' },
+    { value: 'Net 45', label: 'Net 45' },
+    { value: 'Net 60', label: 'Net 60' },
+    { value: 'Due on Receipt', label: 'Due on Receipt' }
+  ];
 
-    // Auto-search as user types
-    if (onSearch) {
-      onSearch(value);
-    }
-  };
-
-  // Handle search button click
-  const handleSearchClick = () => {
-    if (onSearch) {
-      onSearch(searchQuery);
-    }
-  };
-
-  // Handle Enter key in search input
-  const handleSearchKeyPress = (e) => {
-    if (e.key === 'Enter' && onSearch) {
-      onSearch(searchQuery);
-    }
-  };
+  const activeOptions = [
+    { value: '', label: 'All Status' },
+    { value: 'active', label: 'Active' },
+    { value: 'inactive', label: 'Inactive' }
+  ];
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4">
-      <div className="flex items-center justify-between gap-4">
-        {/* Left Side - Items per page */}
-        <div className="flex items-center gap-2">
-          <span className="text-[13px] font-['Poppins',sans-serif] text-[#212529]">
-            Show
-          </span>
-          <div className="relative" ref={itemsDropdownRef}>
-            <button
-              onClick={() => setShowItemsDropdown(!showItemsDropdown)}
-              className="w-[70px] h-[38px] px-3 bg-white border border-gray-300 rounded-lg flex items-center justify-between hover:border-gray-400 transition-colors"
-            >
-              <span className="text-[13px] font-['Poppins',sans-serif] text-[#212529]">
-                {itemsPerPage}
-              </span>
-              <svg
-                width="10"
-                height="6"
-                viewBox="0 0 10 6"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className={`transition-transform ${showItemsDropdown ? 'rotate-180' : ''}`}
-              >
-                <path
-                  d="M1 1L5 5L9 1"
-                  stroke="#212529"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-
-            {/* Items Dropdown */}
-            {showItemsDropdown && (
-              <div className="absolute top-full mt-1 w-[70px] bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                {[10, 20, 50, 100].map((value) => (
-                  <button
-                    key={value}
-                    onClick={() => {
-                      onItemsPerPageChange(value);
-                      setShowItemsDropdown(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left text-[13px] font-['Poppins',sans-serif] hover:bg-gray-50 transition-colors ${itemsPerPage === value ? 'text-[#3bb77e] font-medium' : 'text-[#212529]'
-                      }`}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <span className="text-[13px] font-['Poppins',sans-serif] text-[#212529]">
-            entries
-          </span>
+    <div className="bg-white p-4 rounded-lg shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        {/* Title */}
+        <div className="flex items-center">
+          <h2 className="text-[13px] font-normal font-['Poppins',sans-serif] text-black leading-[20px] whitespace-nowrap">
+            All Suppliers
+          </h2>
         </div>
 
-        {/* Right Side - Search and Actions */}
-        <div className="flex items-center gap-3">
-          {/* Search Input */}
-          <div className="relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={handleSearchInputChange}
-              onKeyPress={handleSearchKeyPress}
-              placeholder="Search by Code, Name, Phone..."
-              className="w-[300px] h-[38px] pl-10 pr-4 border border-gray-300 rounded-lg text-[13px] font-['Poppins',sans-serif] text-[#212529] placeholder-gray-400 focus:outline-none focus:border-[#3bb77e] focus:ring-1 focus:ring-[#3bb77e] transition-all"
-            />
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+        {/* Controls Container */}
+        <div className="flex items-center gap-2 flex-1 ml-4">
+          {/* Items Per Page Dropdown */}
+          <div className="relative w-[80px]">
+            <select
+              value={itemsPerPage}
+              onChange={(e) => onItemsPerPageChange(parseInt(e.target.value))}
+              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             >
-              <path
-                d="M7.33333 12.6667C10.2789 12.6667 12.6667 10.2789 12.6667 7.33333C12.6667 4.38781 10.2789 2 7.33333 2C4.38781 2 2 4.38781 2 7.33333C2 10.2789 4.38781 12.6667 7.33333 12.6667Z"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M14 14L11.1 11.1"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
           </div>
 
-          {/* Actions Dropdown */}
-          <div className="relative" ref={actionsDropdownRef}>
+          {/* Filters Button */}
+          <div className="relative" ref={filtersDropdownRef}>
             <button
-              onClick={() => setShowActionsDropdown(!showActionsDropdown)}
-              className="h-[38px] px-4 bg-[#3bb77e] text-white rounded-lg flex items-center gap-2 hover:bg-[#2ea76a] transition-colors"
+              onClick={() => setShowFiltersDropdown(!showFiltersDropdown)}
+              className={`h-[36px] px-4 border rounded-lg text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap ${termFilter || activeFilter
+                ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                : 'bg-white border-[#ced4da] text-[#212529] hover:bg-gray-50'
+                }`}
             >
-              <span className="text-[13px] font-medium font-['Poppins',sans-serif]">
-                Actions
-              </span>
-              <svg
-                width="10"
-                height="6"
-                viewBox="0 0 10 6"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className={`transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`}
-              >
-                <path
-                  d="M1 1L5 5L9 1"
-                  stroke="white"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13 2H1L5.8 7.46V11.5L8.2 12.5V7.46L13 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
+              <span>Filters</span>
+              {(termFilter || activeFilter) && (
+                <span className="w-2 h-2 bg-emerald-600 rounded-full"></span>
+              )}
             </button>
 
-            {/* Actions Dropdown Menu */}
-            {showActionsDropdown && (
-              <div className="absolute top-full right-0 mt-1 w-[180px] bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                <button
-                  onClick={() => {
-                    onAddSupplier();
-                    setShowActionsDropdown(false);
-                  }}
-                  className="w-full px-4 py-2 text-left text-[13px] font-['Poppins',sans-serif] text-[#212529] hover:bg-gray-50 transition-colors flex items-center gap-2"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M8 3.33337V12.6667"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M3.33301 8H12.6663"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  Add Supplier
-                </button>
+            {/* Filters Dropdown */}
+            {showFiltersDropdown && (
+              <div className="absolute left-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50">
+                <div className="px-4 py-2 border-b border-gray-200">
+                  <h3 className="text-[12px] font-semibold font-['Poppins',sans-serif] text-gray-900">
+                    Filter Suppliers
+                  </h3>
+                </div>
 
-                <div className="border-t border-gray-200"></div>
-
-                <button
-                  onClick={() => {
-                    console.log('Export suppliers clicked');
-                    setShowActionsDropdown(false);
-                  }}
-                  className="w-full px-4 py-2 text-left text-[13px] font-['Poppins',sans-serif] text-[#212529] hover:bg-gray-50 transition-colors flex items-center gap-2"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
+                {/* Term Filter */}
+                <div className="px-4 py-3">
+                  <label className="text-[11px] font-['Poppins',sans-serif] text-gray-600 mb-1.5 block">
+                    Payment Term
+                  </label>
+                  <select
+                    value={termFilter}
+                    onChange={(e) => onTermFilterChange && onTermFilterChange(e.target.value)}
+                    className="w-full h-[32px] bg-white border border-[#ced4da] rounded-lg px-2 py-1 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   >
-                    <path
-                      d="M14 10V12.6667C14 13.0203 13.8595 13.3594 13.6095 13.6095C13.3594 13.8595 13.0203 14 12.6667 14H3.33333C2.97971 14 2.64057 13.8595 2.39052 13.6095C2.14048 13.3594 2 13.0203 2 12.6667V10"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M4.66699 6.66663L8.00033 9.99996L11.3337 6.66663"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M8 10V2"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  Export
-                </button>
+                    {termOptions.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Active Filter */}
+                <div className="px-4 py-3">
+                  <label className="text-[11px] font-['Poppins',sans-serif] text-gray-600 mb-1.5 block">
+                    Status
+                  </label>
+                  <select
+                    value={activeFilter}
+                    onChange={(e) => onActiveFilterChange && onActiveFilterChange(e.target.value)}
+                    className="w-full h-[32px] bg-white border border-[#ced4da] rounded-lg px-2 py-1 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  >
+                    {activeOptions.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Clear Filters */}
+                {(termFilter || activeFilter) && (
+                  <div className="px-4 py-2 border-t border-gray-200">
+                    <button
+                      onClick={() => {
+                        onTermFilterChange && onTermFilterChange('');
+                        onActiveFilterChange && onActiveFilterChange('');
+                        setShowFiltersDropdown(false);
+                      }}
+                      className="w-full h-[32px] text-[12px] font-['Poppins',sans-serif] text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                    >
+                      Clear All Filters
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
+
+          {/* Search Input */}
+          <div className="flex-1 max-w-[300px]">
+            <div className="flex h-[36px] gap-1">
+              <input
+                type="text"
+                placeholder="Search by Code, Name..."
+                value={searchQuery}
+                onChange={(e) => {
+                  onSearchChange(e.target.value);
+                  if (onSearch) onSearch(e.target.value);
+                }}
+                className="flex-1 bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-gray-900 placeholder:text-[#6c757d] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+              <button
+                className="w-[40px] bg-white border border-[#ced4da] rounded-lg flex items-center justify-center hover:bg-gray-50 transition-colors flex-shrink-0"
+                onClick={() => onSearch && onSearch(searchQuery)}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M6.5 11.5C9.26142 11.5 11.5 9.26142 11.5 6.5C11.5 3.73858 9.26142 1.5 6.5 1.5C3.73858 1.5 1.5 3.73858 1.5 6.5C1.5 9.26142 3.73858 11.5 6.5 11.5Z"
+                    stroke="#6B7280"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M12.5 12.5L10.5 10.5"
+                    stroke="#6B7280"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions Button with Dropdown */}
+        <div className="relative ml-auto" ref={actionsDropdownRef}>
+          <button
+            onClick={() => setShowActionsDropdown(!showActionsDropdown)}
+            className="h-[36px] px-4 bg-emerald-600 hover:bg-emerald-700 border border-emerald-600 rounded-lg text-white text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap"
+          >
+            <span>Actions</span>
+            <svg
+              width="8"
+              height="5"
+              viewBox="0 0 8 5"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              className={`transition-transform ${showActionsDropdown ? 'rotate-180' : ''}`}
+            >
+              <path d="M1 1L4 4L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+
+          {/* Dropdown Menu */}
+          {showActionsDropdown && (
+            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
+              <button
+                onClick={() => {
+                  onAddSupplier && onAddSupplier();
+                  setShowActionsDropdown(false);
+                }}
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors flex items-center gap-2"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Add Supplier
+              </button>
+
+              <div className="border-t border-gray-200 my-1"></div>
+
+              <button
+                onClick={() => {
+                  console.log('Export CSV');
+                  setShowActionsDropdown(false);
+                }}
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M14 10V12.6667C14 13.0203 13.8595 13.3594 13.6095 13.6095C13.3594 13.8595 13.0203 14 12.6667 14H3.33333C2.97971 14 2.64057 13.8595 2.39052 13.6095C2.14048 13.3594 2 13.0203 2 12.6667V10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M4.66667 6.66667L8 10L11.3333 6.66667" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M8 10V2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Export CSV
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

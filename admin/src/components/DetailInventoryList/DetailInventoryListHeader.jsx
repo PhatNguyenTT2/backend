@@ -85,13 +85,13 @@ export const DetailInventoryListHeader = ({
           {/* Right side - View Filters */}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onFilterViewChange('all')}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-['Poppins',sans-serif] font-medium transition-colors ${filterView === 'all'
+              onClick={() => onFilterViewChange('in-stock')}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-['Poppins',sans-serif] font-medium transition-colors ${filterView === 'in-stock'
                 ? 'bg-emerald-600 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
             >
-              All Batches
+              In Stock
             </button>
             <button
               onClick={() => onFilterViewChange('out-of-stock')}
@@ -128,6 +128,15 @@ export const DetailInventoryListHeader = ({
                 }`}
             >
               Expiring Soon
+            </button>
+            <button
+              onClick={() => onFilterViewChange('expired')}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-['Poppins',sans-serif] font-medium transition-colors ${filterView === 'expired'
+                ? 'bg-gray-700 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+            >
+              Expired
             </button>
           </div>
         </div>

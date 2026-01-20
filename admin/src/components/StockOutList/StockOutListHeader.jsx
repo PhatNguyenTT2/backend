@@ -5,6 +5,7 @@ export const StockOutListHeader = ({
   onItemsPerPageChange,
   searchQuery = '',
   onSearchChange,
+  onSearch,
   statusFilter = 'all',
   onStatusFilterChange,
   reasonFilter = 'all',
@@ -12,24 +13,32 @@ export const StockOutListHeader = ({
   onAddClick
 }) => {
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
-  const dropdownRef = useRef(null);
+  const [showFiltersDropdown, setShowFiltersDropdown] = useState(false);
+  const actionsDropdownRef = useRef(null);
+  const filtersDropdownRef = useRef(null);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+      if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(event.target)) {
         setShowActionsDropdown(false);
+      }
+      if (filtersDropdownRef.current && !filtersDropdownRef.current.contains(event.target)) {
+        setShowFiltersDropdown(false);
       }
     };
 
-    if (showActionsDropdown) {
+    if (showActionsDropdown || showFiltersDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showActionsDropdown]);
+  }, [showActionsDropdown, showFiltersDropdown]);
+
+  const hasActiveFilters = statusFilter !== 'all' || reasonFilter !== 'all';
+
   return (
     <div className="bg-white p-4 rounded-lg shadow-sm">
       <div className="flex items-center justify-between gap-3">
@@ -47,7 +56,7 @@ export const StockOutListHeader = ({
             <select
               value={itemsPerPage}
               onChange={(e) => onItemsPerPageChange && onItemsPerPageChange(parseInt(e.target.value))}
-              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             >
               <option value="10">10</option>
               <option value="20">20</option>
@@ -61,17 +70,115 @@ export const StockOutListHeader = ({
             </div>
           </div>
 
+          {/* Filters Button */}
+          <div className="relative" ref={filtersDropdownRef}>
+            <button
+              onClick={() => setShowFiltersDropdown(!showFiltersDropdown)}
+              className={`h-[36px] px-4 border rounded-lg text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap ${hasActiveFilters
+                ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                : 'bg-white border-[#ced4da] text-[#212529] hover:bg-gray-50'
+                }`}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13 2H1L5.8 7.46V11.5L8.2 12.5V7.46L13 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Filters</span>
+              {hasActiveFilters && (
+                <span className="w-2 h-2 bg-emerald-600 rounded-full"></span>
+              )}
+            </button>
+
+            {/* Filters Dropdown */}
+            {showFiltersDropdown && (
+              <div className="absolute left-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50">
+                <div className="px-4 py-2 border-b border-gray-200">
+                  <h3 className="text-[12px] font-semibold font-['Poppins',sans-serif] text-gray-900">
+                    Filter Stock Out Orders
+                  </h3>
+                </div>
+
+                {/* Status Filter */}
+                <div className="px-4 py-3">
+                  <label className="text-[11px] font-['Poppins',sans-serif] text-gray-600 mb-1.5 block">
+                    Status
+                  </label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      onStatusFilterChange && onStatusFilterChange(e.target.value);
+                    }}
+                    className="w-full h-[32px] bg-white border border-[#ced4da] rounded-lg px-2 py-1 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  >
+                    <option value="all">All Status</option>
+                    <option value="draft">Draft</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                {/* Reason Filter */}
+                <div className="px-4 py-3">
+                  <label className="text-[11px] font-['Poppins',sans-serif] text-gray-600 mb-1.5 block">
+                    Reason
+                  </label>
+                  <select
+                    value={reasonFilter}
+                    onChange={(e) => {
+                      onReasonFilterChange && onReasonFilterChange(e.target.value);
+                    }}
+                    className="w-full h-[32px] bg-white border border-[#ced4da] rounded-lg px-2 py-1 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  >
+                    <option value="all">All Reasons</option>
+                    <option value="sales">Sales</option>
+                    <option value="transfer">Transfer</option>
+                    <option value="damage">Damage</option>
+                    <option value="expired">Expired</option>
+                    <option value="return_to_supplier">Return to Supplier</option>
+                    <option value="internal_use">Internal Use</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                {/* Clear Filters */}
+                {hasActiveFilters && (
+                  <div className="px-4 py-2 border-t border-gray-200">
+                    <button
+                      onClick={() => {
+                        onStatusFilterChange && onStatusFilterChange('all');
+                        onReasonFilterChange && onReasonFilterChange('all');
+                        setShowFiltersDropdown(false);
+                      }}
+                      className="w-full h-[32px] text-[12px] font-['Poppins',sans-serif] text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                    >
+                      Clear All Filters
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Search Input */}
           <div className="flex-1 max-w-[300px]">
-            <div className="relative h-[36px]">
+            <div className="flex h-[36px] gap-1">
               <input
                 type="text"
                 placeholder="Search by ID, Destination..."
                 value={searchQuery}
                 onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
-                className="w-full h-full bg-white border border-[#ced4da] rounded-lg pl-3 pr-10 py-2 text-[12px] font-['Poppins',sans-serif] text-gray-900 placeholder:text-[#6c757d] focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && onSearch) {
+                    onSearch(searchQuery);
+                  }
+                }}
+                className="flex-1 bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-gray-900 placeholder:text-[#6c757d] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
               />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <button
+                className="w-[40px] bg-white border border-[#ced4da] rounded-lg flex items-center justify-center hover:bg-gray-50 transition-colors flex-shrink-0"
+                onClick={() => onSearch && onSearch(searchQuery)}
+              >
                 <svg
                   width="14"
                   height="14"
@@ -94,60 +201,16 @@ export const StockOutListHeader = ({
                     strokeLinejoin="round"
                   />
                 </svg>
-              </div>
-            </div>
-          </div>
-
-          {/* Status Filter */}
-          <div className="relative w-[130px]">
-            <select
-              value={statusFilter}
-              onChange={(e) => onStatusFilterChange && onStatusFilterChange(e.target.value)}
-              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-            >
-              <option value="all">All Status</option>
-              <option value="draft">Draft</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 4.5L6 7.5L9 4.5" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-          </div>
-
-          {/* Reason Filter */}
-          <div className="relative w-[130px]">
-            <select
-              value={reasonFilter}
-              onChange={(e) => onReasonFilterChange && onReasonFilterChange(e.target.value)}
-              className="w-full h-[36px] bg-white border border-[#ced4da] rounded-lg px-3 py-2 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-            >
-              <option value="all">All Reasons</option>
-              <option value="sales">Sales</option>
-              <option value="transfer">Transfer</option>
-              <option value="damage">Damage</option>
-              <option value="expired">Expired</option>
-              <option value="return_to_supplier">Return to Supplier</option>
-              <option value="internal_use">Internal Use</option>
-              <option value="other">Other</option>
-            </select>
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 4.5L6 7.5L9 4.5" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              </button>
             </div>
           </div>
         </div>
 
         {/* Actions Button with Dropdown */}
-        <div className="relative ml-auto" ref={dropdownRef}>
+        <div className="relative ml-auto" ref={actionsDropdownRef}>
           <button
             onClick={() => setShowActionsDropdown(!showActionsDropdown)}
-            className="h-[36px] px-4 bg-red-600 hover:bg-red-700 border border-red-600 rounded-lg text-white text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 whitespace-nowrap"
+            className="h-[36px] px-4 bg-emerald-600 hover:bg-emerald-700 border border-emerald-600 rounded-lg text-white text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap"
           >
             <span>Actions</span>
             <svg
@@ -165,20 +228,24 @@ export const StockOutListHeader = ({
           {/* Dropdown Menu */}
           {showActionsDropdown && (
             <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
-              <button
-                onClick={() => {
-                  onAddClick && onAddClick();
-                  setShowActionsDropdown(false);
-                }}
-                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors flex items-center gap-2"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Create Stock Out Order
-              </button>
+              {onAddClick && (
+                <>
+                  <button
+                    onClick={() => {
+                      onAddClick();
+                      setShowActionsDropdown(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors flex items-center gap-2"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    Create Stock Out Order
+                  </button>
 
-              <div className="border-t border-gray-200 my-1"></div>
+                  <div className="border-t border-gray-200 my-1"></div>
+                </>
+              )}
 
               <button
                 onClick={() => {

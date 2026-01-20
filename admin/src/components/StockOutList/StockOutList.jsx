@@ -351,7 +351,7 @@ const StockOutList = ({
                 >
                   {/* SO Number */}
                   <div className="w-[140px] px-3 flex items-center flex-shrink-0">
-                    <p className="text-[12px] font-medium font-['Poppins',sans-serif] text-blue-600 leading-[20px] font-mono truncate">
+                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
                       {wo.soNumber}
                     </p>
                   </div>
@@ -536,8 +536,8 @@ const StockOutList = ({
                 onClick={() => handleEdit(wo)}
                 disabled={wo.status === 'cancelled' || wo.status === 'completed'}
                 className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center gap-2 ${wo.status === 'cancelled' || wo.status === 'completed'
-                    ? 'text-gray-400 cursor-not-allowed opacity-50'
-                    : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
+                  ? 'text-gray-400 cursor-not-allowed opacity-50'
+                  : 'text-gray-700 hover:bg-emerald-50 hover:text-emerald-600'
                   }`}
                 title={
                   wo.status === 'cancelled' || wo.status === 'completed'

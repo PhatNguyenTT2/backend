@@ -24,8 +24,11 @@ export const Payments = () => {
   const [selectedPayment, setSelectedPayment] = useState(null);
 
   // Filters and sorting
-  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [searchQuery, setSearchQuery] = useState('');
+  const [methodFilter, setMethodFilter] = useState('all');
+  const [referenceFilter, setReferenceFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [sortField, setSortField] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
 
@@ -33,7 +36,7 @@ export const Payments = () => {
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
-    itemsPerPage: 20,
+    itemsPerPage: 10,
   });
 
   // Fetch payments on component mount
@@ -41,7 +44,7 @@ export const Payments = () => {
     fetchPayments();
   }, []);
 
-  // Apply search and sorting when data or filters change
+  // Apply search, filters and sorting when data or filters change
   useEffect(() => {
     let result = [...payments];
 
@@ -51,6 +54,21 @@ export const Payments = () => {
       result = result.filter(payment =>
         payment.paymentNumber?.toLowerCase().includes(query)
       );
+    }
+
+    // Apply payment method filter
+    if (methodFilter !== 'all') {
+      result = result.filter(payment => payment.paymentMethod === methodFilter);
+    }
+
+    // Apply reference type filter
+    if (referenceFilter !== 'all') {
+      result = result.filter(payment => payment.referenceType === referenceFilter);
+    }
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      result = result.filter(payment => payment.status === statusFilter);
     }
 
     // Apply sorting
@@ -89,7 +107,7 @@ export const Payments = () => {
       totalPages,
       itemsPerPage,
     }));
-  }, [payments, searchQuery, sortField, sortOrder, itemsPerPage]);
+  }, [payments, searchQuery, methodFilter, referenceFilter, statusFilter, sortField, sortOrder, itemsPerPage]);
 
   // Paginate filtered payments
   useEffect(() => {
@@ -141,6 +159,18 @@ export const Payments = () => {
 
   const handleItemsPerPageChange = (value) => {
     setItemsPerPage(value);
+  };
+
+  const handleMethodFilterChange = (value) => {
+    setMethodFilter(value);
+  };
+
+  const handleReferenceFilterChange = (value) => {
+    setReferenceFilter(value);
+  };
+
+  const handleStatusFilterChange = (value) => {
+    setStatusFilter(value);
   };
 
   const handlePageChange = (newPage) => {
@@ -223,6 +253,8 @@ export const Payments = () => {
     }
   };
 
+  const hasActiveFilters = searchQuery || methodFilter !== 'all' || referenceFilter !== 'all' || statusFilter !== 'all';
+
   return (
     <div className="space-y-6">
       {/* Breadcrumb */}
@@ -236,6 +268,12 @@ export const Payments = () => {
         onSearchChange={handleSearchChange}
         onSearch={handleSearch}
         onAddPayment={handleAddPayment}
+        methodFilter={methodFilter}
+        onMethodFilterChange={handleMethodFilterChange}
+        referenceFilter={referenceFilter}
+        onReferenceFilterChange={handleReferenceFilterChange}
+        statusFilter={statusFilter}
+        onStatusFilterChange={handleStatusFilterChange}
       />
 
       {/* Loading State */}
@@ -392,12 +430,17 @@ export const Payments = () => {
       {!isLoading && !error && filteredPayments.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12 bg-white rounded-lg">
           <p className="text-gray-500 text-sm">No payments found</p>
-          {searchQuery && (
+          {hasActiveFilters && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => {
+                setSearchQuery('');
+                setMethodFilter('all');
+                setReferenceFilter('all');
+                setStatusFilter('all');
+              }}
               className="mt-2 text-sm text-emerald-600 hover:underline"
             >
-              Clear search
+              Clear all filters
             </button>
           )}
         </div>

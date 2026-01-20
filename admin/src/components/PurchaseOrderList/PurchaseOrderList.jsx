@@ -191,6 +191,26 @@ const PurchaseOrderList = ({
     return map[(status || '').toLowerCase()] || 'bg-[#6b7280]';
   };
 
+  // Payment status badge styles
+  const getPaymentStatusStyles = (paymentStatus) => {
+    const map = {
+      unpaid: 'bg-[#ef4444]',          // Red - Unpaid
+      partial: 'bg-[#f59e0b]',         // Orange - Partial
+      paid: 'bg-[#10b981]'             // Green - Paid
+    };
+    return map[(paymentStatus || '').toLowerCase()] || 'bg-[#6b7280]';
+  };
+
+  // Payment status label
+  const getPaymentStatusLabel = (paymentStatus) => {
+    const labels = {
+      unpaid: 'Unpaid',
+      partial: 'Partial',
+      paid: 'Paid'
+    };
+    return labels[(paymentStatus || '').toLowerCase()] || paymentStatus || 'N/A';
+  };
+
   // Action handlers
   const handleEdit = (po) => {
     // Only allow edit when status is draft, pending, or approved
@@ -375,10 +395,17 @@ const PurchaseOrderList = ({
               </p>
             </div>
 
-            {/* Payment Status Column */}
+            {/* PO Status Column */}
             <div className="w-[100px] px-3 flex items-center flex-shrink-0">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                 STATUS
+              </p>
+            </div>
+
+            {/* Payment Status Column */}
+            <div className="w-[90px] px-3 flex items-center flex-shrink-0">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
+                PAYMENT
               </p>
             </div>
 
@@ -470,13 +497,19 @@ const PurchaseOrderList = ({
                     )}
                   </div>
 
+                  {/* Payment Status */}
+                  <div className="w-[90px] px-3 flex items-center flex-shrink-0">
+                    <div className={`${getPaymentStatusStyles(po.paymentStatus)} px-2 py-1 rounded inline-flex items-center`}>
+                      <span className="text-[9px] font-bold font-['Poppins',sans-serif] text-white leading-[10px] uppercase">
+                        {getPaymentStatusLabel(po.paymentStatus)}
+                      </span>
+                    </div>
+                  </div>
+
                   {/* Created By */}
                   <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[12px] font-['Poppins',sans-serif] text-[#6c757d] leading-[18px] truncate">
-                      {(() => {
-                        console.log('PO createdBy:', po.poNumber, po.createdBy);
-                        return po.createdBy?.fullName || 'N/A';
-                      })()}
+                      {po.createdBy?.fullName || 'N/A'}
                     </p>
                   </div>
 
