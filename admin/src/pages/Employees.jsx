@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { EmployeeList, EmployeeListHeader, AddEmployeeModal, EditEmployeeModal, UserAccountModal, ViewAccountModal, AdminResetPasswordModal } from '../components/EmployeeList';
 import employeeService from '../services/employeeService';
+import roleService from '../services/roleService';
 
 export const Employees = () => {
   // Breadcrumb items
@@ -23,11 +24,26 @@ export const Employees = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [roles, setRoles] = useState([]);
+  const [roleFilter, setRoleFilter] = useState('');
 
-  // Fetch employees on mount
+  // Fetch employees and roles on mount
   useEffect(() => {
     fetchEmployees();
+    fetchRoles();
   }, []);
+
+  // Fetch roles from API
+  const fetchRoles = async () => {
+    try {
+      const response = await roleService.getAllRoles();
+      if (response.success) {
+        setRoles(response.data.roles || []);
+      }
+    } catch (err) {
+      console.error('Error fetching roles:', err);
+    }
+  };
 
   // Fetch employees from API
   const fetchEmployees = async (params = {}) => {
@@ -217,6 +233,9 @@ export const Employees = () => {
         onSearchChange={setSearchQuery}
         onSearch={handleSearch}
         onAddEmployee={handleAddEmployee}
+        roleFilter={roleFilter}
+        onRoleFilterChange={setRoleFilter}
+        roles={roles}
       />
 
       {/* Loading State */}
@@ -232,38 +251,46 @@ export const Employees = () => {
             </p>
           </div>
         </div>
-      ) : (
-        <>
-          {/* Employee List */}
-          <EmployeeList
-            employees={employees}
-            onEdit={handleEditEmployee}
-            onDelete={handleDeleteEmployee}
-            onManageAccount={handleManageAccount}
-            onViewDetails={handleViewDetails}
-            onResetPassword={handleResetPassword}
-            onSort={handleSort}
-            sortField={sortField}
-            sortOrder={sortOrder}
-          />
+      ) : (() => {
+        // Filter employees by role
+        const filteredEmployees = roleFilter
+          ? employees.filter(emp => emp.userAccount?.role?.id === roleFilter)
+          : employees;
 
-          {/* Results Summary */}
-          {employees.length > 0 && (
-            <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif]">
-              Showing {employees.length} employee{employees.length !== 1 ? 's' : ''}
-            </div>
-          )}
+        return (
+          <>
+            {/* Employee List */}
+            <EmployeeList
+              employees={filteredEmployees}
+              onEdit={handleEditEmployee}
+              onDelete={handleDeleteEmployee}
+              onManageAccount={handleManageAccount}
+              onViewDetails={handleViewDetails}
+              onResetPassword={handleResetPassword}
+              onSort={handleSort}
+              sortField={sortField}
+              sortOrder={sortOrder}
+            />
 
-          {/* Empty State */}
-          {employees.length === 0 && !loading && (
-            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-              <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
-                No employees found
-              </p>
-            </div>
-          )}
-        </>
-      )}
+            {/* Results Summary */}
+            {filteredEmployees.length > 0 && (
+              <div className="text-center text-sm text-gray-600 font-['Poppins',sans-serif]">
+                Showing {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''}
+                {roleFilter && ` (filtered from ${employees.length} total)`}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {filteredEmployees.length === 0 && (
+              <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+                <p className="text-gray-500 text-[14px] font-['Poppins',sans-serif]">
+                  No employees found
+                </p>
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Add Employee Modal */}
       <AddEmployeeModal
@@ -307,3 +334,4 @@ export const Employees = () => {
 };
 
 export default Employees;
+

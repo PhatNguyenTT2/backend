@@ -6,10 +6,15 @@ export const EmployeeListHeader = ({
   searchQuery = '',
   onSearchChange,
   onSearch,
-  onAddEmployee
+  onAddEmployee,
+  roleFilter = '',
+  onRoleFilterChange,
+  roles = []
 }) => {
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const [showFiltersDropdown, setShowFiltersDropdown] = useState(false);
   const actionsDropdownRef = useRef(null);
+  const filtersDropdownRef = useRef(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -17,16 +22,19 @@ export const EmployeeListHeader = ({
       if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(event.target)) {
         setShowActionsDropdown(false);
       }
+      if (filtersDropdownRef.current && !filtersDropdownRef.current.contains(event.target)) {
+        setShowFiltersDropdown(false);
+      }
     };
 
-    if (showActionsDropdown) {
+    if (showActionsDropdown || showFiltersDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showActionsDropdown]);
+  }, [showActionsDropdown, showFiltersDropdown]);
 
   return (
     <div className="bg-white p-4 rounded-lg shadow-sm">
@@ -57,6 +65,72 @@ export const EmployeeListHeader = ({
                 <path d="M3 4.5L6 7.5L9 4.5" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
+          </div>
+
+          {/* Filters Button */}
+          <div className="relative" ref={filtersDropdownRef}>
+            <button
+              onClick={() => setShowFiltersDropdown(!showFiltersDropdown)}
+              className={`h-[36px] px-4 border rounded-lg text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap ${roleFilter
+                ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                : 'bg-white border-[#ced4da] text-[#212529] hover:bg-gray-50'
+                }`}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13 2H1L5.8 7.46V11.5L8.2 12.5V7.46L13 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Filters</span>
+              {roleFilter && (
+                <span className="w-2 h-2 bg-emerald-600 rounded-full"></span>
+              )}
+            </button>
+
+            {/* Filters Dropdown */}
+            {showFiltersDropdown && (
+              <div className="absolute left-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50">
+                <div className="px-4 py-2 border-b border-gray-200">
+                  <h3 className="text-[12px] font-semibold font-['Poppins',sans-serif] text-gray-900">
+                    Filter Employees
+                  </h3>
+                </div>
+
+                {/* Role Filter */}
+                <div className="px-4 py-3">
+                  <label className="text-[11px] font-['Poppins',sans-serif] text-gray-600 mb-1.5 block">
+                    Role
+                  </label>
+                  <select
+                    value={roleFilter}
+                    onChange={(e) => {
+                      onRoleFilterChange && onRoleFilterChange(e.target.value);
+                    }}
+                    className="w-full h-[32px] bg-white border border-[#ced4da] rounded-lg px-2 py-1 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  >
+                    <option value="">All Roles</option>
+                    {roles.map(role => (
+                      <option key={role.id} value={role.id}>
+                        {role.roleName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Clear Filters */}
+                {roleFilter && (
+                  <div className="px-4 py-2 border-t border-gray-200">
+                    <button
+                      onClick={() => {
+                        onRoleFilterChange && onRoleFilterChange('');
+                        setShowFiltersDropdown(false);
+                      }}
+                      className="w-full h-[32px] text-[12px] font-['Poppins',sans-serif] text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                    >
+                      Clear All Filters
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Search Input */}
@@ -161,3 +235,4 @@ export const EmployeeListHeader = ({
     </div>
   );
 };
+

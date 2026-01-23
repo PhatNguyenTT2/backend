@@ -15,9 +15,9 @@ export const POSListHeader = ({
   onFilterStatus
 }) => {
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
-  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [showFiltersDropdown, setShowFiltersDropdown] = useState(false);
   const actionsDropdownRef = useRef(null);
-  const filterDropdownRef = useRef(null);
+  const filtersDropdownRef = useRef(null);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -25,33 +25,28 @@ export const POSListHeader = ({
       if (actionsDropdownRef.current && !actionsDropdownRef.current.contains(event.target)) {
         setShowActionsDropdown(false);
       }
-      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target)) {
-        setShowFilterDropdown(false);
+      if (filtersDropdownRef.current && !filtersDropdownRef.current.contains(event.target)) {
+        setShowFiltersDropdown(false);
       }
     };
 
-    if (showActionsDropdown || showFilterDropdown) {
+    if (showActionsDropdown || showFiltersDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showActionsDropdown, showFilterDropdown]);
+  }, [showActionsDropdown, showFiltersDropdown]);
 
-  // Get filter label
-  const getFilterLabel = () => {
-    switch (statusFilter) {
-      case 'active':
-        return `Active (${activePOS})`;
-      case 'locked':
-        return `Locked (${lockedPOS})`;
-      case 'denied':
-        return `Denied (${deniedPOS})`;
-      default:
-        return `All (${totalPOS})`;
-    }
-  };
+  const statusOptions = [
+    { value: 'all', label: 'All Status', count: totalPOS },
+    { value: 'active', label: 'Active', count: activePOS },
+    { value: 'locked', label: 'Locked', count: lockedPOS },
+    { value: 'denied', label: 'Denied', count: deniedPOS }
+  ];
+
+  const hasActiveFilter = statusFilter && statusFilter !== 'all';
 
   return (
     <div className="bg-white p-4 rounded-lg shadow-sm">
@@ -82,6 +77,71 @@ export const POSListHeader = ({
                 <path d="M3 4.5L6 7.5L9 4.5" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
+          </div>
+
+          {/* Filters Button */}
+          <div className="relative" ref={filtersDropdownRef}>
+            <button
+              onClick={() => setShowFiltersDropdown(!showFiltersDropdown)}
+              className={`h-[36px] px-4 border rounded-lg text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap ${hasActiveFilter
+                ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                : 'bg-white border-[#ced4da] text-[#212529] hover:bg-gray-50'
+                }`}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13 2H1L5.8 7.46V11.5L8.2 12.5V7.46L13 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>Filters</span>
+              {hasActiveFilter && (
+                <span className="w-2 h-2 bg-emerald-600 rounded-full"></span>
+              )}
+            </button>
+
+            {/* Filters Dropdown */}
+            {showFiltersDropdown && (
+              <div className="absolute left-0 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50">
+                <div className="px-4 py-2 border-b border-gray-200">
+                  <h3 className="text-[12px] font-semibold font-['Poppins',sans-serif] text-gray-900">
+                    Filter POS Access
+                  </h3>
+                </div>
+
+                {/* Status Filter */}
+                <div className="px-4 py-3">
+                  <label className="text-[11px] font-['Poppins',sans-serif] text-gray-600 mb-1.5 block">
+                    Status
+                  </label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      onFilterStatus && onFilterStatus(e.target.value);
+                    }}
+                    className="w-full h-[32px] bg-white border border-[#ced4da] rounded-lg px-2 py-1 text-[12px] font-['Poppins',sans-serif] text-[#212529] appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  >
+                    {statusOptions.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label} ({option.count})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Clear Filters */}
+                {hasActiveFilter && (
+                  <div className="px-4 py-2 border-t border-gray-200">
+                    <button
+                      onClick={() => {
+                        onFilterStatus && onFilterStatus('all');
+                        setShowFiltersDropdown(false);
+                      }}
+                      className="w-full h-[32px] text-[12px] font-['Poppins',sans-serif] text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                    >
+                      Clear All Filters
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Search Input */}
@@ -127,84 +187,6 @@ export const POSListHeader = ({
                 </svg>
               </button>
             </div>
-          </div>
-
-          {/* Filter Button with Dropdown */}
-          <div className="relative" ref={filterDropdownRef}>
-            <button
-              onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              className="h-[36px] px-4 bg-white border border-[#ced4da] rounded-lg text-[#212529] text-[12px] font-['Poppins',sans-serif] leading-[20px] flex items-center justify-center gap-1.5 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 whitespace-nowrap"
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M13 2H1L6 7.5V11.5L8 12.5V7.5L13 2Z" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>{getFilterLabel()}</span>
-              <svg
-                width="8"
-                height="5"
-                viewBox="0 0 8 5"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className={`transition-transform ${showFilterDropdown ? 'rotate-180' : ''}`}
-              >
-                <path d="M1 1L4 4L7 1" stroke="#212529" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-
-            {/* Filter Dropdown Menu */}
-            {showFilterDropdown && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
-                <button
-                  onClick={() => {
-                    onFilterStatus && onFilterStatus('all');
-                    setShowFilterDropdown(false);
-                  }}
-                  className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center justify-between ${statusFilter === 'all' ? 'bg-emerald-50 text-emerald-600' : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                >
-                  <span>All</span>
-                  <span className="text-gray-500">({totalPOS})</span>
-                </button>
-
-                <div className="border-t border-gray-200 my-1"></div>
-
-                <button
-                  onClick={() => {
-                    onFilterStatus && onFilterStatus('active');
-                    setShowFilterDropdown(false);
-                  }}
-                  className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center justify-between ${statusFilter === 'active' ? 'bg-emerald-50 text-emerald-600' : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                >
-                  <span>Active</span>
-                  <span className="text-gray-500">({activePOS})</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    onFilterStatus && onFilterStatus('locked');
-                    setShowFilterDropdown(false);
-                  }}
-                  className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center justify-between ${statusFilter === 'locked' ? 'bg-emerald-50 text-emerald-600' : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                >
-                  <span>Locked</span>
-                  <span className="text-gray-500">({lockedPOS})</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    onFilterStatus && onFilterStatus('denied');
-                    setShowFilterDropdown(false);
-                  }}
-                  className={`w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] transition-colors flex items-center justify-between ${statusFilter === 'denied' ? 'bg-emerald-50 text-emerald-600' : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                >
-                  <span>Denied</span>
-                  <span className="text-gray-500">({deniedPOS})</span>
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
@@ -264,3 +246,4 @@ export const POSListHeader = ({
     </div>
   );
 };
+
