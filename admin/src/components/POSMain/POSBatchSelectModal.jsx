@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { X, Package, Calendar, DollarSign, AlertCircle, Clock, ShoppingCart, Minus, Plus, Check } from 'lucide-react';
 
 export const POSBatchSelectModal = ({
   isOpen,
@@ -9,51 +10,80 @@ export const POSBatchSelectModal = ({
   // Single batch selection with quantity
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'expiring', 'normal'
 
   if (!isOpen || !productData) return null;
 
   const { product, batches: allBatches } = productData;
 
-  // Safety filter: Only show batches with quantity > 0
-  // Note: POS endpoint returns batch.quantity field (from ProductBatch model)
-  // AddOrderModal uses detailInventory.quantityOnShelf (different data source)
-  const batches = (allBatches || []).filter(batch => {
-    const qty = batch.detailInventory?.quantityOnShelf || batch.quantityOnShelf || batch.quantity || 0;
-    return qty > 0;
-  });
+  // Helper: Get batch quantity on shelf (from detailInventory only)
+  const getBatchQuantityOnShelf = (batch) => {
+    if (!batch) return 0;
+    return batch.detailInventory?.quantityOnShelf || 0;
+  };
+
+  // Filter: Only show batches with quantityOnShelf > 0 (currently being sold)
+  // Sort by expiry date (FEFO - First Expire First Out)
+  const batches = (allBatches || [])
+    .filter(batch => {
+      const onShelf = batch.detailInventory?.quantityOnShelf || 0;
+      return onShelf > 0;
+    })
+    .sort((a, b) => {
+      if (!a.expiryDate) return 1;
+      if (!b.expiryDate) return -1;
+      return new Date(a.expiryDate) - new Date(b.expiryDate);
+    });
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN', {
+    return date.toLocaleDateString('en-GB', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
     });
   };
 
-  const formatCurrency = (amount) => {
-    return `₫${parseFloat(amount).toLocaleString('vi-VN')}`;
+  const formatVND = (amount) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(amount);
+  };
+
+  // Helper: Get days until expiry
+  const getDaysUntilExpiry = (expiryDate) => {
+    if (!expiryDate) return null;
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    const diffTime = expiry - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  // Helper: Get expiry status with styling
+  const getExpiryStatus = (expiryDate) => {
+    const days = getDaysUntilExpiry(expiryDate);
+    if (days === null) return { color: 'gray', text: 'No expiry', icon: null, status: 'normal' };
+    if (days < 0) return { color: 'red', text: `Expired ${Math.abs(days)}d ago`, icon: <AlertCircle className="w-4 h-4" />, status: 'expired' };
+    if (days === 0) return { color: 'red', text: 'Expires today!', icon: <AlertCircle className="w-4 h-4" />, status: 'expiring' };
+    if (days <= 7) return { color: 'red', text: `${days}d left`, icon: <AlertCircle className="w-4 h-4" />, status: 'expiring' };
+    if (days <= 30) return { color: 'amber', text: `${days}d left`, icon: <Clock className="w-4 h-4" />, status: 'expiring' };
+    return { color: 'green', text: `${days}d left`, icon: <Clock className="w-4 h-4" />, status: 'normal' };
   };
 
   // Helper: Get batch unit price (handle Decimal128)
   const getBatchPrice = (batch) => {
     if (!batch) return 0;
-
     const price = batch.unitPrice;
-
-    // Handle null or undefined
     if (price === null || price === undefined) return 0;
-
-    // Handle Decimal128 object
     if (typeof price === 'object' && price !== null) {
       if (price.$numberDecimal) {
         return parseFloat(price.$numberDecimal);
       }
       return parseFloat(price.toString());
     }
-
-    // Handle number or string
     const parsed = parseFloat(price);
     return isNaN(parsed) ? 0 : parsed;
   };
@@ -67,20 +97,43 @@ export const POSBatchSelectModal = ({
   // Helper: Get current batch price after discount
   const getCurrentBatchPrice = (batch) => {
     if (!batch) return 0;
-
     const basePrice = getBatchPrice(batch);
     const discountPercentage = getBatchDiscountPercentage(batch);
-
     if (discountPercentage > 0) {
       return basePrice * (1 - discountPercentage / 100);
     }
-
     return basePrice;
   };
 
+  // Filter batches based on selected status
+  const getFilteredBatches = () => {
+    if (filterStatus === 'all') return batches;
+    return batches.filter(batch => {
+      const status = getExpiryStatus(batch.expiryDate).status;
+      return status === filterStatus;
+    });
+  };
+
+  // Count batches by status
+  const getCounts = () => {
+    const counts = { all: batches.length, expiring: 0, normal: 0 };
+    batches.forEach(batch => {
+      const status = getExpiryStatus(batch.expiryDate).status;
+      if (status === 'expiring' || status === 'expired') {
+        counts.expiring++;
+      } else {
+        counts.normal++;
+      }
+    });
+    return counts;
+  };
+
+  const filteredBatches = getFilteredBatches();
+  const counts = getCounts();
+
   const handleQuantityChange = (value) => {
     if (!selectedBatch) return;
-    const maxQty = selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 0;
+    const maxQty = getBatchQuantityOnShelf(selectedBatch);
     const newQty = Math.max(1, Math.min(value, maxQty));
     setQuantity(newQty);
   };
@@ -90,232 +143,266 @@ export const POSBatchSelectModal = ({
       alert('Please select a batch');
       return;
     }
-
     if (quantity <= 0) {
       alert('Quantity must be greater than 0');
       return;
     }
-
-    // Call onBatchSelected for the selected batch
     onBatchSelected(selectedBatch, quantity);
-
-    // Reset and close
     setSelectedBatch(null);
     setQuantity(1);
     onClose();
   };
 
-  // Handle batch selection
   const handleBatchSelect = (batch) => {
     setSelectedBatch(batch);
     setQuantity(1);
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+      <div className="bg-white rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 bg-orange-50">
-          <div className="flex justify-between items-start">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-emerald-50 to-blue-50">
+          <div className="flex items-center gap-4">
+            {product.image && (
+              <img
+                src={product.image}
+                alt={product.name}
+                className="w-14 h-14 object-cover rounded-lg border-2 border-white shadow-sm"
+              />
+            )}
             <div>
-              <h2 className="text-xl font-bold text-gray-900 font-['Poppins']">
-                Select Batch - Fresh Product
-              </h2>
-              <p className="text-sm text-gray-600 mt-1">
-                {product.name} - {product.productCode}
+              <h2 className="text-xl font-semibold text-gray-900">Select Batch</h2>
+              <p className="text-sm text-gray-600 mt-0.5">
+                {product.name} ({product.productCode})
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </button>
           </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
         </div>
 
-        {/* Body */}
+        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {/* Product Info */}
-          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-4">
-              {product.image && (
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="w-20 h-20 object-cover rounded-lg"
-                />
-              )}
-              <div className="flex-1">
-                <h3 className="font-bold text-lg">{product.name}</h3>
-                <p className="text-sm text-gray-600">
-                  Category: {product.category?.name || 'N/A'}
-                </p>
-                <p className="text-sm text-gray-600">
-                  Base Price: {formatCurrency(product.unitPrice)}
-                </p>
+          {batches.length === 0 ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-sm text-gray-500 font-medium">No batches available on shelf</p>
+                <p className="text-xs text-gray-400 mt-1">All batches are in warehouse or out of stock</p>
               </div>
             </div>
-          </div>
-          {/* Batch List */}
-          <div className="space-y-3">
-            <h3 className="font-semibold text-gray-700 mb-3">
-              Available Batches ({batches.length})
-            </h3>
-
-            {batches.map((batch, index) => {
-              const isSelected = selectedBatch?.id === batch.id;
-              const maxQty = batch.detailInventory?.quantityOnShelf || batch.quantityOnShelf || 0;
-
-              return (
-                <div
-                  key={batch.id}
-                  onClick={() => handleBatchSelect(batch)}
-                  className={`
-                    p-4 border-2 rounded-lg transition-all cursor-pointer
-                    ${isSelected
-                      ? 'border-emerald-500 bg-emerald-50 shadow-md'
-                      : 'border-gray-200 hover:border-emerald-300 hover:shadow-sm'
-                    }
-                  `}
+          ) : (
+            <div className="space-y-4">
+              {/* Filter Tabs */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setFilterStatus('all')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filterStatus === 'all'
+                    ? 'bg-gray-800 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
                 >
-                  <div className="flex justify-between items-start gap-4">
-                    {/* Left: Batch Info */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-bold text-gray-900">
-                          {batch.batchCode}
-                        </span>
+                  All ({counts.all})
+                </button>
+                <button
+                  onClick={() => setFilterStatus('expiring')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filterStatus === 'expiring'
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                    }`}
+                >
+                  Expiring Soon ({counts.expiring})
+                </button>
+                <button
+                  onClick={() => setFilterStatus('normal')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${filterStatus === 'normal'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                    }`}
+                >
+                  Normal ({counts.normal})
+                </button>
+              </div>
 
-                        {isSelected && (
-                          <span className="px-2 py-1 bg-emerald-500 text-white rounded text-xs font-semibold flex items-center gap-1">
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13.5 4L6 11.5L2.5 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                            Selected
-                          </span>
-                        )}
+              {/* Summary */}
+              <div className={`border rounded-lg p-4 ${counts.expiring > 0
+                ? 'bg-amber-50 border-amber-200'
+                : 'bg-blue-50 border-blue-200'
+                }`}>
+                <div className="flex items-center justify-between text-sm">
+                  <span className={`font-medium ${counts.expiring > 0 ? 'text-amber-900' : 'text-blue-900'}`}>
+                    {counts.expiring > 0 && `${counts.expiring} batch(es) expiring soon - Consider FEFO`}
+                    {counts.expiring === 0 && `Total batches available: ${batches.length}`}
+                  </span>
+                  <span className={counts.expiring > 0 ? 'text-amber-700' : 'text-blue-700'}>
+                    Showing: {filteredBatches.length} | Total qty: {filteredBatches.reduce((sum, b) => sum + (b.detailInventory?.quantityOnShelf || 0), 0)} units
+                  </span>
+                </div>
+              </div>
 
-                        {/* Show discount badge if applicable */}
-                        {getBatchDiscountPercentage(batch) > 0 && (
-                          <span className="px-2 py-1 bg-red-500 text-white rounded text-xs font-semibold">
-                            🔥 -{getBatchDiscountPercentage(batch)}% OFF
-                          </span>
-                        )}
+              {/* No results for filter */}
+              {filteredBatches.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm">No batches match this filter</p>
+                </div>
+              )}
 
-                        {/* Show urgency badge based on days until expiry */}
-                        {batch.daysUntilExpiry !== undefined && batch.daysUntilExpiry !== null && (
-                          <>
-                            {batch.daysUntilExpiry <= 3 && (
-                              <span className="px-2 py-1 bg-red-500 text-white rounded text-xs font-semibold">
-                                🔥 Urgent - {batch.daysUntilExpiry}d left
+              {/* Batch Cards */}
+              {filteredBatches.map((batch) => {
+                const onShelf = getBatchQuantityOnShelf(batch);
+                const hasDiscount = getBatchDiscountPercentage(batch) > 0;
+                const finalPrice = getCurrentBatchPrice(batch);
+                const expiryStatus = getExpiryStatus(batch.expiryDate);
+                const isSelected = selectedBatch?.id === batch.id;
+
+                return (
+                  <div
+                    key={batch.id}
+                    onClick={() => handleBatchSelect(batch)}
+                    className={`border-2 rounded-lg p-4 transition-all cursor-pointer ${isSelected
+                      ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200 shadow-md'
+                      : expiryStatus.status === 'expiring' || expiryStatus.status === 'expired'
+                        ? 'border-amber-300 bg-amber-50/30 hover:border-amber-400'
+                        : 'border-gray-200 hover:border-emerald-400 hover:shadow-md'
+                      }`}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      {/* Batch Code */}
+                      <div className="flex items-center gap-3">
+                        {/* Selection indicator */}
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected
+                          ? 'bg-emerald-500 border-emerald-500'
+                          : 'border-gray-300'
+                          }`}>
+                          {isSelected && <Check className="w-4 h-4 text-white" />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm font-semibold text-gray-900">
+                              {batch.batchCode}
+                            </span>
+                            {hasDiscount && (
+                              <span className="bg-red-100 text-red-700 text-xs font-semibold px-2 py-0.5 rounded">
+                                -{getBatchDiscountPercentage(batch)}% OFF
                               </span>
                             )}
-                            {batch.daysUntilExpiry > 3 && batch.daysUntilExpiry <= 7 && (
-                              <span className="px-2 py-1 bg-orange-500 text-white rounded text-xs font-semibold">
-                                ⚠️ {batch.daysUntilExpiry}d left
+                            {isSelected && (
+                              <span className="bg-emerald-500 text-white text-xs font-semibold px-2 py-0.5 rounded">
+                                Selected
                               </span>
                             )}
-                          </>
-                        )}
+                          </div>
+                          {batch.notes && (
+                            <p className="text-xs text-gray-500 mt-1">{batch.notes}</p>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="mt-3 space-y-1">
-                        <p className="text-sm">
-                          <span className="text-gray-600">Expiry Date:</span>{' '}
-                          <span className={`font-semibold ${batch.daysUntilExpiry !== undefined && batch.daysUntilExpiry < 5
-                            ? 'text-orange-600'
-                            : 'text-gray-900'
-                            }`}>
-                            {formatDate(batch.expiryDate)}
-                            {batch.daysUntilExpiry !== undefined && batch.daysUntilExpiry !== null && (
-                              <> ({batch.daysUntilExpiry} {batch.daysUntilExpiry === 1 ? 'day' : 'days'} left)</>
-                            )}
-                          </span>
-                        </p>
-
-                        <p className="text-sm">
-                          <span className="text-gray-600">Available On Shelf:</span>{' '}
-                          <span className="font-semibold text-gray-900">
-                            {batch.detailInventory?.quantityOnShelf || batch.quantityOnShelf || 0} units
-                          </span>
-                        </p>
-
-                        {batch.mfgDate && (
-                          <p className="text-sm">
-                            <span className="text-gray-600">Mfg Date:</span>{' '}
-                            <span className="font-semibold text-gray-900">
-                              {formatDate(batch.mfgDate)}
-                            </span>
-                          </p>
-                        )}
+                      {/* Quantity Badge */}
+                      <div className="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-sm font-semibold">
+                        {onShelf} units
                       </div>
                     </div>
 
-                    {/* Right: Price and Quantity */}
-                    <div className="flex flex-col items-end gap-3">
-                      {/* Price Display */}
-                      <div className="text-right">
-                        {getBatchDiscountPercentage(batch) > 0 ? (
-                          <>
-                            <p className="text-2xl font-bold text-red-600">
-                              {formatCurrency(getCurrentBatchPrice(batch))}
-                            </p>
-                            <p className="text-xs text-gray-500 line-through">
-                              {formatCurrency(getBatchPrice(batch))}
-                            </p>
-                            <p className="text-xs text-red-600 font-semibold">
-                              🔥 -{getBatchDiscountPercentage(batch)}%
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <p className="text-2xl font-bold text-gray-900">
-                              {formatCurrency(getBatchPrice(batch))}
-                            </p>
-                            <p className="text-xs text-gray-600">
-                              per unit
-                            </p>
-                          </>
-                        )}
+                    {/* Details Grid */}
+                    <div className="grid grid-cols-2 gap-4 ml-9">
+                      {/* Price */}
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="w-4 h-4 text-gray-400" />
+                        <div className="flex flex-col">
+                          <span className="text-xs text-gray-500">Price</span>
+                          {hasDiscount ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-red-600">
+                                {formatVND(finalPrice)}
+                              </span>
+                              <span className="text-xs text-gray-400 line-through">
+                                {formatVND(getBatchPrice(batch))}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm font-semibold text-gray-900">
+                              {formatVND(getBatchPrice(batch))}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Selection indicator */}
-                      {isSelected && (
-                        <div className="text-center">
-                          <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center">
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
+                      {/* Expiry Date */}
+                      <div className="flex items-center gap-2">
+                        <Calendar className={`w-4 h-4 ${expiryStatus.status === 'expired' || expiryStatus.status === 'expiring' ? 'text-amber-500' : 'text-gray-400'}`} />
+                        <div className="flex flex-col">
+                          <span className="text-xs text-gray-500">Expiry Date</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-semibold ${expiryStatus.status === 'expired' || expiryStatus.status === 'expiring' ? 'text-amber-700' : 'text-gray-900'}`}>
+                              {formatDate(batch.expiryDate)}
+                            </span>
+                            {expiryStatus.icon && (
+                              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full ${expiryStatus.status === 'expired'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                {expiryStatus.icon}
+                                <span className="text-xs font-medium">
+                                  {expiryStatus.text}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Manufacturing Date */}
+                      {batch.mfgDate && (
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-gray-400" />
+                          <div className="flex flex-col">
+                            <span className="text-xs text-gray-500">Mfg Date</span>
+                            <span className="text-sm font-semibold text-gray-900">
+                              {formatDate(batch.mfgDate)}
+                            </span>
                           </div>
                         </div>
                       )}
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Quantity Selection */}
           {selectedBatch && (
             <div className="mt-6 p-5 bg-gradient-to-br from-emerald-50 to-blue-50 border-2 border-emerald-300 rounded-lg">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Selected Batch</h3>
+              <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5 text-emerald-600" />
+                Add to Cart
+              </h3>
 
-              <div className="mb-4 p-3 bg-white rounded-lg">
+              <div className="mb-4 p-3 bg-white rounded-lg border border-emerald-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-mono font-bold text-gray-900">{selectedBatch.batchCode}</span>
                   {getBatchDiscountPercentage(selectedBatch) > 0 && (
-                    <span className="px-2 py-1 bg-red-500 text-white rounded text-xs font-semibold">
-                      🔥 -{getBatchDiscountPercentage(selectedBatch)}% OFF
+                    <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-semibold">
+                      -{getBatchDiscountPercentage(selectedBatch)}% OFF
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-gray-600">
-                  Expiry: {formatDate(selectedBatch.expiryDate)}
-                </div>
-                <div className="text-sm text-gray-600">
-                  Available: {selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 0} units
+                <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Expiry: {formatDate(selectedBatch.expiryDate)}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Package className="w-3.5 h-3.5" />
+                    <span>Available: {getBatchQuantityOnShelf(selectedBatch)} units</span>
+                  </div>
                 </div>
               </div>
 
@@ -327,9 +414,9 @@ export const POSBatchSelectModal = ({
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => handleQuantityChange(quantity - 1)}
-                    className="w-12 h-12 bg-white border-2 border-emerald-500 text-emerald-600 rounded-lg font-bold text-xl hover:bg-emerald-50 transition-colors"
+                    className="w-12 h-12 bg-white border-2 border-emerald-500 text-emerald-600 rounded-lg font-bold text-xl hover:bg-emerald-50 transition-colors flex items-center justify-center"
                   >
-                    -
+                    <Minus className="w-5 h-5" />
                   </button>
 
                   <input
@@ -337,19 +424,19 @@ export const POSBatchSelectModal = ({
                     value={quantity}
                     onChange={(e) => handleQuantityChange(parseInt(e.target.value) || 1)}
                     min="1"
-                    max={selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 1}
+                    max={getBatchQuantityOnShelf(selectedBatch)}
                     className="w-28 h-12 text-center text-2xl font-bold border-2 border-emerald-300 rounded-lg focus:border-emerald-500 focus:outline-none"
                   />
 
                   <button
                     onClick={() => handleQuantityChange(quantity + 1)}
-                    className="w-12 h-12 bg-white border-2 border-emerald-500 text-emerald-600 rounded-lg font-bold text-xl hover:bg-emerald-50 transition-colors"
+                    className="w-12 h-12 bg-white border-2 border-emerald-500 text-emerald-600 rounded-lg font-bold text-xl hover:bg-emerald-50 transition-colors flex items-center justify-center"
                   >
-                    +
+                    <Plus className="w-5 h-5" />
                   </button>
 
                   <span className="text-sm text-gray-600">
-                    / {selectedBatch.detailInventory?.quantityOnShelf || selectedBatch.quantityOnShelf || 0} units on shelf
+                    / {getBatchQuantityOnShelf(selectedBatch)} units on shelf
                   </span>
                 </div>
               </div>
@@ -358,17 +445,17 @@ export const POSBatchSelectModal = ({
               <div className="pt-4 border-t-2 border-emerald-400">
                 <div className="flex justify-between items-center">
                   <span className="text-lg text-gray-700 font-semibold">Subtotal:</span>
-                  <span className="text-4xl font-bold text-emerald-600">
-                    {formatCurrency(getCurrentBatchPrice(selectedBatch) * quantity)}
+                  <span className="text-3xl font-bold text-emerald-600">
+                    {formatVND(getCurrentBatchPrice(selectedBatch) * quantity)}
                   </span>
                 </div>
                 {getBatchDiscountPercentage(selectedBatch) > 0 && (
                   <div className="mt-2 text-right">
                     <span className="text-sm text-gray-500 line-through">
-                      {formatCurrency(getBatchPrice(selectedBatch) * quantity)}
+                      {formatVND(getBatchPrice(selectedBatch) * quantity)}
                     </span>
                     <span className="ml-2 text-sm text-red-600 font-semibold">
-                      (Save {formatCurrency((getBatchPrice(selectedBatch) - getCurrentBatchPrice(selectedBatch)) * quantity)})
+                      (Save {formatVND((getBatchPrice(selectedBatch) - getCurrentBatchPrice(selectedBatch)) * quantity)})
                     </span>
                   </div>
                 )}
@@ -378,27 +465,29 @@ export const POSBatchSelectModal = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
-          <button
-            onClick={onClose}
-            className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-          >
-            Cancel
-          </button>
-
-          <button
-            onClick={handleConfirm}
-            disabled={!selectedBatch}
-            className={`
-              px-8 py-3 rounded-lg font-bold text-white transition-all
-              ${selectedBatch
-                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-lg hover:shadow-xl'
-                : 'bg-gray-300 cursor-not-allowed'
-              }
-            `}
-          >
-            {selectedBatch ? `Add ${quantity} items to Cart` : 'Select a Batch'}
-          </button>
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-600">Sorted by expiry date (FEFO - First Expire First Out)</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onClose}
+                className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-100 transition-colors text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirm}
+                disabled={!selectedBatch}
+                className={`px-6 py-2.5 rounded-lg font-bold text-white transition-all text-sm flex items-center gap-2 ${selectedBatch
+                  ? 'bg-emerald-600 hover:bg-emerald-700 shadow-lg hover:shadow-xl'
+                  : 'bg-gray-300 cursor-not-allowed'
+                  }`}
+              >
+                <ShoppingCart className="w-4 h-4" />
+                {selectedBatch ? `Add ${quantity} to Cart` : 'Select a Batch'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

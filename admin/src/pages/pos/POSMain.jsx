@@ -220,48 +220,76 @@ export const POSMain = () => {
     return () => clearInterval(verifyInterval);
   }, [navigate]);
 
-  // Keyboard shortcuts
+  // ========================================
+  // KEYBOARD SHORTCUTS
+  // ========================================
+  // Ctrl+K     - Focus search field
+  // Ctrl+L     - Logout
+  // Ctrl+Del   - Clear cart
+  // F2         - Open QR Code Scanner
+  // F4         - Open Held Orders Modal
+  // F8         - Hold Order (save as draft)
+  // F9         - Payment (checkout flow)
+  // Escape     - Close modals
+  // ========================================
   useEffect(() => {
     const handleKeyPress = (e) => {
+      // Ctrl+K: Focus search field
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         document.getElementById('product-search')?.focus();
       }
 
+      // Ctrl+L: Logout
       if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
         e.preventDefault();
         handleLogout();
       }
 
+      // Ctrl+Delete: Clear cart
       if ((e.ctrlKey || e.metaKey) && e.key === 'Delete' && cart.length > 0) {
         e.preventDefault();
         clearCart();
       }
 
+      // F2: Open QR Code Scanner
       if (e.key === 'F2') {
         e.preventDefault();
-        document.getElementById('product-search')?.focus();
+        setShowQRScanner(true);
       }
 
+      // F4: Open Held Orders Modal
+      if (e.key === 'F4') {
+        e.preventDefault();
+        setShowHeldOrdersModal(true);
+      }
+
+      // F8: Hold Order (save as draft)
       if (e.key === 'F8' && cart.length > 0) {
         e.preventDefault();
         handleHoldOrder();
       }
 
+      // F9: Payment (checkout flow with draft order creation)
       if (e.key === 'F9' && cart.length > 0) {
         e.preventDefault();
-        setShowPaymentModal(true);
+        handleCheckout();
       }
 
-      if (e.key === 'Escape' && showPaymentModal) {
+      // Escape: Close modals
+      if (e.key === 'Escape') {
         e.preventDefault();
-        setShowPaymentModal(false);
+        if (showPaymentModal) setShowPaymentModal(false);
+        if (showQRScanner) setShowQRScanner(false);
+        if (showHeldOrdersModal) setShowHeldOrdersModal(false);
+        if (showBatchModal) setShowBatchModal(false);
+        if (showInvoiceModal) setShowInvoiceModal(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [cart.length, showPaymentModal]);
+  }, [cart.length, showPaymentModal, showQRScanner, showHeldOrdersModal, showBatchModal, showInvoiceModal]);
 
   // Add to cart with stock validation
   const addToCart = async (product) => {

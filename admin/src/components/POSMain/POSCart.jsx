@@ -34,9 +34,11 @@ export const POSCart = ({
             {cart.length > 0 && (
               <button
                 onClick={onClearCart}
-                className="text-[12px] font-medium font-['Poppins',sans-serif] text-red-600 hover:text-red-700"
+                className="text-[12px] font-medium font-['Poppins',sans-serif] text-red-600 hover:text-red-700 flex items-center gap-1"
+                title="Ctrl+Delete"
               >
-                Clear All
+                <span>Clear All</span>
+                <span className="text-[10px] opacity-70">(Ctrl+Del)</span>
               </button>
             )}
           </div>
@@ -56,6 +58,7 @@ export const POSCart = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <span>Held Orders</span>
+          <span className="text-[12px] font-normal opacity-75">(F4)</span>
         </button>
       </div>
 
