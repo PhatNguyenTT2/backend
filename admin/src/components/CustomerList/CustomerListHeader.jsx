@@ -11,7 +11,8 @@ export const CustomerListHeader = ({
   genderFilter,
   onGenderFilterChange,
   typeFilter,
-  onTypeFilterChange
+  onTypeFilterChange,
+  onUpgradeClick
 }) => {
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const [showFiltersDropdown, setShowFiltersDropdown] = useState(false);
@@ -249,6 +250,21 @@ export const CustomerListHeader = ({
                   <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 Add Customer
+              </button>
+
+              <button
+                onClick={() => {
+                  onUpgradeClick && onUpgradeClick();
+                  setShowActionsDropdown(false);
+                }}
+                className="w-full px-4 py-2 text-left text-[12px] font-['Poppins',sans-serif] text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 transition-colors flex items-center gap-2"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 11V17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 7L16 11H8L12 7Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+                Upgrade Customer Type
               </button>
 
               <div className="border-t border-gray-200 my-1"></div>

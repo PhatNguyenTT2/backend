@@ -107,9 +107,19 @@ const customerService = {
       const response = await api.delete(`/customers/${customerId}`)
       return response.data
     } catch (error) {
-      console.error('Error deleting customer:', error)
       throw error
     }
+  },
+
+  // Bulk Upgrade Customers
+  previewUpgrade: async (criteria) => {
+    const response = await api.post('/customers/upgrade/preview', criteria);
+    return response.data;
+  },
+
+  executeUpgrade: async (data) => {
+    const response = await api.post('/customers/upgrade/execute', data);
+    return response.data;
   },
 
   // ========== CONVENIENCE METHODS ==========

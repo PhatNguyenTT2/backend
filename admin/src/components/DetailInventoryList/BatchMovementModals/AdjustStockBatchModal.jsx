@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { X, Package, Calendar, FileText, User, AlertTriangle, Info } from 'lucide-react';
 import inventoryMovementBatchService from '../../../services/inventoryMovementBatchService';
 import employeeService from '../../../services/employeeService';
 import authService from '../../../services/authService';
@@ -38,20 +39,14 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
   const fetchEmployeeData = async () => {
     try {
       setLoading(true);
-
-      // Get current user from authService
       const user = authService.getUser();
       setCurrentUser(user);
 
-      // If user has employeeId, fetch employee details
       if (user?.employeeId) {
         const employeeResponse = await employeeService.getEmployeeById(user.employeeId);
-
         if (employeeResponse.success && employeeResponse.data) {
           const employee = employeeResponse.data.employee;
           setCurrentEmployee(employee);
-
-          // Set employeeId to formData
           setFormData(prev => ({
             ...prev,
             performedBy: user.employeeId
@@ -67,10 +62,8 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const quantity = parseInt(formData.quantity);
 
-    // For decrease, check if there's enough stock
     if (formData.adjustmentType === 'decrease') {
       const targetQty = formData.targetLocation === 'onHand'
         ? (detailInventory?.quantityOnHand || 0)
@@ -95,7 +88,7 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
         inventoryDetail: detailInventoryId,
         movementType: 'adjustment',
         quantity: formData.adjustmentType === 'increase' ? quantity : -quantity,
-        targetLocation: formData.targetLocation, // 'onHand' or 'onShelf'
+        targetLocation: formData.targetLocation,
         reason: formData.reason,
         date: new Date(formData.date),
         performedBy: formData.performedBy || undefined,
@@ -119,168 +112,219 @@ export const AdjustStockBatchModal = ({ isOpen, onClose, onSuccess, detailInvent
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000]">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-[20px] font-semibold font-['Poppins',sans-serif] text-[#212529]">
-            Adjust Batch Stock
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${formData.adjustmentType === 'increase' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
+              <Package className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold font-['Poppins',sans-serif] text-gray-900">
+                Adjust Stock
+              </h2>
+              <p className="text-xs text-gray-500 font-['Poppins',sans-serif]">
+                Manually correct inventory levels for batch {detailInventory?.batchId?.batchCode}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-100 rounded-full"
+          >
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-[13px]">
-              {error}
-            </div>
-          )}
+        {/* Content */}
+        <div className="p-6 overflow-y-auto">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                <span className="font-['Poppins',sans-serif]">{error}</span>
+              </div>
+            )}
 
-          {/* Batch Info */}
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-            <h3 className="text-[14px] font-semibold text-orange-900 mb-2">Batch Information:</h3>
-            <div className="space-y-1 text-[12px] text-orange-800">
-              <p><span className="font-semibold">Batch Code:</span> {detailInventory?.batchId?.batchCode || 'N/A'}</p>
-              <p><span className="font-semibold">Product:</span> {detailInventory?.batchId?.product?.name || detailInventory?.batchId?.productId?.name || 'N/A'}</p>
-              <p><span className="font-semibold">On Hand:</span> {detailInventory?.quantityOnHand || 0} | <span className="font-semibold">On Shelf:</span> {detailInventory?.quantityOnShelf || 0}</p>
+            {/* Batch Info Card */}
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h3 className="text-sm font-medium text-blue-900 font-['Poppins',sans-serif]">Current Status</h3>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs text-blue-700 font-['Poppins',sans-serif]">
+                    <p><span className="font-medium text-blue-800">Product:</span> {detailInventory?.batchId?.product?.name || 'N/A'}</p>
+                    <p><span className="font-medium text-blue-800">Batch Code:</span> {detailInventory?.batchId?.batchCode}</p>
+                    <p><span className="font-medium text-blue-800">Warehouse (On Hand):</span> {detailInventory?.quantityOnHand || 0} units</p>
+                    <p><span className="font-medium text-blue-800">Display (On Shelf):</span> {detailInventory?.quantityOnShelf || 0} units</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Type & Location */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium font-['Poppins',sans-serif] text-gray-700 mb-1.5">
+                    Adjustment Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.adjustmentType}
+                    onChange={(e) => setFormData({ ...formData, adjustmentType: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                  >
+                    <option value="increase">Increase Stock (+)</option>
+                    <option value="decrease">Decrease Stock (-)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium font-['Poppins',sans-serif] text-gray-700 mb-1.5">
+                    Target Location <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.targetLocation}
+                    onChange={(e) => setFormData({ ...formData, targetLocation: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+                  >
+                    <option value="onHand">On Hand (Warehouse)</option>
+                    <option value="onShelf">On Shelf (Display)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Quantity & Date */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium font-['Poppins',sans-serif] text-gray-700 mb-1.5">
+                    Quantity <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="1"
+                      value={formData.quantity}
+                      onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all pl-10"
+                      placeholder="Enter amount"
+                      required
+                    />
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <Package className="w-4 h-4" />
+                    </div>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 font-['Poppins',sans-serif]">
+                    Available: {formData.targetLocation === 'onHand'
+                      ? (detailInventory?.quantityOnHand || 0)
+                      : (detailInventory?.quantityOnShelf || 0)} units
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium font-['Poppins',sans-serif] text-gray-700 mb-1.5">
+                    Date & Time <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="datetime-local"
+                      value={formData.date}
+                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all pl-10"
+                      required
+                    />
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Reason */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#212529] mb-2">
-                Adjustment Type <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium font-['Poppins',sans-serif] text-gray-700 mb-1.5">
+                Reason <span className="text-red-500">*</span>
               </label>
               <select
-                value={formData.adjustmentType}
-                onChange={(e) => setFormData({ ...formData, adjustmentType: e.target.value })}
+                value={formData.reason}
+                onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
                 required
-                className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-orange-500"
               >
-                <option value="increase">Increase (+)</option>
-                <option value="decrease">Decrease (-)</option>
+                <option value="">Select a reason needed</option>
+                <option value="Physical Count Discrepancy">Physical Count Discrepancy</option>
+                <option value="Damage">Damage</option>
+                <option value="Expired">Expired</option>
+                <option value="Found Missing Items">Found Missing Items</option>
+                <option value="System Error Correction">System Error Correction</option>
+                <option value="Quality Issue">Quality Issue</option>
+                <option value="Other">Other</option>
               </select>
             </div>
 
-            <div>
-              <label className="block text-[13px] font-semibold text-[#212529] mb-2">
-                Target Location <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.targetLocation}
-                onChange={(e) => setFormData({ ...formData, targetLocation: e.target.value })}
-                required
-                className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-orange-500"
+            {/* Performed By & Notes */}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium font-['Poppins',sans-serif] text-gray-700 mb-1.5">
+                  Performed By
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={currentEmployee?.fullName || currentUser?.username || 'N/A'}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-['Poppins',sans-serif] bg-gray-50 text-gray-500 pl-10 cursor-not-allowed"
+                  />
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <User className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium font-['Poppins',sans-serif] text-gray-700 mb-1.5">
+                  Notes
+                </label>
+                <div className="relative">
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    rows="2"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all pl-10 resize-none"
+                    placeholder="Optional details..."
+                  />
+                  <div className="absolute left-3 top-3 text-gray-400">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions - Inside form to handle submit */}
+            <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={loading}
+                className="px-4 py-2 text-sm font-medium font-['Poppins',sans-serif] text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
               >
-                <option value="onHand">On Hand (Warehouse)</option>
-                <option value="onShelf">On Shelf (Display)</option>
-              </select>
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className={`px-6 py-2 text-sm font-medium font-['Poppins',sans-serif] text-white rounded-lg shadow-sm transition-all flex items-center gap-2 disabled:opacity-50 ${formData.adjustmentType === 'increase'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-orange-600 hover:bg-orange-700'
+                  }`}
+              >
+                {loading ? 'Processing...' : (formData.adjustmentType === 'increase' ? 'Add Stock' : 'Remove Stock')}
+              </button>
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[13px] font-semibold text-[#212529] mb-2">
-                Quantity <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                value={formData.quantity}
-                onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-                min="1"
-                required
-                className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-orange-500"
-              />
-              <p className="text-[11px] text-gray-600 mt-1">
-                Current {formData.targetLocation === 'onHand' ? 'On Hand' : 'On Shelf'}: {' '}
-                {formData.targetLocation === 'onHand'
-                  ? (detailInventory?.quantityOnHand || 0)
-                  : (detailInventory?.quantityOnShelf || 0)} units
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-[13px] font-semibold text-[#212529] mb-2">
-                Date & Time <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="datetime-local"
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                required
-                className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-orange-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[13px] font-semibold text-[#212529] mb-2">
-              Reason <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={formData.reason}
-              onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-              required
-              className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-orange-500"
-            >
-              <option value="">Select reason</option>
-              <option value="Physical Count Discrepancy">Physical Count Discrepancy</option>
-              <option value="Damage">Damage</option>
-              <option value="Expired">Expired</option>
-              <option value="Found Missing Items">Found Missing Items</option>
-              <option value="System Error Correction">System Error Correction</option>
-              <option value="Quality Issue">Quality Issue</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[13px] font-semibold text-[#212529] mb-2">
-              Performed By
-            </label>
-            <input
-              type="text"
-              value={currentEmployee?.fullName || currentUser?.username || 'N/A'}
-              disabled
-              className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] bg-gray-100 text-gray-600 cursor-not-allowed"
-            />
-            <p className="text-[11px] text-gray-500 mt-1">Current logged in employee</p>
-          </div>
-
-          <div>
-            <label className="block text-[13px] font-semibold text-[#212529] mb-2">
-              Notes
-            </label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows="3"
-              placeholder="Optional: Detailed explanation for this adjustment..."
-              className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-orange-500 resize-none"
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-4 border-t">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-[13px] font-semibold disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-5 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 text-[13px] font-semibold disabled:opacity-50 flex items-center gap-2"
-            >
-              {loading ? 'Processing...' : 'Adjust Stock'}
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );

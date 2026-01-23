@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { CustomerListHeader, CustomerList } from '../components/CustomerList';
+import { CustomerListHeader, CustomerList, CustomerUpgradeModal } from '../components/CustomerList';
 import customerService from '../services/customerService';
 
 const Customers = () => {
@@ -41,6 +41,7 @@ const Customers = () => {
   // Modal states
   const [addCustomerModal, setAddCustomerModal] = useState(false);
   const [editCustomerModal, setEditCustomerModal] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
 
   // Fetch customers from API
@@ -165,6 +166,12 @@ const Customers = () => {
     setSelectedCustomer(null);
   };
 
+  // Handle upgrade success
+  const handleUpgradeSuccess = (count, type) => {
+    fetchCustomers();
+    alert(`Successfully upgraded ${count} customers to ${type}`);
+  };
+
   // Handle delete customer
   const handleDeleteCustomer = async (customer) => {
     // Validate on client-side: Only inactive customers can be deleted
@@ -200,6 +207,7 @@ const Customers = () => {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onAddCustomer={handleAddCustomer}
+        onUpgradeClick={() => setShowUpgradeModal(true)}
         genderFilter={genderFilter}
         onGenderFilterChange={setGenderFilter}
         typeFilter={typeFilter}
@@ -374,6 +382,11 @@ const Customers = () => {
           )}
         </>
       )}
+      <CustomerUpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        onSuccess={handleUpgradeSuccess}
+      />
     </div>
   );
 };

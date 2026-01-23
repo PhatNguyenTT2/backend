@@ -675,4 +675,186 @@ customersRouter.get('/:id/orders', async (request, response) => {
   }
 });
 
+/**
+ * POST /api/customers/upgrade/preview
+ * Preview customers eligible for upgrade based on target type and spending
+ * 
+ * Body: { targetType: 'wholesale'|'vip', minSpent: number }
+ */
+customersRouter.post('/upgrade/preview', userExtractor, async (request, response) => {
+  try {
+    const { targetType, minSpent } = request.body;
+
+    // Validate inputs
+    if (!['wholesale', 'vip'].includes(targetType)) {
+      return response.status(400).json({
+        success: false,
+        error: { message: 'Target type must be wholesale or vip' }
+      });
+    }
+
+    if (minSpent === undefined || minSpent < 0) {
+      return response.status(400).json({
+        success: false,
+        error: { message: 'Minimum spent amount is required and must be non-negative' }
+      });
+    }
+
+    // Use aggregation to calculate real-time totalSpent from orders
+    // This matches the logic in GET /api/customers but does it efficiently in the DB
+    const pipeline = [
+      // 1. Filter by eligible customer types
+      {
+        $match: {
+          isActive: true,
+          customerType: targetType === 'wholesale' ? 'retail' : { $in: ['retail', 'wholesale'] }
+        }
+      },
+      // 2. Lookup delivered & paid orders
+      {
+        $lookup: {
+          from: 'orders',
+          let: { customerId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ['$customer', '$$customerId'] },
+                status: 'delivered',
+                paymentStatus: 'paid'
+              }
+            },
+            { $project: { total: 1 } }
+          ],
+          as: 'paidOrders'
+        }
+      },
+      // 3. Calculate total spent
+      {
+        $addFields: {
+          realTotalSpent: { $sum: '$paidOrders.total' }
+        }
+      },
+      // 4. Filter by minSpent
+      {
+        $match: {
+          realTotalSpent: { $gte: typeof minSpent === 'string' ? parseFloat(minSpent) : minSpent }
+        }
+      },
+      // 5. Format output
+      {
+        $project: {
+          _id: 1,
+          customerCode: 1,
+          fullName: 1,
+          customerType: 1,
+          phone: 1,
+          email: 1,
+          totalSpent: '$realTotalSpent' // Return the calculated value
+        }
+      },
+      { $sort: { totalSpent: -1 } }
+    ];
+
+    const eligibleCustomers = await Customer.aggregate(pipeline);
+
+    // Convert Decimal128 to number for frontend
+    const formattedCustomers = eligibleCustomers.map(customer => ({
+      ...customer,
+      totalSpent: customer.totalSpent ? parseFloat(customer.totalSpent.toString()) : 0
+    }));
+
+    response.json({
+      success: true,
+      data: {
+        customers: formattedCustomers,
+        count: formattedCustomers.length,
+        criteria: { targetType, minSpent }
+      }
+    });
+
+    response.json({
+      success: true,
+      data: {
+        customers: eligibleCustomers,
+        count: eligibleCustomers.length,
+        criteria: { targetType, minSpent }
+      }
+    });
+
+  } catch (error) {
+    console.error('Preview upgrade error:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to preview upgrades',
+        details: error.message
+      }
+    });
+  }
+});
+
+/**
+ * POST /api/customers/upgrade/execute
+ * Execute bulk upgrade for selected customers
+ * 
+ * Body: { targetType: 'wholesale'|'vip', customerIds: string[] }
+ */
+customersRouter.post('/upgrade/execute', userExtractor, async (request, response) => {
+  try {
+    const { targetType, customerIds } = request.body;
+
+    if (!['wholesale', 'vip'].includes(targetType)) {
+      return response.status(400).json({
+        success: false,
+        error: { message: 'Target type must be wholesale or vip' }
+      });
+    }
+
+    if (!Array.isArray(customerIds) || customerIds.length === 0) {
+      return response.status(400).json({
+        success: false,
+        error: { message: 'No customers selected for upgrade' }
+      });
+    }
+
+    // Start transaction
+    const session = await Customer.startSession();
+    session.startTransaction();
+
+    try {
+      const result = await Customer.updateMany(
+        { _id: { $in: customerIds } },
+        { $set: { customerType: targetType } },
+        { session }
+      );
+
+      await session.commitTransaction();
+
+      response.json({
+        success: true,
+        message: `Successfully upgraded ${result.modifiedCount} customers to ${targetType}`,
+        data: {
+          updatedCount: result.modifiedCount,
+          targetType
+        }
+      });
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+
+  } catch (error) {
+    console.error('Execute upgrade error:', error);
+    response.status(500).json({
+      success: false,
+      error: {
+        message: 'Failed to execute upgrades',
+        details: error.message
+      }
+    });
+  }
+});
+
 module.exports = customersRouter;
