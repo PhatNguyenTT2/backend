@@ -281,9 +281,9 @@ export const POSAddCustomerModal = ({ isOpen, onClose, onSuccess }) => {
               className={`w-full px-3 py-2 border ${errors.customerType ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-['Poppins',sans-serif] text-sm`}
               disabled={isSubmitting}
             >
-              <option value="retail">Retail (10% discount)</option>
-              <option value="wholesale">Wholesale (15% discount)</option>
-              <option value="vip">VIP (20% discount)</option>
+              <option value="retail">Retail</option>
+              <option value="wholesale">Wholesale</option>
+              <option value="vip">VIP</option>
             </select>
             {errors.customerType && (
               <p className="mt-1 text-xs text-red-600 font-['Poppins',sans-serif]">{errors.customerType}</p>

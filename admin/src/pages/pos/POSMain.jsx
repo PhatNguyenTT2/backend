@@ -886,6 +886,36 @@ export const POSMain = () => {
     return changed;
   };
 
+  // ⭐ Helper: Check if customer has changed from existing order
+  const hasCustomerChanged = () => {
+    if (!existingOrder) return true;
+
+    // Get current order customer ID
+    // Note: older orders might have populated customer object or just ID
+    const orderCustomerId = existingOrder.customer?._id || existingOrder.customer?.id || existingOrder.customer;
+
+    // Get selected customer ID
+    let selectedCustomerId = selectedCustomer?.id;
+
+    // Handle virtual-guest special case
+    if (!selectedCustomerId || selectedCustomerId === 'virtual-guest') {
+      // If order has no customer or is already virtual-guest
+      // Note: Backend might store virtual guest with specific ID, need careful check
+      // For simplicity: if order has customer and current is virtual-guest, it changed (unless order customer is also virtual guest type)
+      const orderCustomerType = existingOrder.customer?.customerType;
+      if (orderCustomerType === 'guest') return false; // Both are guest => no change
+      return true; // Order was registered customer, now guest => changed
+    }
+
+    // Compare IDs (handle both being populated or strings)
+    if (orderCustomerId !== selectedCustomerId) {
+      console.log('👤 Customer changed:', orderCustomerId, '→', selectedCustomerId);
+      return true;
+    }
+
+    return false;
+  };
+
   // ⭐ UNIFIED FLOW: Handle checkout - create draft order BEFORE showing payment modal
   const handleCheckout = async () => {
     // Step 1: Validate cart
@@ -902,8 +932,12 @@ export const POSMain = () => {
 
     // Step 3: Check if order already exists (held order scenario)
     if (existingOrder) {
-      // ⭐ NEW: Check if cart has changed from original order
-      if (hasCartChanged()) {
+      // ⭐ NEW: Check if cart OR customer has changed
+      const cartChanged = hasCartChanged();
+      const customerChanged = hasCustomerChanged();
+
+      if (cartChanged || customerChanged) {
+        console.log(`📝 Order changed (Cart: ${cartChanged}, Customer: ${customerChanged}) - updating held order...`);
         console.log('📝 Cart changed - updating held order before payment...');
 
         try {
@@ -929,6 +963,12 @@ export const POSMain = () => {
           if (!updateResponse.success) {
             throw new Error(updateResponse.error?.message || 'Failed to update order');
           }
+
+          // ⭐ Update state with refreshed order data (customer, discount, etc.)
+          setExistingOrder({
+            ...updateResponse.data.order,
+            id: updateResponse.data.order._id || updateResponse.data.order.id
+          });
 
           // ⭐ CRITICAL: Update existingOrder with latest data
           const updatedOrder = updateResponse.data.order;
@@ -1312,15 +1352,24 @@ export const POSMain = () => {
       // Clear current cart
       setCart([]);
 
-      // Set customer from order
+      // ⭐ FIX: Set customer from order with proper logging
+      console.log('📋 Loading held order customer:', order.customer);
+
       if (order.customer) {
-        setSelectedCustomer({
+        const loadedCustomer = {
           id: order.customer._id || order.customer.id,
           customerCode: order.customer.customerCode,
           fullName: order.customer.fullName,
           phone: order.customer.phone,
-          customerType: order.customer.customerType
-        });
+          customerType: order.customer.customerType || 'guest'
+        };
+
+        console.log('✅ Setting selectedCustomer:', loadedCustomer);
+        setSelectedCustomer(loadedCustomer);
+      } else {
+        // No customer in order - reset to null (will trigger guest auto-selection)
+        console.log('⚠️ No customer in order, resetting to null');
+        setSelectedCustomer(null);
       }
 
       // ⭐ Mark as held order (loaded from held orders, not newly created)
@@ -1568,15 +1617,12 @@ export const POSMain = () => {
         onClose={() => {
           setShowInvoiceModal(false);
           setInvoiceOrder(null);
+          // ⭐ Reload page to refresh inventory data
+          window.location.reload();
         }}
         onComplete={() => {
-          // Clear cart and close modal after delivery confirmation
-          setCart([]);
-          setSelectedCustomer(null);
-          setExistingOrder(null); // Clear existing order
-          setShowInvoiceModal(false);
-          setInvoiceOrder(null);
-          showToast('success', 'Order completed successfully!');
+          // ⭐ Reload page to clear state and refresh inventory
+          window.location.reload();
         }}
       />
 

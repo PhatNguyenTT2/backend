@@ -678,6 +678,7 @@ async function getCustomerDiscountPercentage(customerType) {
 ordersRouter.put('/:id', async (request, response) => {
   try {
     const {
+      customer,
       deliveryType,
       address,
       shippingAddress, // Frontend gửi shippingAddress
@@ -718,6 +719,74 @@ ordersRouter.put('/:id', async (request, response) => {
           code: 'ORDER_CANNOT_BE_UPDATED'
         }
       });
+    }
+
+    // Handle customer update (for draft orders)
+    if (customer !== undefined) {
+      if (order.status !== 'draft') {
+        return response.status(400).json({
+          success: false,
+          error: {
+            message: 'Customer can only be updated for draft orders',
+            code: 'CUSTOMER_UPDATE_LOCKED'
+          }
+        });
+      }
+
+      console.log('👤 Updating customer:', customer);
+      let customerDoc = null;
+
+      try {
+        if (customer === 'virtual-guest') {
+          // Find or create virtual guest
+          customerDoc = await Customer.findOne({
+            email: 'virtual.guest@pos.system',
+            customerType: 'guest'
+          });
+
+          if (!customerDoc) {
+            customerDoc = await Customer.create({
+              fullName: 'Virtual Guest',
+              email: 'virtual.guest@pos.system',
+              phone: '0000000000',
+              gender: 'other',
+              customerType: 'guest',
+              totalSpent: 0,
+              isActive: true
+            });
+            console.log('✅ Created virtual guest for update');
+          }
+        } else {
+          // Find existing customer
+          customerDoc = await Customer.findById(customer);
+          if (!customerDoc) {
+            return response.status(404).json({
+              success: false,
+              error: {
+                message: 'Customer not found',
+                code: 'CUSTOMER_NOT_FOUND'
+              }
+            });
+          }
+        }
+
+        // Update order customer
+        order.customer = customerDoc._id;
+
+        // Update discount percentage
+        const discountPercentage = await getCustomerDiscountPercentage(customerDoc.customerType);
+        order.discountPercentage = discountPercentage;
+        console.log('🎁 Updated discount percentage:', discountPercentage, `(${customerDoc.customerType})`);
+      } catch (err) {
+        console.error('Error updating customer:', err);
+        return response.status(500).json({
+          success: false,
+          error: {
+            message: 'Failed to update customer',
+            details: err.message
+          }
+        });
+      }
     }
 
     // Handle items update for draft orders
