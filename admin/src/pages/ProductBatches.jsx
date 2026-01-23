@@ -26,7 +26,7 @@ const ProductBatches = () => {
   const [filters, setFilters] = useState({
     page: 1,
     limit: 20,
-    status: ''
+    status: 'active'
   });
 
   // Search state
@@ -103,11 +103,13 @@ const ProductBatches = () => {
         })));
 
         setBatches(response.data.batches || []);
-        setPagination(response.data.pagination || {
-          currentPage: 1,
-          limit: 20,
-          total: 0,
-          totalPages: 0
+        // Map API response pagination (page, pages) to component state (currentPage, totalPages)
+        const apiPagination = response.data.pagination || {};
+        setPagination({
+          currentPage: apiPagination.page || apiPagination.currentPage || 1,
+          limit: apiPagination.limit || 20,
+          total: apiPagination.total || 0,
+          totalPages: apiPagination.pages || apiPagination.totalPages || 0
         });
       }
     } catch (err) {

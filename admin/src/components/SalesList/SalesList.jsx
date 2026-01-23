@@ -5,6 +5,8 @@ import { ViewSalesDetailsModal } from './ViewSalesDetailsModal';
 export const SalesList = ({ salesData = [], summary = null, loading = false }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [viewDetailsModal, setViewDetailsModal] = useState(false);
+  const [sortBy, setSortBy] = useState('rank');
+  const [sortOrder, setSortOrder] = useState('asc');
 
   const handleViewDetails = (product) => {
     setSelectedProduct(product);
@@ -15,6 +17,71 @@ export const SalesList = ({ salesData = [], summary = null, loading = false }) =
     setViewDetailsModal(false);
     setSelectedProduct(null);
   };
+
+  const handleSort = (field) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('desc');
+    }
+  };
+
+  const SortIcon = ({ field }) => {
+    if (sortBy !== field) return null;
+    return sortOrder === 'asc' ? (
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline ml-1">
+        <path d="M6 3V9M6 3L4 5M6 3L8 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ) : (
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="inline ml-1">
+        <path d="M6 9V3M6 9L4 7M6 9L8 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  };
+
+  const getRankBadge = (rank) => {
+    if (rank === 1) return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+    if (rank === 2) return 'bg-gray-100 text-gray-800 border-gray-300';
+    if (rank === 3) return 'bg-orange-100 text-orange-800 border-orange-300';
+    return 'bg-blue-50 text-blue-700 border-blue-200';
+  };
+
+  const getRankIcon = (rank) => {
+    if (rank <= 3) {
+      return <TrendingUp className="w-3 h-3 mr-1" />;
+    }
+    return null;
+  };
+
+  // Add rank to products and sort
+  const rankedProducts = [...salesData].map((product, index) => ({
+    ...product,
+    rank: index + 1
+  }));
+
+  const sortedProducts = [...rankedProducts].sort((a, b) => {
+    let compareValue = 0;
+
+    switch (sortBy) {
+      case 'rank':
+        compareValue = a.rank - b.rank;
+        break;
+      case 'totalRevenue':
+        compareValue = a.totalRevenue - b.totalRevenue;
+        break;
+      case 'totalQuantity':
+        compareValue = a.totalQuantity - b.totalQuantity;
+        break;
+      case 'totalOrders':
+        compareValue = a.totalOrders - b.totalOrders;
+        break;
+      default:
+        compareValue = 0;
+    }
+
+    return sortOrder === 'asc' ? compareValue : -compareValue;
+  });
 
   const formatCurrency = (amount) => {
     if (!amount && amount !== 0) return '₫0';
@@ -60,26 +127,38 @@ export const SalesList = ({ salesData = [], summary = null, loading = false }) =
           {/* Table Header */}
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                Product Code
+              <th
+                className="px-6 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('rank')}
+              >
+                Rank <SortIcon field="rank" />
               </th>
               <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                Product Name
+                Product
               </th>
               <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-700 uppercase tracking-wider">
                 Category
               </th>
-              <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                Qty Sold
+              <th
+                className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('totalQuantity')}
+              >
+                Qty Sold <SortIcon field="totalQuantity" />
               </th>
               <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
                 Price
               </th>
-              <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                Total Revenue
+              <th
+                className="px-6 py-3 text-right text-[11px] font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('totalRevenue')}
+              >
+                Total Revenue <SortIcon field="totalRevenue" />
               </th>
-              <th className="px-6 py-3 text-center text-[11px] font-medium text-gray-700 uppercase tracking-wider">
-                Orders
+              <th
+                className="px-6 py-3 text-center text-[11px] font-medium text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('totalOrders')}
+              >
+                Orders <SortIcon field="totalOrders" />
               </th>
               <th className="px-6 py-3 text-center text-[11px] font-medium text-gray-700 uppercase tracking-wider">
                 Actions
@@ -89,23 +168,29 @@ export const SalesList = ({ salesData = [], summary = null, loading = false }) =
 
           {/* Table Body */}
           <tbody className="divide-y divide-gray-100">
-            {salesData.map((product, index) => (
+            {sortedProducts.map((product) => (
               <tr
-                key={product.productId || index}
+                key={product.productId || product.rank}
                 className="hover:bg-gray-50 transition-colors"
               >
-                {/* Product Code */}
-                <td className="px-6 py-4">
-                  <p className="text-[13px] font-medium text-gray-900">
-                    {product.productCode}
-                  </p>
+                {/* Rank */}
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${getRankBadge(product.rank)}`}>
+                    {getRankIcon(product.rank)}
+                    #{product.rank}
+                  </span>
                 </td>
 
-                {/* Product Name */}
+                {/* Product */}
                 <td className="px-6 py-4">
-                  <p className="text-[13px] font-medium text-gray-900">
-                    {product.productName}
-                  </p>
+                  <div>
+                    <p className="text-[13px] font-medium text-gray-900">
+                      {product.productName}
+                    </p>
+                    <p className="text-[11px] text-gray-500">
+                      {product.productCode}
+                    </p>
+                  </div>
                 </td>
 
                 {/* Category */}

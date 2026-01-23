@@ -130,6 +130,13 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onManageAccount
               </p>
             </div>
 
+            {/* Role Column */}
+            <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+              <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
+                Role
+              </p>
+            </div>
+
             {/* Actions Column */}
             <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
               <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
@@ -182,6 +189,19 @@ export const EmployeeList = ({ employees = [], onEdit, onDelete, onManageAccount
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
                       {formatDate(employee.dateOfBirth)}
                     </p>
+                  </div>
+
+                  {/* Role */}
+                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
+                    {employee.userAccount?.role?.roleName ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-indigo-100 text-indigo-800">
+                        {employee.userAccount.role.roleName}
+                      </span>
+                    ) : (
+                      <span className="text-[13px] font-normal font-['Poppins',sans-serif] text-gray-400 leading-[20px]">
+                        N/A
+                      </span>
+                    )}
                   </div>
 
                   {/* Actions */}

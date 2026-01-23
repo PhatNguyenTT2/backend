@@ -128,12 +128,12 @@ export const ProductBatchList = ({
       <div className="bg-white rounded-lg shadow-sm">
         {/* Scrollable Container */}
         <div className="overflow-x-auto rounded-lg">
-          <div className="min-w-[1200px]">
+          <div className="min-w-[900px]">
             {/* Table Header */}
             <div className="flex items-center h-[34px] bg-gray-50 border-b border-gray-200">
               {/* Batch Code Column - Sortable */}
               <div
-                className="w-[140px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+                className="w-[180px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => handleSortClick('batchCode')}
               >
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
@@ -143,42 +143,42 @@ export const ProductBatchList = ({
               </div>
 
               {/* Cost Price Column */}
-              <div className="w-[110px] px-3 flex items-center flex-shrink-0">
+              <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                   Cost Price
                 </p>
               </div>
 
               {/* Unit Price Column */}
-              <div className="w-[110px] px-3 flex items-center flex-shrink-0">
+              <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                   Unit Price
                 </p>
               </div>
 
               {/* Quantity Column */}
-              <div className="w-[90px] px-3 flex items-center flex-shrink-0">
+              <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                   Quantity
                 </p>
               </div>
 
               {/* MFG Date Column */}
-              <div className="w-[110px] px-3 flex items-center flex-shrink-0">
+              <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                   MFG Date
                 </p>
               </div>
 
               {/* Expiry Date Column */}
-              <div className="w-[110px] px-3 flex items-center flex-shrink-0">
+              <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                   Expiry Date
                 </p>
               </div>
 
-              {/* Promotion Column - Flex grow to take remaining space */}
-              <div className="flex-1 min-w-[120px] px-3 flex items-center">
+              {/* Promotion Column */}
+              <div className="flex-1 min-w-[140px] px-3 flex items-center justify-center">
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px]">
                   Promotion
                 </p>
@@ -186,7 +186,7 @@ export const ProductBatchList = ({
 
               {/* Status Column - Sortable */}
               <div
-                className="w-[100px] px-3 flex items-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
+                className="w-[100px] px-3 flex items-center justify-center flex-shrink-0 cursor-pointer hover:bg-gray-100 transition-colors"
                 onClick={() => handleSortClick('status')}
               >
                 <p className="text-[11px] font-medium font-['Poppins',sans-serif] text-[#212529] uppercase tracking-[0.5px] leading-[18px] flex items-center gap-1">
@@ -212,28 +212,28 @@ export const ProductBatchList = ({
                     }`}
                 >
                   {/* Batch Code */}
-                  <div className="w-[140px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[180px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[12px] font-medium font-['Poppins',sans-serif] text-gray-600 leading-[20px] truncate">
                       {batch.batchCode || '-'}
                     </p>
                   </div>
 
                   {/* Cost Price */}
-                  <div className="w-[110px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
                       {formatVND(batch.costPrice || 0)}
                     </p>
                   </div>
 
                   {/* Unit Price */}
-                  <div className="w-[110px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-semibold font-['Poppins',sans-serif] text-emerald-600 leading-[20px]">
                       {formatVND(batch.unitPrice || 0)}
                     </p>
                   </div>
 
                   {/* Quantity */}
-                  <div className="w-[90px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
                     <p className={`text-[13px] font-medium font-['Poppins',sans-serif] leading-[20px] ${(batch.quantity || 0) > 10 ? 'text-emerald-600' : 'text-red-600'
                       }`}>
                       {batch.quantity || 0}
@@ -241,14 +241,14 @@ export const ProductBatchList = ({
                   </div>
 
                   {/* MFG Date */}
-                  <div className="w-[110px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px]">
                       {formatDate(batch.mfgDate)}
                     </p>
                   </div>
 
                   {/* Expiry Date */}
-                  <div className="w-[110px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[120px] px-3 flex items-center flex-shrink-0">
                     <p className={`text-[13px] font-normal font-['Poppins',sans-serif] leading-[20px] ${batch.isNearExpiry ? 'text-orange-600 font-medium' :
                       batch.isExpired ? 'text-red-600 font-medium' : 'text-[#212529]'
                       }`}>
@@ -259,17 +259,20 @@ export const ProductBatchList = ({
                     </p>
                   </div>
 
-                  {/* Promotion - Flex grow */}
-                  <div className="flex-1 min-w-[120px] px-3 flex items-center">
-                    <p className="text-[13px] font-normal font-['Poppins',sans-serif] text-[#212529] leading-[20px] truncate">
-                      {batch.promotionApplied === 'none' ? '-' :
-                        batch.promotionApplied === 'discount' ? `${batch.discountPercentage}% OFF` :
+                  {/* Promotion */}
+                  <div className="flex-1 min-w-[140px] px-3 flex items-center justify-center">
+                    <span className={`text-[11px] font-medium font-['Poppins',sans-serif] leading-[18px] px-2 py-0.5 rounded ${batch.promotionApplied === 'none' || !batch.promotionApplied
+                      ? 'text-gray-400'
+                      : 'bg-orange-100 text-orange-700'
+                      }`}>
+                      {batch.promotionApplied === 'none' || !batch.promotionApplied ? '-' :
+                        batch.promotionApplied === 'discount' ? `${batch.discountPercentage}%` :
                           batch.promotionApplied}
-                    </p>
+                    </span>
                   </div>
 
                   {/* Status - Dropdown */}
-                  <div className="w-[100px] px-3 flex items-center flex-shrink-0">
+                  <div className="w-[100px] px-3 flex items-center justify-center flex-shrink-0">
                     <button
                       onClick={(e) => toggleDropdown(batch.id, 'status', e)}
                       className={`${getStatusColor(batch.status)} px-2 py-1 rounded inline-flex items-center gap-1 cursor-pointer hover:opacity-90 transition-opacity`}
