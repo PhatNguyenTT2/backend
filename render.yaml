@@ -21,6 +21,6 @@ services:
       - key: VNP_TEST_MODE
         value: true
       - key: APP_URL
-        value: https://backend.onrender.com
+        value: https://backend-rtxe.onrender.com
       - key: FRONTEND_URL
-        value: https://backend.onrender.com
+        value: https://backend-rtxe.onrender.com
