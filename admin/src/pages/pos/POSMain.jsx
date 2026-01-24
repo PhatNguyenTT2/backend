@@ -365,7 +365,10 @@ export const POSMain = () => {
 
       // Use functional update to avoid stale closure issue
       setCart(prevCart => {
-        const existingItem = prevCart.find(item => item.id === product.id);
+        // ⚠️ CRITICAL: Normalize ID early to ensure consistent cart item matching
+        const normalizedId = product._id || product.id;
+
+        const existingItem = prevCart.find(item => item.id === normalizedId);
         const currentQuantityInCart = existingItem ? existingItem.quantity : 0;
 
         // Check stock availability
@@ -378,7 +381,7 @@ export const POSMain = () => {
           // Update existing item quantity
           showToast('success', `Updated ${product.name} quantity`);
           return prevCart.map(item =>
-            item.id === product.id
+            item.id === normalizedId
               ? { ...item, quantity: item.quantity + 1 }
               : item
           );
@@ -387,6 +390,8 @@ export const POSMain = () => {
           showToast('success', `Added ${product.name} to cart`);
           return [...prevCart, {
             ...product,
+            id: normalizedId,          // Ensure id is normalized
+            productId: normalizedId,   // ⭐ Explicitly set productId for checkout
             quantity: 1,
             basePrice: basePrice, // Store original price
             discountPercentage: discountPercentage, // Store discount percentage
