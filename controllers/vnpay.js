@@ -102,9 +102,13 @@ vnpayRouter.post('/create-payment-url', async (req, res) => {
  * Chỉ verify và hiển thị kết quả cho user, KHÔNG update database
  */
 vnpayRouter.get('/return', async (req, res) => {
+  // Get frontend URL early to ensure we can always redirect
+  const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+
   try {
-    // DEBUG: Log raw query string
+    // DEBUG: Log raw query string and environment
     logger.info('VNPay return - Raw query:', req.url);
+    logger.info('VNPay return - FRONTEND_URL:', frontendUrl);
 
     // Use vnpay library's built-in verification
     const verify = vnpay.verifyReturnUrl(req.query);
@@ -126,35 +130,41 @@ vnpayRouter.get('/return', async (req, res) => {
         { returnUrlAccessed: true }
       ).catch(err => logger.error('Mark return URL error:', err));
 
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-
       if (vnp_ResponseCode === '00') {
         // Payment successful - redirect to frontend
         logger.info('VNPay payment successful (return URL)', {
           vnp_TxnRef,
-          vnp_ResponseCode
+          vnp_ResponseCode,
+          redirectTo: `${frontendUrl}/pos?payment=success&ref=${vnp_TxnRef}`
         });
-        res.redirect(`${frontendUrl}/pos?payment=success&ref=${vnp_TxnRef}`);
+        return res.redirect(`${frontendUrl}/pos?payment=success&ref=${vnp_TxnRef}`);
       } else {
         // Payment failed
         const errorMessage = vnpayService.getResponseMessage(vnp_ResponseCode);
         logger.warn('VNPay payment failed', {
           vnp_TxnRef,
           vnp_ResponseCode,
-          errorMessage
+          errorMessage,
+          redirectTo: `${frontendUrl}/pos?payment=failed&code=${vnp_ResponseCode}`
         });
-        res.redirect(`${frontendUrl}/pos?payment=failed&code=${vnp_ResponseCode}&message=${encodeURIComponent(errorMessage)}`);
+        return res.redirect(`${frontendUrl}/pos?payment=failed&code=${vnp_ResponseCode}&message=${encodeURIComponent(errorMessage)}`);
       }
     } else {
       // Invalid signature
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      logger.error('VNPay return URL: Invalid signature');
-      res.redirect(`${frontendUrl}/pos?payment=failed&reason=invalid_signature`);
+      logger.error('VNPay return URL: Invalid signature', {
+        message: verify.message,
+        query: req.query
+      });
+      return res.redirect(`${frontendUrl}/pos?payment=failed&reason=invalid_signature`);
     }
   } catch (error) {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    logger.error('VNPay return error:', error);
-    res.redirect(`${frontendUrl}/pos?payment=error`);
+    logger.error('VNPay return error:', {
+      error: error.message,
+      stack: error.stack,
+      query: req.query
+    });
+    // Always redirect to frontend even on error
+    return res.redirect(`${frontendUrl}/pos?payment=error&message=${encodeURIComponent(error.message || 'Unknown error')}`);
   }
 });
 

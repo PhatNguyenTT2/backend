@@ -26,7 +26,7 @@ class VNPayService {
         vnp_OrderInfo: orderInfo || `Thanh toán đơn hàng ${orderId}`,
         vnp_OrderType: 'billpayment',
         vnp_IpAddr: ipAddr || '127.0.0.1',
-        vnp_ReturnUrl: `${process.env.APP_URL}/api/vnpay/return`,
+        vnp_ReturnUrl: `${(process.env.APP_URL || '').replace(/\/$/, '')}/api/vnpay/return`,
         vnp_Locale: 'vn',
         vnp_CurrCode: 'VND',
       });
