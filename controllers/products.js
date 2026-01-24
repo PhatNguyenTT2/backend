@@ -812,7 +812,7 @@ productsRouter.get('/:id/price-history', userExtractor, async (request, response
       .sort({ createdAt: -1 })
       .populate({
         path: 'createdBy',
-        select: 'username',
+        select: 'username role', // Keep some selection but ensure we have enough for virtuals
         populate: {
           path: 'employee',
           select: 'fullName'
