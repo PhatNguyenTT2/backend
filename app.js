@@ -69,6 +69,18 @@ app.use(express.json())
 app.set('query parser', (str) => {
   return require('querystring').parse(str);
 })
+
+// URL Normalization middleware: Fix double slashes (e.g., //api -> /api)
+// This is crucial for VNPay return URLs that may have accidental double slashes
+app.use((req, res, next) => {
+  if (req.path.includes('//')) {
+    const normalizedUrl = req.url.replace(/\/+/g, '/')
+    logger.info(`URL normalized: ${req.url} -> ${normalizedUrl}`)
+    return res.redirect(301, normalizedUrl)
+  }
+  next()
+})
+
 app.use(middleware.requestLogger)
 
 // API Routes
@@ -116,8 +128,11 @@ if (process.env.NODE_ENV === 'test') {
 // This allows direct navigation to /pos-login, /dashboard, etc.
 const pathModule = require('path')
 app.use((req, res, next) => {
-  // Skip API routes and Socket.IO - let unknownEndpoint handle them if not matched
-  if (req.path.startsWith('/api/') || req.path.startsWith('/socket.io/')) {
+  // Normalize path to handle double slashes (e.g., //api/vnpay/return -> /api/vnpay/return)
+  const normalizedPath = req.path.replace(/\/+/g, '/')
+
+  // Skip API routes and Socket.IO - let Express router handle them
+  if (normalizedPath.startsWith('/api/') || normalizedPath.startsWith('/socket.io/')) {
     return next()
   }
 
