@@ -33,6 +33,7 @@ export const POSCart = ({
           <div className="flex items-center gap-2">
             {cart.length > 0 && (
               <button
+                id="pos-clear-cart-btn"
                 onClick={onClearCart}
                 className="text-[12px] font-medium font-['Poppins',sans-serif] text-red-600 hover:text-red-700 flex items-center gap-1"
                 title="Ctrl+Delete"
@@ -231,6 +232,7 @@ export const POSCart = ({
 
           <div className="flex gap-2">
             <button
+              id="pos-hold-order-btn"
               onClick={onHoldOrder}
               className="flex-1 py-4 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-[16px] font-bold font-['Poppins',sans-serif] transition-colors flex items-center justify-center gap-2"
               title="Save order as draft to process later"
@@ -243,6 +245,7 @@ export const POSCart = ({
               <span className="text-[12px] font-normal opacity-75">(F8)</span>
             </button>
             <button
+              id="pos-checkout-btn"
               onClick={onCheckout}
               className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[16px] font-bold font-['Poppins',sans-serif] transition-colors flex items-center justify-center gap-2"
             >

@@ -247,9 +247,9 @@ export const POSMain = () => {
       }
 
       // Ctrl+Delete: Clear cart
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Delete' && cart.length > 0) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Delete') {
         e.preventDefault();
-        clearCart();
+        document.getElementById('pos-clear-cart-btn')?.click();
       }
 
       // F2: Open QR Code Scanner
@@ -264,16 +264,16 @@ export const POSMain = () => {
         setShowHeldOrdersModal(true);
       }
 
-      // F8: Hold Order (save as draft)
-      if (e.key === 'F8' && cart.length > 0) {
+      // F8: Hold Order (save as draft) - Click button to ensure same logic
+      if (e.key === 'F8') {
         e.preventDefault();
-        handleHoldOrder();
+        document.getElementById('pos-hold-order-btn')?.click();
       }
 
-      // F9: Payment (checkout flow with draft order creation)
-      if (e.key === 'F9' && cart.length > 0) {
+      // F9: Payment (checkout flow) - Click button to ensure same logic
+      if (e.key === 'F9') {
         e.preventDefault();
-        handleCheckout();
+        document.getElementById('pos-checkout-btn')?.click();
       }
 
       // Escape: Close modals
@@ -289,7 +289,7 @@ export const POSMain = () => {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [cart.length, showPaymentModal, showQRScanner, showHeldOrdersModal, showBatchModal, showInvoiceModal]);
+  }, [showPaymentModal, showQRScanner, showHeldOrdersModal, showBatchModal, showInvoiceModal]);
 
   // Add to cart with stock validation
   const addToCart = async (product) => {
