@@ -13,7 +13,8 @@ import {
   POSPaymentModal,
   POSLoadingScreen,
   POSCustomerSelector,
-  POSInvoiceModal
+  POSInvoiceModal,
+  POSStoreMapModal
 } from '../../components/POSMain';
 import { POSBatchSelectModal } from '../../components/POSMain/POSBatchSelectModal';
 import { POSHeldOrdersModal } from '../../components/POSMain/POSHeldOrdersModal';
@@ -73,6 +74,60 @@ export const POSMain = () => {
 
   // Toast notification state
   const [toast, setToast] = useState(null); // { type: 'success'|'error', message: string }
+
+  // Store Map modal state
+  const [showStoreMap, setShowStoreMap] = useState(false);
+
+  // Handle batch selection from Map
+  const handleMapBatchSelect = async (batch) => {
+    // We need to fetch full product details to add to cart properly
+    // batch object from map might be partial (populated from StoreLocation)
+    // format from map: { batchCode, product: { _id, name, productCode }, quantity, ... }
+
+    // Check if we have productCode
+    const productCode = batch.product?.productCode;
+    if (!productCode) {
+      showToast('error', 'Invalid product data on map');
+      return;
+    }
+
+    try {
+      // Re-use logic to fetch full product data
+      const response = await productService.getProductByCode(productCode, {
+        withInventory: true,
+        withBatches: true,
+        isActive: true
+      });
+
+      if (!response.success) {
+        showToast('error', 'Failed to load product details');
+        return;
+      }
+
+      const { product, inventory } = response.data;
+
+      // Ensure specific batch data is complete
+      // We might need to find the specific batch from response.data.batches to get price/expiry etc if map data is missing it
+      // But let's assume map data has what we need or we find it.
+
+      // The batch from map (batch) has: batchCode, product, expiryDate, quantity
+      // We need price info which might be on ProductBatch model, but StoreLocation population might be partial.
+      // Safest is to find this batch in response.data.batches
+      const fullBatch = response.data.batches?.find(b => b.batchCode === batch.batchCode);
+
+      if (!fullBatch) {
+        showToast('error', 'Batch details not found');
+        return;
+      }
+
+      // Add 1 item
+      handleAddProductWithBatch(response.data, fullBatch, 1);
+
+    } catch (err) {
+      console.error('Error adding from map:', err);
+      showToast('error', 'Failed to add item');
+    }
+  };
 
   // Load employee and verify session
   useEffect(() => {
@@ -568,6 +623,7 @@ export const POSMain = () => {
   // Add product with batch info to cart
   const handleAddProductWithBatch = (productData, batch, quantity) => {
     const { product, inventory } = productData;
+
 
     // Helper: Get batch unit price (handle Decimal128)
     const getBatchPrice = (batch) => {
@@ -1545,7 +1601,8 @@ export const POSMain = () => {
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
               onProductScanned={handleProductScanned}
-              onOpenQRScanner={() => setShowQRScanner(true)}
+              onScanClick={() => setShowQRScanner(true)}
+              onMapClick={() => setShowStoreMap(true)}
               scanning={scanning}
             />
 
@@ -1613,6 +1670,12 @@ export const POSMain = () => {
         onClose={() => setShowQRScanner(false)}
         onScanSuccess={handleQRScanSuccess}
         onScanError={handleQRScanError}
+      />
+
+      <POSStoreMapModal
+        isOpen={showStoreMap}
+        onClose={() => setShowStoreMap(false)}
+        onAddBatch={handleMapBatchSelect}
       />
 
       {/* Invoice Modal */}

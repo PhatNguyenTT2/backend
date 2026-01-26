@@ -6,6 +6,7 @@ import CustomerSalesReport from "./pages/reports/CustomerSales";
 import { ProductQRCodes } from "./pages/ProductQRCodes";
 import { StockOuts } from "./pages/StockOuts";
 import Locations from "./pages/Locations";
+import StoreLocations from "./pages/StoreLocations";
 import { POSLogin, POSMain } from "./pages/pos";
 import PurchaseOrders from "./pages/PurchaseOrders";
 import Payments from "./pages/Payments";
@@ -173,6 +174,16 @@ function App() {
             element={
               <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_INVENTORY}>
                 <Locations />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Store Locations - Under Products */}
+          <Route
+            path="/products/store-locations"
+            element={
+              <ProtectedRoute requiredPermission={PERMISSIONS.MANAGE_PRODUCTS}>
+                <StoreLocations />
               </ProtectedRoute>
             }
           />

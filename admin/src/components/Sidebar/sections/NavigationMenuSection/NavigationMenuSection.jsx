@@ -95,7 +95,8 @@ export const NavigationMenuSection = ({ isCollapsed, toggleCollapse }) => {
           submenu: [
             { name: 'List', href: '/products/' },
             { name: 'View', href: '/products/view' },
-            { name: 'QR Codes', href: '/product-qr-codes' }
+            { name: 'QR Codes', href: '/product-qr-codes' },
+            { name: 'Store Locations', href: '/products/store-locations' }
           ]
         },
         {

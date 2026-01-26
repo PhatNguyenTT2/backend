@@ -8,3 +8,4 @@ export { POSLoadingScreen } from './POSLoadingScreen';
 export { POSCustomerSelector } from './POSCustomerSelector';
 export { POSAddCustomerModal } from './POSAddCustomerModal';
 export { POSInvoiceModal } from './POSInvoiceModal';
+export { POSStoreMapModal } from './POSStoreMapModal';

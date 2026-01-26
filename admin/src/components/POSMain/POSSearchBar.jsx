@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode } from 'lucide-react';
+import { QrCode, Map } from 'lucide-react';
 
-export const POSSearchBar = ({ onProductScanned, onSearchChange, searchTerm, scanning, onOpenQRScanner }) => {
+export const POSSearchBar = ({ onProductScanned, onSearchChange, searchTerm, scanning, onOpenQRScanner, onMapClick }) => {
   const [scanBuffer, setScanBuffer] = useState('');
   const [lastKeyTime, setLastKeyTime] = useState(0);
   const [scanStatus, setScanStatus] = useState(null); // 'success' | 'error' | null
@@ -165,6 +165,18 @@ export const POSSearchBar = ({ onProductScanned, onSearchChange, searchTerm, sca
           <QrCode size={20} />
           <span className="hidden sm:inline">Scan QR</span>
         </button>
+
+        {/* Store Map Button */}
+        {onMapClick && (
+          <button
+            onClick={onMapClick}
+            className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2 font-medium shadow-sm"
+            title="Open Store Map"
+          >
+            <Map size={20} />
+            <span className="hidden sm:inline">Map</span>
+          </button>
+        )}
       </div>
     </div>
   );
